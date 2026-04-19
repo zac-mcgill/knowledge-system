@@ -16,6 +16,8 @@ This is not Obsidian-specific tooling. It operates on plain markdown files with 
 - **Improvement** — Scores all partial notes by difficulty weight, missing section penalties, and domain priority. Outputs ranked upgrade tasks with per-note writing instructions and quality constraints.
 - **Reporting** — Generates a markdown report with executive summary, domain analysis, key insights, critical gaps, section deficiencies, and priority actions. Written to the vault's `Vault Files/` directory.
 
+The system is designed to integrate with external content generation workflows, including LLM-assisted pipelines, while remaining fully deterministic in evaluation.
+
 ## How It Works
 
 All four commands are routed through `run.py`, which reads `config/config.yaml` for the vault root path, resolves the vault's schema, and dispatches to the appropriate module.
@@ -162,6 +164,21 @@ The system implements a closed-loop improvement cycle: **validate** confirms str
 
 - **Single demo vault** — ships with one vault (`demo-vault/`) containing 19 notes in a single domain. The tooling supports multi-domain vaults but the demo does not exercise this.
 - **CLI only** — all interaction is through `python run.py <command>`. There is no web UI, GUI, or interactive mode.
-- **Manual content authoring** — the system identifies what to improve and provides writing constraints, but does not generate note content.
+- **Content generation model** — the system does not generate note content itself. It acts as a deterministic validation, analysis, and improvement engine.
+
+  Content generation is external and intentionally decoupled.
+
+  This supports two workflows:
+
+  - **Manual authoring** — users write and refine notes based on system feedback  
+  - **LLM-assisted authoring** — external models (e.g. Copilot, ChatGPT) generate or improve notes using system-generated constraints and upgrade tasks  
+
+  This enables fully automated pipelines:
+
+  1. The system identifies gaps and prioritised improvements  
+  2. An external model generates or updates content  
+  3. The system re-validates and re-scores the result  
+
+  The system remains deterministic, while generation is flexible and composable.
 - **No watch mode** — the pipeline runs on demand. There is no file-watching or automatic re-validation.
 - **Python dependency** — requires Python 3.10+ and PyYAML.
