@@ -15,6 +15,7 @@ This is not Obsidian-specific tooling. It operates on plain markdown files with 
 - **Analysis** — Produces seven structured analyses from metadata: completeness by domain, subdomain weak points, difficulty vs completeness, critical gaps (advanced + partial), section deficiency heatmap, structural balance, and a scored action list.
 - **Improvement** — Scores all partial notes by difficulty weight, missing section penalties, and domain priority. Outputs ranked upgrade tasks with per-note writing instructions and quality constraints.
 - **Reporting** — Generates a markdown report with executive summary, domain analysis, key insights, critical gaps, section deficiencies, and priority actions. Written to the vault's `Vault Files/` directory.
+- **API (MCP-based)** — Exposes structured knowledge signals (validation status, prioritised tasks, note metadata) for programmatic access and agent workflows.
 
 The system is designed to integrate with external content generation workflows, including LLM-assisted pipelines, while remaining fully deterministic in evaluation.
 
@@ -37,23 +38,61 @@ validate → analyse → improve → report
 The schema (`vault_schema.py`) lives inside the vault itself at `Vault Files/Scripts/vault_schema.py` and defines all enums, field lists, section maps, and derivation logic. It is the single source of truth — no other file duplicates these definitions.
 
 
+## API (Brain Interface)
+
+The system includes an HTTP API (MCP-based) that exposes structured, deterministic knowledge signals.
+
+This is not raw note access — it provides:
+
+- validation status
+- prioritised improvement tasks
+- structured note metadata
+
+### Endpoints
+
+| Endpoint | Description |
+|--------|--------|
+| `/health` | Server status |
+| `/validation` | Schema validation result |
+| `/tasks` | Ranked improvement tasks |
+| `/tasks?limit=5` | Top N tasks |
+| `/notes` | Structured note metadata |
+
+### Example
+
+```text
+GET /tasks
+```
+
+Returns prioritised upgrade tasks suitable for automated workflows.
+
+### Agent Loop
+
+This enables closed-loop automation:
+
+1. GET `/tasks`
+2. Select highest priority
+3. Generate or update content
+4. GET `/validation`
+5. Repeat
+
+The system enforces structure; generation is external.
+
+
 ## Example Workflow
 
 ```bash
-# Create a new vault
+# Initialise
 python run.py init my-vault
 
-# Validate
+# CLI pipeline
 python run.py validate
-
-# Analyse
 python run.py analyse
-
-# Generate improvement tasks
 python run.py improve
-
-# Produce report
 python run.py report
+
+# API (optional)
+python mcp/server/mcp_server.py
 ```
 
 ## Repository Structure
@@ -86,9 +125,11 @@ knowledge-system/
 │       └── Scripts/
 │           └── vault_schema.py     # Single source of truth for schema
 ├── mcp/                            # MCP server integration (reads config/config.yaml)
-│   ├── config/
-│   │   └── vaults.json
 │   ├── core/
+│   │   ├── adapters/
+│   │   │   ├── validation_adapter.py
+│   │   │   ├── tasks_adapter.py
+│   │   │   └── notes_adapter.py
 │   │   ├── contract_runner.py
 │   │   ├── note_index.py
 │   │   ├── query_engine.py
@@ -182,7 +223,22 @@ Start the server:
 python mcp/server/mcp_server.py
 ```
 
-The server runs on `http://127.0.0.1:8000` and exposes endpoints for listing vaults, querying notes, retrieving individual notes, aggregating fields, health checks, and contract verification.
+The server runs on `http://127.0.0.1:8000`.
+
+### Endpoints
+
+| Endpoint | Method | Description |
+| --- | --- | --- |
+| `/health` | GET | Server status and metrics |
+| `/validation` | GET | Schema validation result |
+| `/tasks` | GET | Ranked improvement tasks |
+| `/tasks?limit=N` | GET | Top N tasks |
+| `/notes` | GET | Structured note metadata |
+| `/vaults` | GET | List the active vault |
+| `/query` | POST | Query notes with filters |
+| `/note` | GET | Retrieve a single note |
+| `/stats` | GET | Aggregate a field across the vault |
+| `/contract` | GET | Run system contract checks |
 
 ### Key Properties
 
@@ -196,8 +252,7 @@ The server runs on `http://127.0.0.1:8000` and exposes endpoints for listing vau
 ## Limitations
 
 - **Single demo vault** — ships with one vault (`demo-vault/`) containing 19 notes in a single domain. The tooling supports multi-domain vaults but the demo does not exercise this.
-- **CLI only** — all interaction is through `python run.py <command>`. There is no web UI, GUI, or interactive mode.
-- **Content generation model** — the system does not generate note content itself. It acts as a deterministic validation, analysis, and improvement engine.
+- **Content generation model** — the system does not generate content itself. It provides constraints and prioritised tasks. Generation can be manual or handled by external models.
 
   Content generation is external and intentionally decoupled.
 

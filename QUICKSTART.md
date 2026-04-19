@@ -3,36 +3,18 @@
 ## 1. Clone
 
 ```bash
-git clone https://github.com/zac-mcgill/knowledge-system.git
+git clone <repo-url> knowledge-system
 cd knowledge-system
-```
-
-Requires Python 3.10+ and PyYAML:
-
-```bash
 pip install pyyaml
 ```
 
-
 ## 2. Initialise a Vault
-
-Create a new working vault:
 
 ```bash
 python run.py init my-vault
 ```
 
-This:
-
-* copies the demo vault
-* removes generated artefacts
-* updates configuration automatically
-
----
-
-## 3. Run
-
-Validate and analyse your vault:
+## 3. Run the Pipeline
 
 ```bash
 python run.py validate
@@ -40,8 +22,6 @@ python run.py analyse
 python run.py improve
 python run.py report
 ```
-
-## 3. What Happens
 
 | Command | What it does |
 | --- | --- |
@@ -53,35 +33,20 @@ python run.py report
 
 `validate`, `analyse`, and `improve` are read-only — they never modify files. `report` writes one markdown file.
 
----
-
-## 4. MCP Server (Optional)
-
-The MCP server exposes a read-only API over your active vault. It reads `config/config.yaml` automatically — no additional configuration is required.
-
-### Requirements
+## 4. Start API Server (Optional)
 
 ```bash
-pip install fastapi uvicorn pyyaml
-```
-
-### Start
-
-```bash
+pip install fastapi uvicorn
 python mcp/server/mcp_server.py
 ```
 
-The server starts on `http://127.0.0.1:8000` and automatically loads whichever vault is set in `config/config.yaml`.
+The server starts on `http://127.0.0.1:8000` and automatically loads whichever vault is set in `config/config.yaml`. No manual config edits are needed.
 
-### Endpoints
+## 5. Query the System
 
-| Endpoint | Method | Description |
-| --- | --- | --- |
-| `/vaults` | GET | List the active vault |
-| `/query` | POST | Query notes with filters |
-| `/note` | GET | Retrieve a single note |
-| `/stats` | GET | Aggregate a field across the vault |
-| `/health` | GET | Server health and metrics |
-| `/contract` | GET | Run system contract checks |
+Examples:
 
-No manual config edits are needed. After `python run.py init my-vault`, the MCP server will serve the new vault automatically.
+* http://127.0.0.1:8000/validation
+* http://127.0.0.1:8000/tasks
+* http://127.0.0.1:8000/tasks?limit=5
+* http://127.0.0.1:8000/notes
