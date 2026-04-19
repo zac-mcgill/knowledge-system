@@ -3,7 +3,7 @@
 ## 1. Clone
 
 ```bash
-git clone <repo-url> knowledge-system
+git clone https://github.com/zac-mcgill/knowledge-system.git
 cd knowledge-system
 ```
 
