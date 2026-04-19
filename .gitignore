@@ -1,0 +1,29 @@
+# Python artefacts
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# OS + editor noise
+.DS_Store
+Thumbs.db
+.vscode/
+*.code-workspace
+
+# Logs and temp files
+*.log
+tmp/
+temp/
+
+# Generated vault outputs
+**/Vault Files/Vault Report.md
+**/Vault Files/*Delta*.md
+
+# MCP runtime artefacts
+mcp/*.log
+mcp/tmp/
