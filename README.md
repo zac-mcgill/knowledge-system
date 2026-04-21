@@ -9,12 +9,23 @@ Includes a built-in vault initialisation command for rapid setup.
 
 This is not Obsidian-specific tooling. It operates on plain markdown files with YAML frontmatter. Any editor or vault structure that follows the schema conventions will work.
 
+## System Guarantees
+
+These properties are enforced at runtime and have been verified through fault injection testing:
+
+- **YAML frontmatter is mandatory.** Every note must begin with a valid `---`-delimited YAML block. A note without frontmatter fails validation immediately.
+- **Missing or malformed YAML causes explicit failure.** The system uses strict YAML parsing. Syntax errors are reported with the exact parse reason, not silently swallowed.
+- **Validation cannot be bypassed.** There is no fallback, no default, and no soft-fail path. A file either passes fully or is rejected with a specific error.
+- **Invalid files are always surfaced.** Files that fail validation are excluded from analysis and reporting, but are always identified with explicit warnings. The system never silently drops invalid data.
+- **Report insights are derived strictly from computed data.** No narrative is hardcoded. Every statement in the generated report is produced from the actual metadata of the vault being analysed.
+- **CLI adapts to the environment.** The `run.py` entry point automatically detects the correct Python executable (`py` on Windows, `python3` elsewhere). All printed instructions reflect the actual runtime command.
+
 ## What It Does
 
-- **Validation** — Checks every note against the schema: required fields, enum membership, type derivation from filename, domain derivation from path, and section-boolean consistency. Reports pass/fail per file.
-- **Analysis** — Produces seven structured analyses from metadata: completeness by domain, subdomain weak points, difficulty vs completeness, critical gaps (advanced + partial), section deficiency heatmap, structural balance, and a scored action list.
+- **Validation** — Checks every note against the schema using strict YAML parsing. Fails on: missing YAML frontmatter, malformed YAML, missing required fields, enum violations, and structural section gaps. Reports pass/fail per file with the specific error. Invalid files are never silently ignored — they either fail validation or are surfaced with explicit warnings in downstream commands.
+- **Analysis** — Produces seven structured analyses from metadata: completeness by domain, subdomain weak points, difficulty vs completeness, critical gaps (advanced + partial), section deficiency heatmap, structural balance, and a scored action list. Files that fail validation are excluded but always reported with explicit warnings.
 - **Improvement** — Scores all partial notes by difficulty weight, missing section penalties, and domain priority. Outputs ranked upgrade tasks with per-note writing instructions and quality constraints.
-- **Reporting** — Generates a markdown report with executive summary, domain analysis, key insights, critical gaps, section deficiencies, and priority actions. Written to the vault's `Vault Files/` directory.
+- **Reporting** — Generates a markdown report with executive summary, domain analysis, key insights, critical gaps, section deficiencies, and priority actions. Written to the vault's `Vault Files/` directory. All insights are derived from computed data — no hardcoded narrative.
 - **Template generation** — Derives canonical note templates directly from the schema (no manual templates).
 - **API (decision layer)** — Exposes validation status, prioritised tasks, gaps, and structured note metadata for programmatic and agent use.
 
@@ -52,7 +63,7 @@ They are generated directly from `vault_schema.py`, which is the single source o
 Generate templates with:
 
 ```bash
-python run.py templates
+py run.py templates
 ```
 
 This ensures all templates remain consistent with the schema.
@@ -108,20 +119,38 @@ The system enforces structure; generation is external.
 
 ```bash
 # Initialise
-python run.py init my-vault
+py run.py init my-vault
 
 # Generate templates (recommended)
-python run.py templates
+py run.py templates
 
 # CLI pipeline
-python run.py validate
-python run.py analyse
-python run.py improve
-python run.py report
+py run.py validate
+py run.py analyse
+py run.py improve
+py run.py report
 
 # API (optional)
-python mcp/server/mcp_server.py
+py mcp/server/mcp_server.py
 ```
+
+## Example: Validation Failure
+
+A note with missing YAML frontmatter produces:
+
+```text
+Fundamentals/Recursion.md
+  - Missing or invalid YAML frontmatter
+```
+
+A note with malformed YAML produces:
+
+```text
+Fundamentals/Recursion.md
+  - Malformed YAML: could not find expected ':'
+```
+
+Validation exits with code 1 and no valid file is reported as failing.
 
 ## Repository Structure
 
@@ -177,7 +206,7 @@ knowledge-system/
 Use the built-in initialisation command:
 
 ```bash
-python run.py init my-vault
+py run.py init my-vault
 ```
 
 This command:
@@ -190,7 +219,7 @@ This command:
 After initialisation, the system is immediately ready:
 
 ```bash
-python run.py validate
+py run.py validate
 ```
 
 ### Requirements
@@ -227,7 +256,7 @@ The MCP server provides a read-only HTTP API over the active vault. It is option
 
 ### How It Works
 
-The MCP server reads `config/config.yaml` — the same file used by the CLI pipeline. Whichever vault is configured as `vault_root` is automatically loaded, indexed, and served. After running `python run.py init my-vault`, the MCP server will serve `my-vault` with no additional steps.
+The MCP server reads `config/config.yaml` — the same file used by the CLI pipeline. Whichever vault is configured as `vault_root` is automatically loaded, indexed, and served. After running `py run.py init my-vault`, the MCP server will serve `my-vault` with no additional steps.
 
 ### Usage
 
@@ -240,7 +269,7 @@ pip install fastapi uvicorn
 Start the server:
 
 ```bash
-python mcp/server/mcp_server.py
+py mcp/server/mcp_server.py
 ```
 
 The server runs on `http://127.0.0.1:8000`.
@@ -268,7 +297,7 @@ The server runs on `http://127.0.0.1:8000`.
 - **Zero config** — reads `config/config.yaml` automatically, no manual edits required.
 - **Single active vault** — serves whichever vault the CLI is configured to use.
 - **Read-only** — no vault data is modified through the API.
-- **Init compatible** — after `python run.py init <name>`, the server immediately serves the new vault.
+- **Init compatible** — after `py run.py init <name>`, the server immediately serves the new vault.
 - **Schema-aware** — validates notes against `vault_schema.py` at startup and periodically.
 
 
@@ -292,4 +321,4 @@ See [examples/agent_loop.md](examples/agent_loop.md) for full details.
 - **Single demo vault** — ships with one vault (`demo-vault/`) containing 19 notes in a single domain. The tooling supports multi-domain vaults but the demo does not exercise this.
 - **Content generation model** — the system does not generate content itself. It produces constraints, validation, and prioritised tasks. Content can be authored manually or generated via external tools.
 - **No watch mode** — the pipeline runs on demand. There is no file-watching or automatic re-validation.
-- **Python dependency** — requires Python 3.10+ and PyYAML.
+- **Python dependency** — requires Python 3.10+ and PyYAML. On Windows, the `py` launcher is recommended. On macOS/Linux, use `python3` if `python` is not available.

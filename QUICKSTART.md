@@ -1,5 +1,8 @@
 # Quickstart
 
+> On Windows, use `py run.py ...` (the Python launcher).  
+> On macOS/Linux, use `python3 run.py ...` if `python` is not available.
+
 ## 1. Clone
 
 ```bash
@@ -13,7 +16,7 @@ pip install -r requirements.txt
 ## 2. Initialise a Vault
 
 ```bash
-python run.py init my-vault
+py run.py init my-vault
 ```
 
 This creates a fully valid vault and updates configuration automatically.
@@ -23,7 +26,7 @@ This creates a fully valid vault and updates configuration automatically.
 ## 3. Generate Templates (Optional but Recommended)
 
 ```bash
-python run.py templates
+py run.py templates
 ```
 
 Templates are derived from the schema and ensure structural consistency.
@@ -33,10 +36,10 @@ Templates are derived from the schema and ensure structural consistency.
 ## 4. Run the Pipeline
 
 ```bash
-python run.py validate
-python run.py analyse
-python run.py improve
-python run.py report
+py run.py validate
+py run.py analyse
+py run.py improve
+py run.py report
 ```
 
 ---
@@ -44,7 +47,7 @@ python run.py report
 ## 5. Start API Server (Optional)
 
 ```bash
-python mcp/server/mcp_server.py
+py mcp/server/mcp_server.py
 ```
 
 ---
