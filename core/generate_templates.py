@@ -35,21 +35,6 @@ CONFIG_PATH = REPO_ROOT / "config" / "config.yaml"
 SCHEMA_REL = Path("Vault Files") / "Scripts" / "vault_schema.py"
 TEMPLATE_REL = Path("Vault Files") / "Templates"
 
-# Explicit type → section-constant name mapping.
-# Every type that can appear in any vault's VALID_TYPES MUST be listed here.
-# Pattern: <type> → <TYPE>_SECTIONS  (hyphens → underscores, upper-cased)
-TYPE_TO_CONSTANT: dict[str, str] = {
-    "core-concept":              "CORE_CONCEPT_SECTIONS",
-    "pattern-technique":         "PATTERN_TECHNIQUE_SECTIONS",
-    "pattern-light":             "PATTERN_LIGHT_SECTIONS",
-    "technology-implementation": "TECHNOLOGY_IMPLEMENTATION_SECTIONS",
-    "technology-concept":        "TECHNOLOGY_CONCEPT_SECTIONS",
-    "system-architecture":       "SYSTEM_ARCHITECTURE_SECTIONS",
-    "system-overview":           "SYSTEM_OVERVIEW_SECTIONS",
-    "technology-pattern":        "TECHNOLOGY_PATTERN_SECTIONS",
-    "system-pattern":            "SYSTEM_PATTERN_SECTIONS",
-}
-
 
 # ============================================================================
 # HELPERS
@@ -101,15 +86,27 @@ def load_schema(vault: Path) -> ModuleType:
     return module
 
 
+def _derive_constant_name(note_type: str) -> str:
+    """Derive the schema constant name for a note type's section list.
+
+    Convention: <TYPE>_SECTIONS where hyphens become underscores, upper-cased.
+    e.g. 'core-concept' → 'CORE_CONCEPT_SECTIONS'
+    """
+    return note_type.upper().replace("-", "_") + "_SECTIONS"
+
+
 def build_type_section_map(
     schema: ModuleType, vault_name: str
 ) -> dict[str, tuple[str, ...]]:
     """
     Build type → sections mapping from a schema module.
 
-    For each type in VALID_TYPES, look up the corresponding section constant
-    using the explicit TYPE_TO_CONSTANT mapping.  HARD FAIL if any type has
-    no mapping or the constant is missing from the schema.
+    For each type in VALID_TYPES, derive the section constant name dynamically
+    using the convention <TYPE>_SECTIONS (hyphens → underscores, upper-cased).
+    HARD FAIL if the constant is missing from the schema.
+
+    Adding a new note type requires only adding the constant to vault_schema.py —
+    no engine modifications needed.
     """
     valid_types: frozenset[str] = getattr(schema, "VALID_TYPES", None)
     if valid_types is None:
@@ -122,23 +119,15 @@ def build_type_section_map(
     section_map: dict[str, tuple[str, ...]] = {}
 
     for note_type in sorted(valid_types):
-        # 1. Check explicit mapping exists
-        constant_name = TYPE_TO_CONSTANT.get(note_type)
-        if constant_name is None:
-            print(
-                f"HARD FAIL [{vault_name}]: type '{note_type}' has no entry in "
-                f"TYPE_TO_CONSTANT — cannot derive section constant name. "
-                f"Add the mapping before re-running.",
-                file=sys.stderr,
-            )
-            sys.exit(1)
+        constant_name = _derive_constant_name(note_type)
 
-        # 2. Check the constant exists in the schema module
+        # Check the constant exists in the schema module
         sections = getattr(schema, constant_name, None)
         if sections is None:
             print(
-                f"HARD FAIL [{vault_name}]: type '{note_type}' → "
-                f"constant '{constant_name}' not found in vault_schema.py",
+                f"HARD FAIL [{vault_name}]: type '{note_type}' requires constant "
+                f"'{constant_name}' in vault_schema.py — not found. "
+                f"Add '{constant_name}' to vault_schema.py before re-running.",
                 file=sys.stderr,
             )
             sys.exit(1)
@@ -153,24 +142,30 @@ def build_type_section_map(
 
         section_map[note_type] = tuple(sections)
 
-    # Cross-check against schema's own SECTION_MAP if present
-    schema_section_map: dict | None = getattr(schema, "SECTION_MAP", None)
-    if schema_section_map is not None:
-        for note_type in sorted(valid_types):
-            if note_type not in schema_section_map:
-                print(
-                    f"HARD FAIL [{vault_name}]: type '{note_type}' in VALID_TYPES "
-                    f"but missing from schema SECTION_MAP",
-                    file=sys.stderr,
-                )
-                sys.exit(1)
-            if tuple(schema_section_map[note_type]) != section_map[note_type]:
-                print(
-                    f"HARD FAIL [{vault_name}]: SECTION_MAP['{note_type}'] differs "
-                    f"from {TYPE_TO_CONSTANT[note_type]}",
-                    file=sys.stderr,
-                )
-                sys.exit(1)
+    # Cross-check against schema's own SECTION_MAP (required constant)
+    if not hasattr(schema, "SECTION_MAP"):
+        print(
+            f"HARD FAIL [{vault_name}]: SECTION_MAP not found in vault_schema.py",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    schema_section_map: dict = schema.SECTION_MAP
+    for note_type in sorted(valid_types):
+        if note_type not in schema_section_map:
+            print(
+                f"HARD FAIL [{vault_name}]: type '{note_type}' in VALID_TYPES "
+                f"but missing from schema SECTION_MAP",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        constant_name = _derive_constant_name(note_type)
+        if tuple(schema_section_map[note_type]) != section_map[note_type]:
+            print(
+                f"HARD FAIL [{vault_name}]: SECTION_MAP['{note_type}'] differs "
+                f"from {constant_name}",
+                file=sys.stderr,
+            )
+            sys.exit(1)
 
     return section_map
 

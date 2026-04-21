@@ -24,20 +24,38 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
-from core.shared import load_schema as _load_schema
+from core.shared import load_schema as _load_schema, _resolve_vault_path
 
-_schema = _load_schema()
+# Module-level globals (populated by _bind before use)
+VALID_DIFFICULTIES = None
+VALID_DOMAINS = None
+VALID_STATUSES = None
+VALID_SUBDOMAINS = None
+VALID_TYPES = None
+VAULT_ROOT = None
+discover_files = None
+extract_section_body = None
+parse_yaml_frontmatter = None
+read_file_safe = None
 
-VALID_DIFFICULTIES = _schema.VALID_DIFFICULTIES
-VALID_DOMAINS = _schema.VALID_DOMAINS
-VALID_STATUSES = _schema.VALID_STATUSES
-VALID_SUBDOMAINS = _schema.VALID_SUBDOMAINS
-VALID_TYPES = _schema.VALID_TYPES
-VAULT_ROOT = _schema.VAULT_ROOT
-discover_files = _schema.discover_files
-extract_section_body = _schema.extract_section_body
-parse_yaml_frontmatter = _schema.parse_yaml_frontmatter
-read_file_safe = _schema.read_file_safe
+
+def _bind(vault_path: Path) -> None:
+    """Load schema and bind all module-level globals."""
+    global VALID_DIFFICULTIES, VALID_DOMAINS, VALID_STATUSES, VALID_SUBDOMAINS
+    global VALID_TYPES, VAULT_ROOT, discover_files, extract_section_body
+    global parse_yaml_frontmatter, read_file_safe
+
+    _schema = _load_schema(vault_path)
+    VALID_DIFFICULTIES = _schema.VALID_DIFFICULTIES
+    VALID_DOMAINS = _schema.VALID_DOMAINS
+    VALID_STATUSES = _schema.VALID_STATUSES
+    VALID_SUBDOMAINS = _schema.VALID_SUBDOMAINS
+    VALID_TYPES = _schema.VALID_TYPES
+    VAULT_ROOT = _schema.VAULT_ROOT
+    discover_files = _schema.discover_files
+    extract_section_body = _schema.extract_section_body
+    parse_yaml_frontmatter = _schema.parse_yaml_frontmatter
+    read_file_safe = _schema.read_file_safe
 
 # ============================================================================
 # QUERY ENGINE
@@ -359,7 +377,11 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main() -> int:
+def main(vault_path: Path | None = None) -> int:
+    if vault_path is None:
+        vault_path = _resolve_vault_path()
+    _bind(vault_path)
+
     parser = build_parser()
     args = parser.parse_args()
 

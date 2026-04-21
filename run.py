@@ -144,12 +144,21 @@ def main():
         raise SystemExit(1)
 
     sys.path.insert(0, str(repo_root))
-    os.chdir(scripts_dir)
 
     sys.argv = sys.argv[:1]
 
     module = __import__(COMMANDS[command], fromlist=["main"])
-    raise SystemExit(module.main())
+    try:
+        raise SystemExit(module.main(vault_root))
+    except FileNotFoundError as exc:
+        print(f"Error: {exc}")
+        raise SystemExit(1)
+    except ValueError as exc:
+        print(f"Error: {exc}")
+        raise SystemExit(1)
+    except Exception as exc:
+        print(f"Error: unexpected failure in {command}: {exc}")
+        raise SystemExit(1)
 
 if __name__ == "__main__":
     main()

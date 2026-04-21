@@ -24,16 +24,29 @@ if sys.stdout.encoding != "utf-8":
         sys.stdout.buffer, encoding="utf-8", errors="replace"
     )
 
-from core.shared import load_schema as _load_schema
+from core.shared import load_schema as _load_schema, _resolve_vault_path
 
-_schema = _load_schema()
+# Module-level globals (populated by _bind before use)
+VALID_DIFFICULTIES = None
+VAULT_ROOT = None
+discover_files = None
+parse_yaml_frontmatter = None
+read_file_safe = None
+DOMAIN_PRIORITY_WEIGHT = None
 
-VALID_DIFFICULTIES = _schema.VALID_DIFFICULTIES
-VAULT_ROOT = _schema.VAULT_ROOT
-discover_files = _schema.discover_files
-parse_yaml_frontmatter = _schema.parse_yaml_frontmatter
-read_file_safe = _schema.read_file_safe
-DOMAIN_PRIORITY_WEIGHT = getattr(_schema, 'DOMAIN_PRIORITY_WEIGHT', {})
+
+def _bind(vault_path: Path) -> None:
+    """Load schema and bind all module-level globals."""
+    global VALID_DIFFICULTIES, VAULT_ROOT, discover_files
+    global parse_yaml_frontmatter, read_file_safe, DOMAIN_PRIORITY_WEIGHT
+
+    _schema = _load_schema(vault_path)
+    VALID_DIFFICULTIES = _schema.VALID_DIFFICULTIES
+    VAULT_ROOT = _schema.VAULT_ROOT
+    discover_files = _schema.discover_files
+    parse_yaml_frontmatter = _schema.parse_yaml_frontmatter
+    read_file_safe = _schema.read_file_safe
+    DOMAIN_PRIORITY_WEIGHT = _schema.DOMAIN_PRIORITY_WEIGHT
 
 # ============================================================================
 # DATA LOADING
@@ -590,7 +603,11 @@ def executive_summary(records: list[dict]) -> None:
 # ============================================================================
 
 
-def main() -> int:
+def main(vault_path: Path | None = None) -> int:
+    if vault_path is None:
+        vault_path = _resolve_vault_path()
+    _bind(vault_path)
+
     records = load_all(VAULT_ROOT)
     if not records:
         print("ERROR: No records loaded.")

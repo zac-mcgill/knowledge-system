@@ -7,15 +7,15 @@ import concurrent.futures
 import logging
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from core.vault_registry import list_vaults, get_vault_path, get_schema
-from core.note_index import (
+from mcp.core.vault_registry import list_vaults, get_vault_path, get_schema
+from mcp.core.note_index import (
     build_index, get_index, get_schema_hash,
     get_index_metadata, _SCHEMA_COOLDOWN_SECONDS,
     _indices, _get_vault_lock,
 )
-from core.query_engine import query, list_notes, get_note, aggregate
+from mcp.core.query_engine import query, list_notes, get_note, aggregate
 
 
 # ============================================================

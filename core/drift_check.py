@@ -413,7 +413,7 @@ def check_sections(verbose: bool = False) -> int:
         m = _load_schema(vault_name)
         root = VAULT_ROOT / vault_name
         section_map = m.SECTION_MAP
-        optional_map = getattr(m, "OPTIONAL_SECTION_MAP", {})
+        optional_map = m.OPTIONAL_SECTION_MAP
         files = m.discover_files(root)
         vault_violations = 0
 

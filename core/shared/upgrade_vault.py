@@ -38,22 +38,41 @@ if sys.stdout.encoding != "utf-8":
         sys.stdout.buffer, encoding="utf-8", errors="replace"
     )
 
-from core.shared import load_schema as _load_schema
+from core.shared import load_schema as _load_schema, _resolve_vault_path
 
-_schema = _load_schema()
+# Module-level globals (populated by _bind before use)
+SECTION_MAP = None
+TRACKED_SECTIONS = None
+VALID_DIFFICULTIES = None
+VAULT_ROOT = None
+discover_files = None
+extract_section_body = None
+find_headings = None
+parse_yaml_frontmatter = None
+read_file_safe = None
+SUBDOMAIN_DIFFICULTY = None
+DOMAIN_PRIORITY_WEIGHT = None
 
-SECTION_MAP = _schema.SECTION_MAP
-TRACKED_SECTIONS = _schema.TRACKED_SECTIONS
-VALID_DIFFICULTIES = _schema.VALID_DIFFICULTIES
-VAULT_ROOT = _schema.VAULT_ROOT
-discover_files = _schema.discover_files
-extract_section_body = _schema.extract_section_body
-find_headings = _schema.find_headings
-parse_yaml_frontmatter = _schema.parse_yaml_frontmatter
-read_file_safe = _schema.read_file_safe
 
-SUBDOMAIN_DIFFICULTY = getattr(_schema, 'SUBDOMAIN_DIFFICULTY', {})
-DOMAIN_PRIORITY_WEIGHT = getattr(_schema, 'DOMAIN_PRIORITY_WEIGHT', {})
+def _bind(vault_path: Path) -> None:
+    """Load schema and bind all module-level globals."""
+    global SECTION_MAP, TRACKED_SECTIONS, VALID_DIFFICULTIES, VAULT_ROOT
+    global discover_files, extract_section_body, find_headings
+    global parse_yaml_frontmatter, read_file_safe
+    global SUBDOMAIN_DIFFICULTY, DOMAIN_PRIORITY_WEIGHT
+
+    _schema = _load_schema(vault_path)
+    SECTION_MAP = _schema.SECTION_MAP
+    TRACKED_SECTIONS = _schema.TRACKED_SECTIONS
+    VALID_DIFFICULTIES = _schema.VALID_DIFFICULTIES
+    VAULT_ROOT = _schema.VAULT_ROOT
+    discover_files = _schema.discover_files
+    extract_section_body = _schema.extract_section_body
+    find_headings = _schema.find_headings
+    parse_yaml_frontmatter = _schema.parse_yaml_frontmatter
+    read_file_safe = _schema.read_file_safe
+    SUBDOMAIN_DIFFICULTY = _schema.SUBDOMAIN_DIFFICULTY
+    DOMAIN_PRIORITY_WEIGHT = _schema.DOMAIN_PRIORITY_WEIGHT
 
 # ============================================================================
 # QUALITY THRESHOLDS
@@ -504,7 +523,11 @@ def render_domain_breakdown(tasks: list[dict]) -> None:
 # ============================================================================
 
 
-def main() -> int:
+def main(vault_path: Path | None = None) -> int:
+    if vault_path is None:
+        vault_path = _resolve_vault_path()
+    _bind(vault_path)
+
     parser = argparse.ArgumentParser(
         description="Vault Upgrade Task Engine \u2014 generates prioritised upgrade tasks."
     )

@@ -1,60 +1,18 @@
 """
 Notes adapter — structured note listing for MCP.
 
-Reuses vault schema discovery and frontmatter parsing.
-Returns JSON-serialisable dict.
+Delegates directly to the vault registry and schema.  No sys.modules
+manipulation, no os.chdir, no importlib workarounds.
 """
 
 from __future__ import annotations
 
-import importlib.util
-import os
-import sys
 from pathlib import Path
 
-import yaml
+from mcp.core.vault_registry import get_vault_path, get_schema, list_vaults
 
 
-def _resolve_config() -> tuple[Path, Path]:
-    """Resolve repo root and vault path from config.
-
-    Returns (repo_root, vault_path).
-    """
-    repo_root = Path(__file__).resolve().parent.parent.parent.parent
-    config_path = repo_root / "config" / "config.yaml"
-
-    if not config_path.is_file():
-        raise FileNotFoundError(f"Config not found: {config_path}")
-
-    with open(config_path, "r", encoding="utf-8") as f:
-        data = yaml.safe_load(f)
-
-    vault_rel = data.get("vault_root")
-    if not vault_rel:
-        raise ValueError("config.yaml missing 'vault_root'")
-
-    vault_path = (repo_root / vault_rel).resolve()
-    if not vault_path.is_dir():
-        raise FileNotFoundError(f"Vault directory not found: {vault_path}")
-
-    return repo_root, vault_path
-
-
-def _prepare_env(repo_root: Path, vault_path: Path) -> None:
-    """Set CWD and sys.path so core.shared imports resolve correctly."""
-    scripts_dir = vault_path / "Vault Files" / "Scripts"
-    if not scripts_dir.is_dir():
-        raise FileNotFoundError(f"Scripts directory not found: {scripts_dir}")
-
-    if str(repo_root) not in sys.path:
-        sys.path.insert(0, str(repo_root))
-
-    sys.modules.pop("vault_schema", None)
-
-    os.chdir(scripts_dir)
-
-
-def get_notes() -> dict:
+def get_notes(vault_name: str | None = None) -> dict:
     """Enumerate all notes with metadata.
 
     Returns:
@@ -71,42 +29,43 @@ def get_notes() -> dict:
         }
     """
     try:
-        repo_root, vault_path = _resolve_config()
-        _prepare_env(repo_root, vault_path)
-    except (FileNotFoundError, ValueError) as exc:
-        return {"error": str(exc)}
+        if vault_name is None:
+            vaults = list_vaults()
+            if not vaults:
+                return {"error": "No vaults registered"}
+            vault_name = vaults[0]
 
-    try:
-        # Load vault_schema directly from the vault
-        schema_file = vault_path / "Vault Files" / "Scripts" / "vault_schema.py"
-        if not schema_file.is_file():
-            return {"error": f"Schema not found: {schema_file}"}
-
-        spec = importlib.util.spec_from_file_location(
-            "_adapter_vault_schema", str(schema_file)
-        )
-        schema = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(schema)
+        vault_path = get_vault_path(vault_name)
+        schema = get_schema(vault_name)
 
         files = schema.discover_files(vault_path)
         notes: list[dict] = []
 
         for filepath in files:
             content = schema.read_file_safe(filepath)
-            fields, _ = schema.parse_yaml_frontmatter(content)
+            fields, body = schema.parse_yaml_frontmatter(content)
             if fields is None:
                 continue
 
             rel_path = filepath.relative_to(vault_path).as_posix()
             name = filepath.stem
+            note_type = fields.get("type", "core-concept")
 
             missing: list[str] = []
-            if fields.get("has_key_principles") is not True:
-                missing.append("key_principles")
-            if fields.get("has_how_it_works") is not True:
-                missing.append("how_it_works")
-            if fields.get("has_tradeoffs") is not True:
-                missing.append("tradeoffs")
+            if note_type == "core-concept":
+                if fields.get("has_key_principles") is not True:
+                    missing.append("key_principles")
+                if fields.get("has_how_it_works") is not True:
+                    missing.append("how_it_works")
+                if fields.get("has_tradeoffs") is not True:
+                    missing.append("tradeoffs")
+            else:
+                present_headings = set(schema.find_headings(body))
+                for section in schema.SECTION_MAP.get(note_type, ()):
+                    if section not in present_headings:
+                        slug = section.lstrip("#").strip().lower()
+                        slug = slug.replace(" ", "_").replace("-", "_")
+                        missing.append(slug)
 
             notes.append({
                 "name": name,

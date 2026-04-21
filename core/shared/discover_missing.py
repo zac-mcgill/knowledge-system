@@ -6,28 +6,38 @@ import argparse
 import re
 from pathlib import Path
 
-from core.shared import load_schema
+from core.shared import load_schema, _resolve_vault_path
 
-_schema = load_schema()
+# Module-level globals (populated by _bind before use)
+VAULT_ROOT: Path = None
+discover_files = None
+derive_domain = None
+derive_subdomain = None
+DOMAIN_MAP: dict[str, str] = None
+SUBDOMAIN_MAP: dict = None
+EXPECTED_CONCEPTS: dict[str, frozenset[str]] = None
+SUBDOMAIN_DIFFICULTY: dict[str, str] = None
+DOMAIN_PRIORITY_WEIGHT: dict[str, float] = None
+CONCEPT_PRIORITY: dict[str, float] = None
 
-VAULT_ROOT: Path = _schema.VAULT_ROOT
-discover_files = _schema.discover_files
-derive_domain = _schema.derive_domain
-derive_subdomain = _schema.derive_subdomain
-DOMAIN_MAP: dict[str, str] = _schema.DOMAIN_MAP
-SUBDOMAIN_MAP: dict = getattr(_schema, "SUBDOMAIN_MAP", {})
-EXPECTED_CONCEPTS: dict[str, frozenset[str]] = getattr(
-    _schema, "EXPECTED_CONCEPTS", {},
-)
-SUBDOMAIN_DIFFICULTY: dict[str, str] = getattr(
-    _schema, "SUBDOMAIN_DIFFICULTY", {},
-)
-DOMAIN_PRIORITY_WEIGHT: dict[str, float] = getattr(
-    _schema, "DOMAIN_PRIORITY_WEIGHT", {},
-)
-CONCEPT_PRIORITY: dict[str, float] = getattr(
-    _schema, "CONCEPT_PRIORITY", {},
-)
+
+def _bind(vault_path: Path) -> None:
+    """Load schema and bind all module-level globals."""
+    global VAULT_ROOT, discover_files, derive_domain, derive_subdomain
+    global DOMAIN_MAP, SUBDOMAIN_MAP, EXPECTED_CONCEPTS
+    global SUBDOMAIN_DIFFICULTY, DOMAIN_PRIORITY_WEIGHT, CONCEPT_PRIORITY
+
+    _schema = load_schema(vault_path)
+    VAULT_ROOT = _schema.VAULT_ROOT
+    discover_files = _schema.discover_files
+    derive_domain = _schema.derive_domain
+    derive_subdomain = _schema.derive_subdomain
+    DOMAIN_MAP = _schema.DOMAIN_MAP
+    SUBDOMAIN_MAP = _schema.SUBDOMAIN_MAP
+    EXPECTED_CONCEPTS = _schema.EXPECTED_CONCEPTS
+    SUBDOMAIN_DIFFICULTY = _schema.SUBDOMAIN_DIFFICULTY
+    DOMAIN_PRIORITY_WEIGHT = _schema.DOMAIN_PRIORITY_WEIGHT
+    CONCEPT_PRIORITY = _schema.CONCEPT_PRIORITY
 
 DIFFICULTY_SCORE: dict[str, float] = {
     "advanced": 3.0,
@@ -339,7 +349,11 @@ def render_ranked_list(
 # ── Entry point ────────────────────────────────────────────────
 
 
-def main() -> int:
+def main(vault_path: Path | None = None) -> int:
+    if vault_path is None:
+        vault_path = _resolve_vault_path()
+    _bind(vault_path)
+
     parser = argparse.ArgumentParser(
         description="Coverage Derivation Engine",
     )

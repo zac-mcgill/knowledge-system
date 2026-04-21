@@ -13,12 +13,12 @@ Exit codes:
 import sys
 from pathlib import Path
 
-# Ensure project root is on sys.path
-_project_root = str(Path(__file__).resolve().parent)
+# Ensure repo root is on sys.path so mcp.* and core.* imports work
+_project_root = str(Path(__file__).resolve().parent.parent)
 if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
-from core.contract_runner import run_all_checks, run_lightweight_checks
+from mcp.core.contract_runner import run_all_checks, run_lightweight_checks
 
 
 def main() -> int:

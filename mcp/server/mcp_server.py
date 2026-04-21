@@ -19,7 +19,6 @@ Hardening:
     - Structured JSON logging
 """
 
-import os
 import signal
 import sys
 import time
@@ -29,8 +28,8 @@ from collections import deque
 from pathlib import Path
 from contextlib import asynccontextmanager
 
-# Ensure project root is on sys.path so core.* imports work
-_project_root = str(Path(__file__).resolve().parent.parent)
+# Ensure repo root is on sys.path so both mcp.* and core.* imports work
+_project_root = str(Path(__file__).resolve().parent.parent.parent)
 if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
@@ -39,13 +38,13 @@ from fastapi.responses import JSONResponse
 from starlette.requests import Request
 from pydantic import BaseModel, Field
 
-from core.vault_registry import list_vaults, get_vault_path, get_schema
-from core.note_index import build_index, get_index, get_schema_hash, get_index_metadata
-from core.query_engine import query, list_notes, get_note, aggregate
-from core.contract_runner import run_all_checks, run_lightweight_checks
-from core.adapters.validation_adapter import get_validation
-from core.adapters.tasks_adapter import get_tasks
-from core.adapters.notes_adapter import get_notes as get_all_notes
+from mcp.core.vault_registry import list_vaults, get_vault_path, get_schema
+from mcp.core.note_index import build_index, get_index, get_schema_hash, get_index_metadata
+from mcp.core.query_engine import query, list_notes, get_note, aggregate
+from mcp.core.contract_runner import run_all_checks, run_lightweight_checks
+from mcp.core.adapters.validation_adapter import get_validation
+from mcp.core.adapters.tasks_adapter import get_tasks
+from mcp.core.adapters.notes_adapter import get_notes as get_all_notes
 
 
 # ---------- Structured Logging (Phase 7) ----------
@@ -119,7 +118,6 @@ _request_count: int = 0
 _endpoint_counts: dict[str, int] = {}
 _response_times: deque[float] = deque(maxlen=10000)
 _metrics_lock = threading.Lock()
-_adapter_lock = threading.Lock()
 _shutting_down: bool = False
 
 
@@ -495,41 +493,12 @@ def endpoint_contract(
 
 # ---------- Adapter Endpoints (Phase 2) ----------
 
-def _adapter_call(fn, *args, **kwargs):
-    """Call an adapter function with isolated sys.modules for core.shared.
-
-    The MCP server has 'core' cached as mcp/core/. Adapters need 'core'
-    to resolve to the repo root core/ for core.shared imports. This
-    temporarily removes conflicting entries so the adapter's importlib
-    loads resolve correctly, then restores them.
-
-    Thread-safe: serialised via _adapter_lock.
-    """
-    with _adapter_lock:
-        saved = {}
-        keys_to_clear = [k for k in sys.modules if k == "core" or k.startswith("core.")]
-        for k in keys_to_clear:
-            saved[k] = sys.modules.pop(k)
-
-        saved_cwd = os.getcwd()
-
-        try:
-            return fn(*args, **kwargs)
-        finally:
-            os.chdir(saved_cwd)
-            # Clear any repo-level core modules the adapter loaded
-            for k in [k for k in sys.modules if k == "core" or k.startswith("core.")]:
-                if k not in saved:
-                    sys.modules.pop(k, None)
-            # Restore MCP core modules
-            sys.modules.update(saved)
-
 
 @app.get("/validation")
 def endpoint_validation():
     """Run vault validation and return structured results."""
     try:
-        result = _adapter_call(get_validation)
+        result = get_validation()
         if "error" in result:
             return _error("VALIDATION_FAILED", result["error"], 500)
         return result
@@ -541,7 +510,7 @@ def endpoint_validation():
 def endpoint_summary():
     """Aggregate vault-level decision signals."""
     try:
-        result = _adapter_call(get_all_notes)
+        result = get_all_notes()
         if "error" in result:
             return _error("SUMMARY_FAILED", result["error"], 500)
 
@@ -583,7 +552,7 @@ def endpoint_tasks(
     """Return prioritised upgrade tasks, optionally filtered by min_priority."""
     try:
         # Fetch all tasks (no limit at adapter level when filtering)
-        result = _adapter_call(get_tasks, limit=9999)
+        result = get_tasks(limit=9999)
         if "error" in result:
             return _error("TASKS_FAILED", result["error"], 500)
 
@@ -614,11 +583,11 @@ def endpoint_tasks(
 def endpoint_gaps():
     """Return high-impact incomplete notes (priority >= 2)."""
     try:
-        result = _adapter_call(get_tasks, limit=9999)
+        result = get_tasks(limit=9999)
         if "error" in result:
             return _error("GAPS_FAILED", result["error"], 500)
 
-        notes_result = _adapter_call(get_all_notes)
+        notes_result = get_all_notes()
         if "error" in notes_result:
             return _error("GAPS_FAILED", notes_result["error"], 500)
 
@@ -646,7 +615,7 @@ def endpoint_gaps():
 def endpoint_notes():
     """List all notes with metadata."""
     try:
-        result = _adapter_call(get_all_notes)
+        result = get_all_notes()
         if "error" in result:
             return _error("NOTES_FAILED", result["error"], 500)
         return result

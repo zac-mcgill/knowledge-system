@@ -20,25 +20,49 @@ import sys
 import tempfile
 from pathlib import Path
 
-from core.shared import load_schema as _load_schema
+from core.shared import load_schema as _load_schema, _resolve_vault_path
 
-_schema = _load_schema()
+# Module-level globals (populated by _bind before use)
+VALID_DIFFICULTIES = None
+VALID_DOMAINS = None
+VALID_STATUSES = None
+VALID_SUBDOMAINS = None
+VALID_TOPICS = None
+VALID_TYPES = None
+VAULT_ROOT = None
+detect_section_content = None
+derive_difficulty = None
+derive_domain = None
+derive_subdomain = None
+derive_topic = None
+derive_type = None
+discover_files = None
+read_file_safe = None
 
-VALID_DIFFICULTIES = _schema.VALID_DIFFICULTIES
-VALID_DOMAINS = _schema.VALID_DOMAINS
-VALID_STATUSES = _schema.VALID_STATUSES
-VALID_SUBDOMAINS = _schema.VALID_SUBDOMAINS
-VALID_TOPICS = _schema.VALID_TOPICS
-VALID_TYPES = _schema.VALID_TYPES
-VAULT_ROOT = _schema.VAULT_ROOT
-detect_section_content = _schema.detect_section_content
-derive_difficulty = _schema.derive_difficulty
-derive_domain = _schema.derive_domain
-derive_subdomain = _schema.derive_subdomain
-derive_topic = _schema.derive_topic
-derive_type = _schema.derive_type
-discover_files = _schema.discover_files
-read_file_safe = _schema.read_file_safe
+
+def _bind(vault_path: Path) -> None:
+    """Load schema and bind all module-level globals."""
+    global VALID_DIFFICULTIES, VALID_DOMAINS, VALID_STATUSES, VALID_SUBDOMAINS
+    global VALID_TOPICS, VALID_TYPES, VAULT_ROOT
+    global detect_section_content, derive_difficulty, derive_domain
+    global derive_subdomain, derive_topic, derive_type, discover_files, read_file_safe
+
+    _schema = _load_schema(vault_path)
+    VALID_DIFFICULTIES = _schema.VALID_DIFFICULTIES
+    VALID_DOMAINS = _schema.VALID_DOMAINS
+    VALID_STATUSES = _schema.VALID_STATUSES
+    VALID_SUBDOMAINS = _schema.VALID_SUBDOMAINS
+    VALID_TOPICS = _schema.VALID_TOPICS
+    VALID_TYPES = _schema.VALID_TYPES
+    VAULT_ROOT = _schema.VAULT_ROOT
+    detect_section_content = _schema.detect_section_content
+    derive_difficulty = _schema.derive_difficulty
+    derive_domain = _schema.derive_domain
+    derive_subdomain = _schema.derive_subdomain
+    derive_topic = _schema.derive_topic
+    derive_type = _schema.derive_type
+    discover_files = _schema.discover_files
+    read_file_safe = _schema.read_file_safe
 
 
 # ============================================================================
@@ -359,7 +383,11 @@ def process_file(
     return ("modified", None)
 
 
-def main() -> int:
+def main(vault_path: Path | None = None) -> int:
+    if vault_path is None:
+        vault_path = _resolve_vault_path()
+    _bind(vault_path)
+
     dry_run = "--dry-run" in sys.argv
 
     mode_label = "DRY RUN" if dry_run else "LIVE RUN"

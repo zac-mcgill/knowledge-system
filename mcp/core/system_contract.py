@@ -10,8 +10,8 @@ import sys
 from pathlib import Path
 from types import ModuleType
 
-from core.vault_registry import list_vaults, get_vault_path, get_schema
-from core.note_index import build_index, get_index
+from mcp.core.vault_registry import list_vaults, get_vault_path, get_schema
+from mcp.core.note_index import build_index, get_index
 
 _SCHEMA_RELATIVE_PATH = Path("Vault Files") / "Scripts" / "vault_schema.py"
 _VALIDATE_SCRIPT = Path("Vault Files") / "Scripts" / "validate_vault.py"

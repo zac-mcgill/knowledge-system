@@ -7,8 +7,8 @@ Returns structured results: PASS or FAIL with detailed violations.
 import time
 import logging
 
-from core.vault_registry import list_vaults
-from core.system_contract import (
+from mcp.core.vault_registry import list_vaults
+from mcp.core.system_contract import (
     check_vault_integrity,
     check_schema_interface,
     check_index_integrity,

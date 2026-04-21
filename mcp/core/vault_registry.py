@@ -9,7 +9,7 @@ import yaml
 from pathlib import Path
 from types import ModuleType
 
-from core.schema_loader import load_schema
+from mcp.core.schema_loader import load_schema
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 _CONFIG_PATH = _REPO_ROOT / "config" / "config.yaml"

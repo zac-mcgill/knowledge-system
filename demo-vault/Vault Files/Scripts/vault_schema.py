@@ -128,12 +128,22 @@ SECTION_MAP: dict[str, tuple[str, ...]] = {
 OPTIONAL_SECTION_MAP: dict[str, tuple[str, ...]] = {}
 
 # ============================================================================
+# PRIORITY / WEIGHT TABLES — must be explicitly defined (no silent defaults)
+# ============================================================================
+
+DOMAIN_PRIORITY_WEIGHT: dict[str, float] = {}
+SUBDOMAIN_DIFFICULTY: dict[str, str] = {}
+EXPECTED_CONCEPTS: dict[str, frozenset[str]] = {}
+PRIORITY_DOMAINS: frozenset[str] = frozenset()
+CONCEPT_PRIORITY: dict[str, float] = {}
+
+# ============================================================================
 # FILE DISCOVERY
 # ============================================================================
 
 
 def discover_files(root: Path) -> list[Path]:
-    """Recursively find all content files. Deterministic sort order."""
+    """Recursively find all content files. Deterministic case-insensitive sort."""
     content_files: list[Path] = []
     for dirpath, _dirnames, filenames in os.walk(root):
         rel = Path(dirpath).relative_to(root)
@@ -145,7 +155,7 @@ def discover_files(root: Path) -> list[Path]:
             if fn in EXCLUDE_FILENAMES:
                 continue
             content_files.append(Path(dirpath) / fn)
-    content_files.sort()
+    content_files.sort(key=lambda p: str(p).lower())
     return content_files
 
 

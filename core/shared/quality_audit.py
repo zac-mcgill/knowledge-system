@@ -30,15 +30,26 @@ import string
 import sys
 from pathlib import Path
 
-from core.shared import load_schema as _load_schema
+from core.shared import load_schema as _load_schema, _resolve_vault_path
 
-_schema = _load_schema()
+# Module-level globals (populated by _bind before use)
+VAULT_ROOT = None
+derive_type = None
+discover_files = None
+parse_yaml_frontmatter = None
+read_file_safe = None
 
-VAULT_ROOT = _schema.VAULT_ROOT
-derive_type = _schema.derive_type
-discover_files = _schema.discover_files
-parse_yaml_frontmatter = _schema.parse_yaml_frontmatter
-read_file_safe = _schema.read_file_safe
+
+def _bind(vault_path: Path) -> None:
+    """Load schema and bind all module-level globals."""
+    global VAULT_ROOT, derive_type, discover_files, parse_yaml_frontmatter, read_file_safe
+
+    _schema = _load_schema(vault_path)
+    VAULT_ROOT = _schema.VAULT_ROOT
+    derive_type = _schema.derive_type
+    discover_files = _schema.discover_files
+    parse_yaml_frontmatter = _schema.parse_yaml_frontmatter
+    read_file_safe = _schema.read_file_safe
 
 # ============================================================================
 # CONSTANTS
@@ -439,7 +450,11 @@ def format_details(results: list[dict], top_n: int | None) -> str:
 # ============================================================================
 
 
-def main() -> int:
+def main(vault_path: Path | None = None) -> int:
+    if vault_path is None:
+        vault_path = _resolve_vault_path()
+    _bind(vault_path)
+
     parser = argparse.ArgumentParser(
         description="Content Quality Audit — deterministic analysis of "
                     "explanatory quality for core-concept notes.",

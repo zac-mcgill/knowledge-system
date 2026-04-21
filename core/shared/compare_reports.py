@@ -21,16 +21,29 @@ import argparse
 import re
 from pathlib import Path
 
-from core.shared import load_schema as _load_schema
+from core.shared import load_schema as _load_schema, _resolve_vault_path
 
-_schema = _load_schema()
+# Module-level globals (populated by _bind before use)
+TRACKED_SECTIONS = None
+VAULT_ROOT = None
+OUTPUT_DIR = None
+discover_files = None
+parse_yaml_frontmatter = None
+read_file_safe = None
 
-TRACKED_SECTIONS = _schema.TRACKED_SECTIONS
-VAULT_ROOT = _schema.VAULT_ROOT
-OUTPUT_DIR = _schema.OUTPUT_DIR
-discover_files = _schema.discover_files
-parse_yaml_frontmatter = _schema.parse_yaml_frontmatter
-read_file_safe = _schema.read_file_safe
+
+def _bind(vault_path: Path) -> None:
+    """Load schema and bind all module-level globals."""
+    global TRACKED_SECTIONS, VAULT_ROOT, OUTPUT_DIR
+    global discover_files, parse_yaml_frontmatter, read_file_safe
+
+    _schema = _load_schema(vault_path)
+    TRACKED_SECTIONS = _schema.TRACKED_SECTIONS
+    VAULT_ROOT = _schema.VAULT_ROOT
+    OUTPUT_DIR = _schema.OUTPUT_DIR
+    discover_files = _schema.discover_files
+    parse_yaml_frontmatter = _schema.parse_yaml_frontmatter
+    read_file_safe = _schema.read_file_safe
 
 # ============================================================================
 # CONSTANTS
@@ -605,7 +618,11 @@ def generate_delta_report(before: VaultSnapshot, after: VaultSnapshot) -> str:
 # CLI
 # ============================================================================
 
-def main() -> None:
+def main(vault_path: Path | None = None) -> None:
+    if vault_path is None:
+        vault_path = _resolve_vault_path()
+    _bind(vault_path)
+
     parser = argparse.ArgumentParser(
         description="Generate a delta comparison report between two vault states",
     )

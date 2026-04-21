@@ -21,7 +21,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
 from pathlib import Path
 
-from core.vault_registry import get_vault_path, get_schema
+from mcp.core.vault_registry import get_vault_path, get_schema
 
 logger = logging.getLogger("mcp.index")
 

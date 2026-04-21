@@ -19,25 +19,40 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from core.shared import load_schema as _load_schema
+from core.shared import load_schema as _load_schema, _resolve_vault_path
 
-_schema = _load_schema()
+# Module-level globals (populated by _bind before use)
+TRACKED_SECTIONS = None
+VALID_DIFFICULTIES = None
+VAULT_ROOT = None
+OUTPUT_DIR = None
+discover_files = None
+parse_yaml_frontmatter = None
+read_file_safe = None
+PRIORITY_DOMAINS = None
 
-TRACKED_SECTIONS = _schema.TRACKED_SECTIONS
-VALID_DIFFICULTIES = _schema.VALID_DIFFICULTIES
-VAULT_ROOT = _schema.VAULT_ROOT
-OUTPUT_DIR = _schema.OUTPUT_DIR
-discover_files = _schema.discover_files
-parse_yaml_frontmatter = _schema.parse_yaml_frontmatter
-read_file_safe = _schema.read_file_safe
+
+def _bind(vault_path: Path) -> None:
+    """Load schema and bind all module-level globals."""
+    global TRACKED_SECTIONS, VALID_DIFFICULTIES, VAULT_ROOT, OUTPUT_DIR
+    global discover_files, parse_yaml_frontmatter, read_file_safe, PRIORITY_DOMAINS
+
+    _schema = _load_schema(vault_path)
+    TRACKED_SECTIONS = _schema.TRACKED_SECTIONS
+    VALID_DIFFICULTIES = _schema.VALID_DIFFICULTIES
+    VAULT_ROOT = _schema.VAULT_ROOT
+    OUTPUT_DIR = _schema.OUTPUT_DIR
+    discover_files = _schema.discover_files
+    parse_yaml_frontmatter = _schema.parse_yaml_frontmatter
+    read_file_safe = _schema.read_file_safe
+    PRIORITY_DOMAINS = _schema.PRIORITY_DOMAINS
+
 
 # ============================================================================
 # CONSTANTS
 # ============================================================================
 
 DEFAULT_OUTPUT = "Vault Report.md"
-
-PRIORITY_DOMAINS = getattr(_schema, 'PRIORITY_DOMAINS', frozenset())
 
 
 # ============================================================================
@@ -536,8 +551,12 @@ def generate_report(records: list[dict]) -> str:
 # ============================================================================
 
 
-def main() -> None:
+def main(vault_path: Path | None = None) -> None:
     import argparse
+
+    if vault_path is None:
+        vault_path = _resolve_vault_path()
+    _bind(vault_path)
 
     parser = argparse.ArgumentParser(
         description="Generate a portfolio-ready markdown report for the vault",

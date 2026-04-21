@@ -1,0 +1,556 @@
+Full System Forensic Analysis
+Knowledge-System — Implementation-Level Reverse Engineering
+1. Execution Entry Points
+Entry Point 1: run.py
+__main__ call chain:
+
+
+python run.py <command>  └── main()                          # defined at module level       ├── sys.argv[1] dispatch       ├── command == "help"          → prints USAGE, returns       ├── command == "init"          → _init_vault(repo_root)       ├── command == "templates"     → imports core.generate_templates, calls main()       └── command in COMMANDS        → dynamic import + main()
+Argument parsing:
+No argparse. Raw sys.argv indexing. sys.argv[1] is the command. For init, sys.argv[2] is the vault name. No validation of argument count beyond explicit length checks.
+
+Initialisation sequence (for validate/report/analyse/improve):
+
+Resolve repo_root = Path(__file__).resolve().parent
+Open config/config.yaml with yaml.safe_load
+Extract vault_root key, resolve to absolute path
+Verify vault_root is a directory
+Verify vault_root / "Vault Files" / "Scripts" exists
+Side effect: sys.path.insert(0, str(repo_root))
+Side effect: os.chdir(scripts_dir) — changes CWD to <vault>/Vault Files/Scripts
+Side effect: sys.argv = sys.argv[:1] — argv is mutated before module import
+__import__(COMMANDS[command], fromlist=["main"]) — lazy import of target module
+raise SystemExit(module.main())
+Modules imported at runtime vs top-level:
+
+Top-level: os, re, shutil, sys, tempfile, pathlib.Path, yaml
+Runtime (lazy): all of core.shared.validate_vault, core.shared.generate_report, core.shared.analyse_vault, core.shared.upgrade_vault, core.generate_templates
+Critical side effect: os.chdir(scripts_dir) is called before the target module is imported. This is load_schema()'s search anchor — it searches from Path.cwd() upward to find vault_schema.py. The CWD must be set correctly before any core.shared module imports at module level.
+
+Entry Point 2: mcp/server/mcp_server.py
+Not invoked via python mcp_server.py __main__ — this file has no if __name__ == "__main__" block. It is a FastAPI ASGI application, started externally by uvicorn: uvicorn mcp.server.mcp_server:app.
+
+sys.path injection at top of file:
+
+
+_project_root = str(Path(__file__).resolve().parent.parent)if _project_root not in sys.path:    sys.path.insert(0, _project_root)
+This adds mcp/ to sys.path so that from core.vault_registry import ... resolves to mcp/core/vault_registry.py, not core/ at repo root.
+
+Startup sequence (FastAPI lifespan context manager):
+
+_validate_config() — calls list_vaults() → _load_config() → reads config/config.yaml, then for each vault: checks dir exists, checks vault_schema.py exists, calls get_schema() and verifies discover_files + parse_yaml_frontmatter callables
+For each vault: build_index(vault_name) — scans all files, builds in-memory dict list
+run_all_checks(include_vault_scripts=False) — runs check_schema_interface, check_index_integrity, check_query_determinism for each vault. Hard abort on failure.
+Install signal handlers (SIGINT/SIGTERM)
+Start _periodic_recheck_loop daemon thread (runs every 300 seconds)
+Modules imported at top-level (not lazy):
+fastapi, starlette, pydantic, core.vault_registry, core.note_index, core.query_engine, core.contract_runner, core.adapters.* — all from mcp/core/.
+
+2. CLI Runtime Flow (Trace-Level)
+validate command
+
+run.py:main()  os.chdir(<vault>/Vault Files/Scripts)  sys.path.insert(0, repo_root)  sys.argv = [run.py]  module = __import__("core.shared.validate_vault", fromlist=["main"])    # Module-level execution on import:  core.shared.validate_vault (top of file):    from core.shared import load_schema as _load_schema    _schema = _load_schema()           ← searches CWD upward for vault_schema.py                                         finds: <vault>/Vault Files/Scripts/vault_schema.py                                         loads via importlib.util.spec_from_file_location                                         caches as sys.modules["vault_schema"]        # Extracts all constants from _schema into module-level names:    ALL_KNOWN_FIELDS = _schema.ALL_KNOWN_FIELDS    SECTION_MAP = _schema.SECTION_MAP    ... (14 more attribute assignments)        # Also binds functions:    discover_files = _schema.discover_files    parse_yaml_frontmatter = _schema.parse_yaml_frontmatter    ... etc  module.main():    files = discover_files(VAULT_ROOT)      ← os.walk(VAULT_ROOT), skips EXCLUDE_DIRS ("Vault Files"),        skips EXCLUDE_FILENAMES, collects .md files      ← sorts each directory's filenames, then sorts full list      Returns: list[Path], deterministic        for filepath in files:      errors = validate_file(filepath, VAULT_ROOT)        ← reads content via read_file_safe(filepath)           strips BOM, normalises line endings        ← parse_yaml_frontmatter(content)           hand-rolled parser: looks for "---\n" start,           finds "\n---\n" close, splits key:value pairs           Returns: (dict | None, str body)        ← checks ALL_KNOWN_FIELDS, required fields by type+depth        ← enum validation for domain/subdomain/topic/status/difficulty        ← derive_* functions called for consistency cross-check        ← detect_section_content(body, heading) for boolean fields        ← validate_how_it_works(body) / validate_tradeoffs(body) for quality        Returns: list[str] of error messages        Prints summary to stdout    Returns 0 (pass) or 1 (fail)    raise SystemExit(module.main())
+Data structures passed:
+
+list[Path] from discover_files
+(dict[str, str|bool] | None, str) from parse_yaml_frontmatter
+list[str] errors from validate_file
+File I/O: Read-only. Reads each .md file via filepath.read_bytes().
+
+analyse command
+
+run.py:main()  [same setup as validate]  module = __import__("core.shared.analyse_vault", fromlist=["main"])    # Module-level:  _schema = load_schema()   ← same CWD-based search  VAULT_ROOT, discover_files, parse_yaml_frontmatter, etc. bound  module.main():    records = load_all(VAULT_ROOT)      for filepath in discover_files(VAULT_ROOT):        content = read_file_safe(filepath)        fields, _ = parse_yaml_frontmatter(content)        if fields is None: continue        fields["_path"] = str(filepath.relative_to(VAULT_ROOT))        records.append(fields)      Returns: list[dict]   ← each dict is raw YAML fields + "_path" key    analysis_1_completeness_by_domain(records)   → prints table to stdout    analysis_2_subdomain_weak_points(records)     → prints table to stdout    analysis_3_difficulty_vs_completeness(records)→ prints table to stdout    analysis_4_critical_gaps(records)             → prints list to stdout    analysis_5_section_deficiency_heatmap(records)→ prints tables to stdout    analysis_6_priority_upgrade_targets(records)  → [UNVERIFIED — not read]    analysis_7_*                                  → [UNVERIFIED — not read]
+File I/O: Read-only. No writes. Output to stdout only.
+
+improve command
+
+run.py:main()  [same setup]  module = __import__("core.shared.upgrade_vault", fromlist=["main"])    # Module-level:  _schema = load_schema()  SECTION_MAP, TRACKED_SECTIONS, VALID_DIFFICULTIES, VAULT_ROOT, etc. bound  SUBDOMAIN_DIFFICULTY = getattr(_schema, 'SUBDOMAIN_DIFFICULTY', {})  DOMAIN_PRIORITY_WEIGHT = getattr(_schema, 'DOMAIN_PRIORITY_WEIGHT', {})  # Note: both attributes use getattr(..., {}) — if absent from schema, silently default  module.main():    parser = argparse.ArgumentParser()    parser.add_argument("--top", type=int, default=20)    args = parser.parse_args()    # sys.argv was truncated to [run.py] before this, so no args are parsed        records = load_all(VAULT_ROOT)      for filepath in discover_files(VAULT_ROOT):        fields, body = parse_yaml_frontmatter(content)        fields["_path"] = rel        fields["_body"] = body        fields["_abs"] = str(filepath)        records.append(fields)        tasks = generate_tasks(records)      for rec in records:        if rec.get("status") != "partial": continue        if note_type == "core-concept":          hw_issue, hw_steps = check_how_it_works(body)          to_issue, to_rows  = check_tradeoffs(body)          kp_issue           = check_key_principles(rec)          score = score_core_concept(rec, issues)            ← difficulty: "advanced"=+3.0, "intermediate"=+1.0            ← per issue: tradeoffs=+3.0, how-it-works=+2.0, key-principles=+1.0            ← multiplied by DOMAIN_PRIORITY_WEIGHT.get(domain, 1.0)        else:          missing = check_family_b_sections(body, note_type)          score = score_family_b(rec, missing)            ← difficulty weight same as above            ← len(missing) * 1.5            ← multiplied by DOMAIN_PRIORITY_WEIGHT        tasks.append({path, note_type, difficulty, domain, score, issues})            tasks.sort(key=lambda t: (-t["score"], t["path"]))      Returns: list[dict]        render_summary(records, tasks, top_n)  → stdout    render_scoring(tasks)                   → stdout    render_task_table(tasks, top_n)         → stdout    render_task_details(tasks, top_n)       → stdout
+File I/O: Read-only. No writes.
+
+report command
+
+run.py:main()  [same setup]  module = __import__("core.shared.generate_report", fromlist=["main"])    module.main():    argparse: --output "Custom Report Name.md" (optional)    output_filename = args.output or DEFAULT_OUTPUT ("Vault Report.md")    output_path = OUTPUT_DIR / output_filename      ← OUTPUT_DIR = _schema.OUTPUT_DIR = <vault>/Vault Files/        records = load_all(VAULT_ROOT)   [same as analyse]        sections = [      section_executive_summary(records),      section_domain_analysis(records),      section_key_insights(records),      section_critical_gaps(records),      section_priority_actions(records),      section_architecture(),    ]        report_content = "# Vault Analysis Report\n\n" + "\n".join(sections)    output_path.write_text(report_content, encoding="utf-8")   ← WRITES FILE
+File I/O: Reads all .md files. Writes one file: <vault>/Vault Files/Vault Report.md.
+
+3. API Runtime Flow (Trace-Level)
+GET /vaults
+
+endpoint_vaults()  list_vaults()    _load_config()          ← reads config.yaml once, caches in _vaults dict    return sorted(_vaults.keys())  return {"status": "ok", "data": {"vaults": [...]}}
+POST /query
+
+endpoint_query(req: QueryRequest)  _validate_vault(req.vault)    get_vault_path(req.vault)   ← checks _vaults dict, raises KeyError if absent    if req.filters:    query(req.vault, req.filters, limit, offset, strict)      known = _valid_fields(vault_name)        get_schema(vault_name).ALL_KNOWN_FIELDS      [optional strict field validation]      index = get_index(vault_name)        ← returns cached list[dict], may rebuild if schema changed      for note in index:        if time > deadline (200ms): timed_out = True; break        if _match(note, filters, known): results.append(...)      results.sort(key=lambda n: n["path"].lower())      paginated = results[offset:offset+limit]      return {status, count, returned, offset, limit, results}  else:    list_notes(req.vault, limit, offset)      index = get_index(vault_name)      all_notes sorted by path.lower()      paginated      return same structure
+GET /note
+
+endpoint_note(vault, path)  _validate_vault(vault)  get_note(vault, path)    decoded = urllib.parse.unquote(path)    normed = os.path.normpath(decoded)    if os.path.isabs(normed): return PATH_TRAVERSAL error    resolved = (vault_root / normed).resolve()    if not resolved == vault_resolved or starts_with check: return PATH_TRAVERSAL    index = get_index(vault_name)    for note in index:      if note["path"] == resolved.relative_to(vault_root).as_posix():        return {status: ok, data: {path, fields, body}}    return {status: error, error: {code: NOT_FOUND}}
+GET /stats
+
+endpoint_stats(vault, field)  aggregate(vault, field)    known = _valid_fields(vault_name)    if field not in known: return INVALID_FIELD error    index = get_index(vault_name)    counter = Counter(note["fields"].get(field) for note in index)    return {status: ok, data: {field, stats: dict(counter), total}}
+Adapter endpoints (/validation, /tasks, /gaps, /notes, /summary)
+
+endpoint_*(...)  _adapter_call(get_*)    with _adapter_lock:   ← serialised (not concurrent)      saved = {all sys.modules keys starting with "core" or "core.*"}      remove them from sys.modules      save cwd      try:        get_*()         ← adapter runs, re-imports core.shared.* from repo root      finally:        os.chdir(saved_cwd)        remove any new "core.*" modules adapter loaded        restore saved MCP "core.*" modules
+Conclusion: Adapter endpoints are fully serialised via _adapter_lock. They manipulate sys.modules and os.chdir on every call.
+
+4. Core Architecture Layers (Code-Derived)
+Layer 1: Schema Layer
+Module: <vault>/Vault Files/Scripts/vault_schema.py
+
+Defines all constants, enums, derivation functions, file I/O utilities
+Not importable by standard Python package path — loaded via importlib.util.spec_from_file_location
+No external dependencies (stdlib only)
+Layer 2: Core Shared Logic (CLI backend)
+Modules: core/shared/validate_vault.py, core/shared/analyse_vault.py, core/shared/upgrade_vault.py, core/shared/generate_report.py, core/shared/inject_frontmatter.py, core/shared/discover_missing.py, core/shared/compare_reports.py, core/shared/quality_audit.py, core/shared/query_vault.py
+
+Each imports schema via core.shared.load_schema() at module level. They are not importable standalone — they rely on CWD being set to the scripts directory before import.
+
+Layer 3: CLI Layer
+Module: run.py
+
+Dispatches to Layer 2 via __import__ at runtime
+Responsible for CWD manipulation and sys.path setup
+No business logic of its own
+Layer 4: Template Engine
+Module: core/generate_templates.py
+
+Loads schema independently via importlib.util.spec_from_file_location using config path
+Does NOT use core.shared.load_schema() or CWD manipulation
+Uses config/config.yaml directly for vault resolution
+Layer 5: MCP API Layer
+Modules: mcp/core/vault_registry.py, mcp/core/schema_loader.py, mcp/core/note_index.py, mcp/core/query_engine.py, mcp/core/contract_runner.py, mcp/core/system_contract.py, mcp/core/adapters/*.py
+
+Layer violations / cross-layer access:
+
+mcp/core/ is a parallel re-implementation of schema loading (schema_loader.py) independent of core/shared/__init__.py
+mcp/core/adapters/ bridge the gap by importing core/shared/ modules directly via importlib.util.spec_from_file_location, bypassing the layer entirely
+system_contract.py invokes subprocess calls (subprocess.run) back to vault scripts — the API layer reaches down to the filesystem layer
+Namespace collision: both core/ (repo root) and mcp/core/ exist. The MCP server injects mcp/ into sys.path[0], so from core.x import y resolves to mcp/core/x.py. The adapters must explicitly undo this to load repo_root/core/shared/.
+5. Schema System (Full Deconstruction)
+Load Mechanism — Two Paths
+Path A: core/shared/__init__.py → load_schema()
+
+
+if "vault_schema" in sys.modules:    return sys.modules["vault_schema"]roots = [Path.cwd().resolve()]if sys.argv[0]:    roots.append(Path(sys.argv[0]).resolve().parent)for start in roots:    cursor = start    while True:        candidate = cursor / "vault_schema.py"        if candidate.is_file():            spec = importlib.util.spec_from_file_location("vault_schema", str(candidate))            mod = importlib.util.module_from_spec(spec)            sys.modules["vault_schema"] = mod            spec.loader.exec_module(mod)            return mod        parent = cursor.parent        if parent == cursor: break        cursor = parent
+Registered as sys.modules["vault_schema"] — a global, unnamespaced key
+CWD-dependent: works because run.py does os.chdir(scripts_dir) before import
+First call caches; all subsequent calls return the cached module
+Path B: mcp/core/schema_loader.py → load_schema(vault_path, vault_name)
+
+
+module_name = f"vault_schema_{vault_name}"if module_name in sys.modules:    return sys.modules[module_name]spec = importlib.util.spec_from_file_location(module_name, str(schema_file))module = importlib.util.module_from_spec(spec)sys.modules[module_name] = modulespec.loader.exec_module(module)return module
+Registered as sys.modules["vault_schema_<name>"] — namespaced, avoids collision
+Path-explicit, not CWD-dependent
+Schema Structure (vault_schema.py)
+Element	Type	Purpose
+VAULT_ROOT	Path	Absolute path to vault root (derived from __file__)
+OUTPUT_DIR	Path	<vault>/Vault Files/
+EXCLUDE_DIRS	frozenset[str]	Dirs skipped by discover_files
+EXCLUDE_FILENAMES	frozenset[str]	Files skipped by discover_files
+TYPE_REGISTRY	dict[str,str]	filename → note type override (empty in demo vault)
+DOMAIN_MAP	dict[str,str]	folder name → slug
+SUBDOMAIN_MAP	dict[str,tuple]	folder → (slug, parent_domain)
+TOPIC_MAP	dict[str,tuple]	folder → (slug, parent_subdomain)
+VALID_TYPES	frozenset[str]	{"core-concept"}
+VALID_DOMAINS	frozenset[str]	derived from DOMAIN_MAP.values()
+VALID_SUBDOMAINS	frozenset[str]	derived from SUBDOMAIN_MAP.values()
+VALID_STATUSES	frozenset[str]	{"complete", "partial"}
+VALID_DIFFICULTIES	frozenset[str]	{"intermediate"}
+CORE_CONCEPT_FIELDS	tuple[str,...]	required fields at depth-3
+CORE_CONCEPT_FIELDS_WITH_TOPIC	tuple[str,...]	required fields at depth-4
+SECTION_MAP	dict[str,tuple]	type → required section headings
+TRACKED_SECTIONS	tuple[tuple]	[(yaml_key, heading_label),...]
+How Schema Drives Validation
+validate_vault.py binds all constants directly from _schema at module-load time. validate_file() uses these bindings for all checks. If schema changes, a process restart is required — no live reload.
+
+How Schema Drives Template Generation
+generate_templates.py calls its own load_schema(vault) (not core.shared). It reads VALID_TYPES, looks up TYPE_TO_CONSTANT[note_type] → constant name → reads that constant from schema module. Calls build_type_section_map(), then render_template() → writes files.
+
+How Schema Drives Task Generation
+upgrade_vault.py uses SECTION_MAP (for Family B), TRACKED_SECTIONS (indirectly via has_* field checks), VALID_DIFFICULTIES, DOMAIN_PRIORITY_WEIGHT, SUBDOMAIN_DIFFICULTY (via getattr fallbacks). The schema's VALID_DIFFICULTIES content controls which difficulty branch executes (the "advanced" scoring path is dead code in the demo vault since VALID_DIFFICULTIES = frozenset({"intermediate"})).
+
+6. Template Engine Internals
+Transformation Pipeline
+
+resolve_vault()  reads config/config.yaml  resolves vault_path  checks vault_path / SCHEMA_REL existsload_schema(vault_path)  importlib.util.spec_from_file_location(f"vault_schema_{vault.name}", schema_path)  Module NOT cached in sys.modules["vault_schema"] — separate namespacebuild_type_section_map(schema, vault_name)  valid_types = schema.VALID_TYPES  for note_type in sorted(valid_types):    constant_name = TYPE_TO_CONSTANT[note_type]    ← hardcoded dict in generate_templates.py    sections = getattr(schema, constant_name)    if schema has SECTION_MAP: cross-check SECTION_MAP[note_type] == sections  Returns: dict[str, tuple[str,...]]process_vault(vault, dry_run)  for note_type in sorted(section_map):    filename = f"{note_type}.md"    content = render_template(note_type, sections)      → "# {{Title}}\n\n## Section 1\n\n## Section 2\n...\n"    filepath = template_dir / filename    if exists:      read existing content      if content == existing: unchanged      else: updated    else: created    if not dry_run: write file  # Cleanup phase  for child in sorted(template_dir.iterdir()):    if child.name not in valid_filenames: remove  # Validation phase (not dry_run only)  for note_type in sorted(section_map):    read back written file    parse_headings(content)  → list of "## ..." lines    assert actual == expected  → HARD FAIL + sys.exit(1) on mismatch
+Idempotency Mechanism
+String equality check: if existing == content: unchanged. The content is deterministic (sorted types, fixed template format), so re-runs produce identical bytes given identical schema.
+
+Overwrite vs Merge
+Full overwrite — no merging. The existing file's content beyond headings is discarded. Templates contain only # {{Title}} and ## Heading lines with blank lines between them.
+
+Post-generation Validation
+Reads each written file back and compares extracted headings against section_map[note_type]. Mismatches cause sys.exit(1). This is a write-then-verify pattern.
+
+7. Task Generation System
+Responsible module: core/shared/upgrade_vault.py
+Entry function: generate_tasks(records: list[dict]) -> list[dict]
+
+Trigger Conditions
+A record generates tasks if and only if: rec.get("status") == "partial". Complete notes are skipped entirely.
+
+For core-concept notes:
+check_how_it_works(body): calls extract_section_body(body, "## How It Works"). If None → "missing-how-it-works". If present but < 3 lines matching ^\d+\.\s+ → "weak-how-it-works".
+check_tradeoffs(body): calls extract_section_body(body, "## Trade-offs"). If None → "missing-tradeoffs". If present but < 3 data rows (table lines minus 2) OR header cells ≠ ["aspect","benefit","cost"] → "weak-tradeoffs".
+check_key_principles(fields): checks fields.get("has_key_principles") is not True → "missing-key-principles". This checks the YAML boolean field, not the actual section body.
+For Family B notes:
+check_family_b_sections(body, note_type): gets SECTION_MAP[note_type], compares to set(find_headings(body)). Returns list of missing headings.
+Priority Calculation (core-concept):
+
+base = 0.0if "advanced" in VALID_DIFFICULTIES and difficulty == "advanced": base += 3.0elif difficulty == "intermediate": base += 1.0for issue:  if tradeoffs:     base += 3.0  if how_it_works:  base += 2.0  if key_principles: base += 1.0score = base * DOMAIN_PRIORITY_WEIGHT.get(domain, 1.0)
+Note: In the demo vault, "advanced" not in VALID_DIFFICULTIES, so the if "advanced" in... branch never executes. All notes score +1.0 for difficulty at most.
+
+Sorting
+
+tasks.sort(key=lambda t: (-t["score"], t["path"]))
+Primary: score descending. Secondary: path ascending (alphabetical, case-sensitive string sort).
+
+Task Structure
+
+{    "path": str,    "note_type": str,    "difficulty": str,    "domain": str,    "score": float,    "issues": [        {            "issue_type": str,            "detail": str,            "required_sections": [str],            "constraints": [str],        }    ]}
+8. Data Flow & State Model
+Primary Data Unit
+A note is represented as a Python dict with these keys:
+
+type, domain, subdomain, topic (optional), status, has_key_principles, has_how_it_works, has_tradeoffs, difficulty — YAML field values, as str | bool
+_path — relative path string (CLI context), or path (MCP index)
+_body — markdown body after frontmatter (upgrade_vault only)
+_abs — absolute path string (upgrade_vault only)
+In the MCP index, the structure is:
+
+
+{"path": str, "fields": dict, "body": str}
+Parsing Process
+read_file_safe(filepath) → raw bytes → UTF-8 string, BOM stripped, \r\n normalised
+parse_yaml_frontmatter(content) → hand-rolled parser (not PyYAML):
+Looks for content.startswith("---\n"), finds "\n---\n" close
+Splits on newlines, partitions on first :, strips whitespace
+Converts "true" → True, "false" → False, everything else → str
+Returns (dict | None, str body)
+Transformation Stages (CLI)
+Raw bytes on disk
+UTF-8 string (normalised)
+(fields: dict, body: str) tuple
+Module-level name bindings (in each core/shared/*.py)
+Analysis aggregation structures (dicts of dicts)
+CLI output (stdout) or written markdown file
+Stateless vs Stateful
+CLI layer: Fully stateless per invocation. No caching between commands. Schema is loaded once per process, cached in sys.modules["vault_schema"].
+
+MCP API layer: Explicitly stateful:
+
+_vaults: dict[str, Path] — vault registry (populated on first call, never updated)
+_schemas: dict[str, ModuleType] — schema cache per vault (never invalidated)
+_indices: dict[str, dict] — note indexes with metadata (rebuilt on schema hash change, with cooldown)
+_rate_limiter — sliding window state
+_request_count, _endpoint_counts, _response_times — metrics state
+Caching
+Schema: cached in sys.modules by name, never invalidated during process lifetime
+Note index: rebuilt when SHA-256(schema_file_bytes) changes, subject to 2-second cooldown
+Vault registry: populated once, frozen after that
+Reliance on Filesystem Ordering
+discover_files() uses os.walk() (OS-ordered) then explicitly sorts filenames per directory and finally sorts the full list. The final content_files.sort() uses Path comparison (lexicographic, case-sensitive on the Path object). The MCP index re-sorts by path.lower() — case-insensitive. These two sort orders can diverge for mixed-case paths.
+
+9. Determinism Audit
+Claim 1: No Randomness
+VERDICT: VALID
+
+No random, uuid, secrets, or os.urandom calls anywhere in the codebase
+No time.time() or datetime.now() in output-affecting code paths
+time.monotonic() used only for metrics/timeouts, not in data output
+Claim 2: Repeatable Outputs
+VERDICT: PARTIAL
+
+Proven repeatable:
+
+discover_files(): os.walk output is sorted per-directory, then globally. Given fixed filesystem state, identical output.
+generate_tasks(): sort is (-score, path). Score is a deterministic float function of field values. Path is a string. Output is repeatable for fixed input.
+Template generation: content is "\n".join(["# {{Title}}", ""] + [section, "" for section in sections]) + "\n" — deterministic string concatenation.
+Partial concern:
+
+os.walk() ordering is OS/filesystem-dependent before the explicit sort. The content_files.sort() call sorts Path objects using Python's default Path.__lt__, which is case-sensitive on all platforms. The MCP index sorts by path.lower() (case-insensitive). On a case-insensitive filesystem (Windows), two files A.md and a.md cannot coexist, but the sort order difference is a theoretical risk on Linux vaults.
+The DOMAIN_PRIORITY_WEIGHT and SUBDOMAIN_DIFFICULTY attributes are fetched with getattr(_schema, 'X', {}). If absent from schema, silently defaults to {}. This is a hidden default — the behaviour changes silently if the schema adds these attributes.
+Claim 3: Idempotent Template Generation
+VERDICT: VALID
+
+Template content is deterministic from schema
+Idempotency check is existing == content (byte-level string equality)
+The write uses filepath.write_text(..., newline="\n") — consistent line endings
+Cleanup removes non-canonical files, so re-runs on a mutated template directory converge to correct state
+Hidden State Risk
+sys.modules["vault_schema"] persists for the process lifetime. If two CLI commands are run in the same Python process (hypothetically), the second would reuse the first's schema. In practice, run.py is a subprocess launcher via raise SystemExit, so this is not an active risk for CLI use.
+In the MCP adapter _adapter_call, sys.modules.pop("vault_schema", None) is called to clear the cached schema before re-importing — this correctly handles the multi-vault scenario.
+Concurrency Risk
+_adapter_lock serialises all adapter calls, preventing race conditions on sys.modules and os.chdir. This is correct but means adapter endpoints do not parallelize.
+_get_vault_lock() provides per-vault locking for index operations using double-checked locking. The global _global_lock guards the _locks dict creation. This is correct.
+_metrics_lock guards _request_count, _endpoint_counts, _response_times. _request_count is a module-level int modified with global statement inside a lock — correct.
+_shutting_down flag is written without a lock (in signal handler and startup). This is a benign race for a boolean flag, but technically not atomic in Python before 3.12 GIL removal scenarios.
+10. Error Handling & Failure Model
+Where Exceptions Are Raised
+Location	Exception Type	Condition
+core/shared/__init__.py:load_schema	FileNotFoundError	vault_schema.py not found after exhaustive search
+vault_schema.py:derive_domain	ValueError	folder not in DOMAIN_MAP
+vault_schema.py:derive_subdomain	ValueError	folder not in SUBDOMAIN_MAP
+vault_schema.py:derive_topic	ValueError	folder not in TOPIC_MAP
+mcp/core/schema_loader.py:load_schema	FileNotFoundError	schema file missing
+mcp/core/schema_loader.py:load_schema	ImportError	spec creation fails
+mcp/core/vault_registry.py:get_vault_path	KeyError	vault name not registered
+mcp/core/vault_registry.py:_load_config	FileNotFoundError	config.yaml missing
+mcp/core/vault_registry.py:_load_config	ValueError	vault_root key missing
+mcp/core/note_index.py:_build_index_internal	RuntimeError	build timeout with no fallback
+Where Exceptions Are Caught
+CLI (run.py):
+
+yaml.YAMLError on config load → SystemExit(1) with message
+validate_file() wraps file reads in try/except Exception → returns error string
+derive_* calls in validate_file and process_file catch ValueError → appended to errors list
+No top-level except — unhandled exceptions produce Python tracebacks to stderr
+MCP endpoints:
+
+All endpoint functions have try/except Exception as exc: return _error(...) — raw tracebacks are suppressed, structured JSON errors are returned
+_validate_config() raises RuntimeError → propagates to FastAPI lifespan → server aborts startup
+run_all_checks() failures at startup → RuntimeError → server aborts startup
+Adapter functions return {"error": str(exc)} from their own try/except
+Fail-fast Behaviour
+Missing config: Both CLI and MCP fail fast. CLI prints error + SystemExit(1). MCP raises FileNotFoundError during _validate_config(), which kills the lifespan and prevents server start.
+
+Missing vault: CLI checks vault_root.is_dir() → SystemExit(1). MCP raises FileNotFoundError in _load_config().
+
+Invalid schema: CLI — load_schema() raises FileNotFoundError at module import time, which propagates as an unhandled exception (raw traceback). MCP — _validate_config() checks schema file existence and raises RuntimeError.
+
+Schema missing required functions: CLI — AttributeError at module-level binding (e.g., discover_files = _schema.discover_files when the attribute doesn't exist). This produces a raw traceback. MCP — explicitly checked in _validate_config().
+
+Documentation vs Code discrepancy — validate_vault.py error on missing schema: The module docstring says "Read-only — never modifies files" and implies clean error reporting, but a missing vault_schema.py produces a raw FileNotFoundError traceback from load_schema() during module import, not a handled error message.
+
+11. Configuration System Behaviour
+File: config/config.yaml
+Content: Single key: vault_root: ./demo-vault
+
+Load Mechanism
+CLI (run.py):
+
+Loaded on every invocation before any module import
+Uses yaml.safe_load() (PyYAML)
+Read once per process, not cached (but the process is single-use)
+yaml.YAMLError → caught → SystemExit(1)
+Missing file → checked explicitly before open → SystemExit(1)
+Missing vault_root key → SystemExit(1)
+Template engine (generate_templates.py):
+
+Independent read via its own resolve_vault() function
+Uses yaml.safe_load()
+Failure modes: sys.exit(1) with HARD FAIL: prefix to stderr
+MCP (mcp/core/vault_registry.py):
+
+_load_config() is called from list_vaults() and get_vault_path()
+Uses module-level _vaults: dict as cache
+Guard: if _vaults: return — loads once, then cached for process lifetime
+No live reload: If config.yaml changes while the MCP server runs, the change is NOT detected. The server must be restarted.
+Failure modes: FileNotFoundError or ValueError — both propagate uncaught, killing the lifespan startup
+Adapters (mcp/core/adapters/*.py):
+
+Each adapter re-reads config.yaml independently via _resolve_config()
+No caching in adapter — reads on every call
+This means config is re-read on every /validation, /tasks, /notes, /summary, /gaps request (though protected by _adapter_lock serialisation)
+Atomicity
+_init_vault in run.py uses tempfile.mkstemp + Path.replace() for atomic config update. This is the only write path to config.yaml.
+
+12. CLI ↔ API Consistency
+CLI modules for business logic:
+core/shared/validate_vault.py — validation
+core/shared/upgrade_vault.py — task generation + scoring
+core/shared/analyse_vault.py — analysis
+core/shared/generate_report.py — report generation
+core/shared/__init__.py — schema loading
+API modules for business logic:
+mcp/core/note_index.py — file discovery + parsing (reimplemented)
+mcp/core/query_engine.py — filtering + pagination (new logic, not in CLI)
+mcp/core/vault_registry.py — config + schema loading (reimplemented)
+mcp/core/schema_loader.py — schema loading (reimplemented)
+Adapter bridge:
+mcp/core/adapters/validation_adapter.py — loads core/shared/validate_vault.py via importlib
+mcp/core/adapters/tasks_adapter.py — loads core/shared/upgrade_vault.py via importlib
+mcp/core/adapters/notes_adapter.py — loads vault_schema.py directly, reimplements note listing inline
+Verdict: DIVERGED, WITH BRIDGE
+The core read/query path (vaults, /query, /note, /stats, /health) is entirely reimplemented in mcp/core/ and does not reuse any core/shared/ code. It uses note_index.py for file scanning and query_engine.py for filtering.
+
+The validation, tasks, and notes adapter endpoints (/validation, /tasks, /notes, /summary, /gaps) bridge to core/shared/ via importlib dynamic loading and sys.modules manipulation.
+
+Practical consequence: The same vault can produce different results from CLI validate vs API /validation because:
+
+The CLI path runs validate_file() with the full quality checks (section validators, etc.)
+The API path runs validate_file() via the adapter, but the adapter re-executes the module from scratch — so they should be functionally equivalent, but the adapter does not preserve the exact same process state (different sys.argv, etc.)
+The /query endpoint and the CLI analyse command use completely different code paths — the API queries the in-memory index; the CLI reads files from disk. They produce structurally different output (the API returns JSON; the CLI prints formatted tables).
+
+13. Module Dependency Graph
+
+run.py├── yaml (PyYAML)├── core.generate_templates│   ├── yaml│   ├── importlib.util│   └── [vault]/Vault Files/Scripts/vault_schema.py  (explicit path load)├── core.shared.validate_vault│   ├── core.shared  →  load_schema()  →  vault_schema (sys.modules)│   └── vault_schema.*  (all constants + functions bound at module level)├── core.shared.analyse_vault│   └── [same as validate_vault]├── core.shared.upgrade_vault│   └── [same]└── core.shared.generate_report    └── [same]mcp/server/mcp_server.py├── fastapi, starlette, pydantic├── mcp/core/vault_registry│   ├── yaml│   └── mcp/core/schema_loader│       └── importlib.util → [vault]/vault_schema.py  (as vault_schema_<name>)├── mcp/core/note_index│   └── mcp/core/vault_registry├── mcp/core/query_engine│   ├── mcp/core/vault_registry│   └── mcp/core/note_index├── mcp/core/contract_runner│   ├── mcp/core/vault_registry│   └── mcp/core/system_contract│       ├── mcp/core/vault_registry│       ├── mcp/core/note_index│       └── subprocess → sys.executable → vault scripts├── mcp/core/adapters/validation_adapter│   ├── yaml│   ├── importlib.util → core/shared/validate_vault.py│   │   └── core.shared → load_schema() → vault_schema (sys.modules["vault_schema"])│   └── [side effect: os.chdir, sys.modules mutation]├── mcp/core/adapters/tasks_adapter│   ├── yaml│   ├── importlib.util → core/shared/upgrade_vault.py│   └── [side effect: os.chdir, sys.modules mutation]└── mcp/core/adapters/notes_adapter    ├── yaml    ├── importlib.util → vault_schema.py  (as "_adapter_vault_schema")    └── [side effect: os.chdir, sys.modules mutation]
+Namespace Collision
+core is a Python package at repo_root/core/ and also at mcp/core/. The MCP server inserts mcp/ into sys.path[0], so all from core.x import y within the MCP process resolve to mcp/core/x.py. The adapters work around this via importlib.util.spec_from_file_location with absolute paths.
+
+Circular Dependencies
+None detected. The dependency graph is a DAG.
+
+14. Performance Characteristics
+discover_files() — O(N) where N = number of files
+os.walk traverses the entire directory tree. Two sorts occur: sorted(filenames) per directory (O(k log k) per dir), then content_files.sort() globally (O(N log N)). For typical vault sizes (hundreds of notes), this is fast. No caching between calls — every command re-traverses the filesystem.
+
+validate_file() — O(L) where L = lines in file
+Per-file: 1 read, 1 frontmatter parse, multiple regex operations on body, section extraction (linear scan), find_headings (linear scan). No cross-file state. Total validation: O(N × L).
+
+generate_tasks() — O(N × L + N log N)
+load_all does N reads and parses. check_how_it_works/check_tradeoffs do section body extraction (linear). Final sort is O(N log N) on task count.
+
+MCP build_index() — O(N × L)
+Scans all files, stores {path, fields, body} for each. Body is stored in memory — this is the largest memory cost. The _estimate_index_size() function tracks growth via sys.getsizeof() + len(body). For 1000 notes at 5KB each, the index holds ~5MB of body text in memory.
+
+MCP get_index() — O(1) cached, O(N×L) on rebuild
+Schema hash check: reads schema file bytes → SHA-256. This is O(schema_size) per call when outside the cooldown window (every 2+ seconds).
+
+MCP query() — O(N + K log K) where K = match count
+Linear scan of index, with a 200ms timeout guard. After filtering, sort by path (O(K log K)), then slice for pagination. The timeout means large vaults under heavy filter load may return partial results.
+
+Adapter endpoints — O(N×L) always
+Adapters never use the in-memory index. Every call to /validation, /tasks, /notes, /summary, /gaps performs a full filesystem scan from scratch, plus the sys.modules manipulation overhead. These are serialised (single-threaded via _adapter_lock).
+
+Scalability
+Vaults with thousands of notes: the CLI tools scale linearly and are acceptable for batch operations
+MCP primary endpoints (/query, /note): scale well due to in-memory index
+MCP adapter endpoints: do not scale — each call is O(N) filesystem reads, serialised
+15. Test Coverage vs Test Plan
+Tested (in mcp/test_verify.py):
+Test	What it actually exercises
+test_basic_functionality	list_vaults(), build_index() — verifies config loads and files are indexed
+test_deterministic_ordering	build_index() twice, compares paths — verifies sort stability
+test_concurrent_queries	list_notes() with 8-thread pool — verifies no crash or data corruption
+test_schema_hash_tracking	build_index() + get_schema_hash() — verifies SHA-256 is 64 chars
+test_pagination_stable	list_notes() with limit/offset — verifies non-overlapping pages
+test_path_traversal_blocked	get_note() with traversal strings — verifies error code
+test_strict_mode	query() with strict=True/False — verifies field rejection
+test_limit_and_timeout	query() with limit=5 and limit=9999 — verifies clamping
+test_typed_responses	list_notes/get_note/aggregate — verifies key presence
+test_cross_vault_queries	aggregate() with valid/invalid field — verifies error
+test_rate_limiter	_RateLimiter(10) burst test — verifies sliding window
+test_schema_refresh_cooldown	5 rapid get_index() calls — verifies no rebuild
+test_index_metadata	get_index_metadata() — verifies all keys present
+test_config_validation	get_schema() attribute checks
+test_structured_logging	_StructuredFormatter — verifies key=value format
+Untested Areas:
+CLI commands (validate, analyse, improve, report, templates, init) — no tests. The entire CLI layer has zero test coverage.
+
+core/shared/inject_frontmatter.py — no tests. The atomic write pipeline and validation logic are untested.
+
+core/shared/discover_missing.py — no tests. The EXPECTED_CONCEPTS matching logic is untested.
+
+core/shared/compare_reports.py — no tests. The delta computation is untested.
+
+core/shared/quality_audit.py — no tests. The Q-01 through Q-05 quality checks are untested.
+
+core/shared/query_vault.py — no tests. The CLI query filters are untested.
+
+core/generate_templates.py — no tests. Template generation, cleanup, and post-validation are untested.
+
+Adapter endpoints under concurrent load — test_concurrent_queries tests list_notes, not the adapter endpoints. The _adapter_lock serialisation behaviour is untested.
+
+Schema hash-triggered index rebuild — the test only verifies the cooldown prevents rebuild; it does not test what happens when the schema file actually changes.
+
+MCP startup failure paths — no test for what happens when a vault is missing at startup, or when the contract check fails.
+
+system_contract.py:check_vault_integrity — calls subprocess.run on vault scripts. Untested.
+
+generate_report.py file write — the only module that writes a file in the CLI path. Untested.
+
+Incorrect Assumptions in Existing Tests:
+test_path_traversal_blocked: tests "subdir/../../outside.md" and expects PATH_TRAVERSAL. However, os.path.normpath("subdir/../../outside.md") → "../outside.md", which is not absolute. The traversal is detected by the resolved.is_relative_to(vault_resolved) check, not the absolute path check. The test passes, but it is testing the second guard not the first.
+
+test_schema_refresh_cooldown: asserts meta2["last_build_time"] == initial_build. This is time-dependent. If the test runs extremely slowly (> 2 seconds), the cooldown expires and the assertion would fail. The test is flaky under load.
+
+16. Design Risks & Hidden Coupling
+Risk 1: CWD-Dependent Schema Loading
+Location: core/shared/__init__.py:load_schema()
+Risk: The entire CLI layer depends on os.chdir(scripts_dir) being called before any core/shared/*.py module is imported. If any import occurs before the chdir (e.g., if a module is added to COMMANDS and has a top-level import that triggers core.shared), load_schema() will search from the wrong CWD, fail to find vault_schema.py, and raise FileNotFoundError.
+
+Coupling: run.py → os.chdir → load_schema() → vault_schema.py. Removing or reordering the chdir breaks all CLI commands silently (they raise FileNotFoundError instead of printing a useful message).
+
+Risk 2: sys.modules["vault_schema"] Global Cache
+Location: core/shared/__init__.py:load_schema()
+Risk: The schema is cached under the plain key "vault_schema" in sys.modules. If two different vault schemas are loaded in the same process (not currently possible via CLI, but possible if the CLI is extended), the second load returns the first vault's schema. The MCP adapter correctly clears this with sys.modules.pop("vault_schema", None) before each adapter call.
+
+Evidence: validation_adapter.py line: sys.modules.pop("vault_schema", None) confirms this is a known risk, not theoretical.
+
+Risk 3: sys.modules Manipulation in _adapter_call
+Location: mcp/server/mcp_server.py:_adapter_call()
+Risk: This function removes all core.* modules from sys.modules, calls the adapter, then restores them. If the adapter raises an exception after partial sys.modules mutation and before the finally block executes, the finally block still runs (correct). However, if the adapter leaves partially-initialised modules in sys.modules (e.g., a module that failed mid-execution), the restoration logic removes any new core.* keys not in saved, but does not check for partially-executed modules.
+
+Coupling: This creates tight coupling between the MCP server's module cache state and the adapter's behaviour. Adding a new adapter that imports additional core.* submodules could silently break module isolation.
+
+Risk 4: os.chdir in Adapter Calls
+Location: mcp/core/adapters/*.py:_prepare_env()
+Risk: os.chdir(scripts_dir) changes the process-wide CWD. This is protected by _adapter_lock, but it means no other code that depends on CWD (e.g., relative file operations) can run concurrently. The _adapter_call wrapper saves and restores CWD in finally, but the CWD change is still process-global for the duration of the adapter call.
+
+Risk 5: TYPE_TO_CONSTANT Hardcoded in generate_templates.py
+Location: core/generate_templates.py, lines defining TYPE_TO_CONSTANT
+Risk: The mapping from note type to schema constant name is hardcoded in the template engine, not in the schema. If a new note type is added to vault_schema.py that is not in TYPE_TO_CONSTANT, the template engine hard-fails with sys.exit(1). This creates a maintenance dependency: every new note type requires a corresponding entry in generate_templates.py.
+
+Risk 6: getattr(_schema, 'DOMAIN_PRIORITY_WEIGHT', {}) Silent Defaults
+Location: core/shared/analyse_vault.py, core/shared/upgrade_vault.py, core/shared/discover_missing.py
+Risk: Multiple schema attributes are fetched with getattr(..., {}) fallback. If these attributes are added to one vault's schema but not another, the system behaves differently across vaults without any error. The default {} means all domain weights default to 1.0 (via .get(dom, 1.0)), which may not be the intended behaviour for a vault that defines partial weights.
+
+Risk 7: Subprocess in Contract Checks
+Location: mcp/core/system_contract.py:check_vault_audit, check_vault_validate, check_vault_inject_dry
+Risk: Three contract checks spawn subprocesses with subprocess.run([sys.executable, str(script_file)]). The inject_frontmatter.py script, when run without --dry-run, would modify vault files. The contract check always passes --dry-run. If the argument order or the script's argument parsing changes, the contract check could trigger live writes. The scripts use "--dry-run" in sys.argv (not argparse), which is robust to positional changes.
+
+Risk 8: CORE_CONCEPT_FIELDS_NO_SUBDOMAIN Defined but Not Used
+Location: vault_schema.py
+Risk: CORE_CONCEPT_FIELDS_NO_SUBDOMAIN is defined in the schema but is not referenced anywhere in validate_vault.py. The validation logic uses CORE_CONCEPT_FIELDS (which includes subdomain) and handles subdomain absence via a depth check (if field_name == "subdomain" and depth < 3: continue). The constant is dead code.
+
+Risk 9: Family B scoring uses SECTION_MAP presence check
+Location: upgrade_vault.py:check_family_b_sections()
+
+
+expected = SECTION_MAP.get(note_type, ())if not expected:    return []
+Risk: If a Family B type has an empty sections tuple in SECTION_MAP, it is silently treated as "no sections to check" and generates no tasks. This is indistinguishable from a missing SECTION_MAP entry.
+
+17. Unknowns / Unverifiable Behaviour
+1. analysis_6 and analysis_7 in analyse_vault.py
+The file was read to line ~400. The module is documented as performing "seven structured analyses". Analyses 1–5 are confirmed. Analyses 6 and 7 are UNVERIFIED — their function signatures, logic, and output were not read.
+
+2. Behaviour of discover_missing.py with EXPECTED_CONCEPTS
+The demo vault's vault_schema.py defines EXPECTED_CONCEPTS = {} (via getattr fallback to {}). The discover_missing.py module is built around this dict. With an empty dict, validate_expected_keys returns [] and the module produces no missing-concept output. Whether this is intended for the demo vault or represents a misconfiguration is UNVERIFIED.
+
+3. quality_audit.py integration
+The module exists and defines Q-01 through Q-05 checks with scoring. It is not referenced in COMMANDS in run.py. It has no entry in the CLI dispatch table. Whether it is invocable at all via run.py is UNVERIFIED — it may only be runnable directly via python quality_audit.py.
+
+4. query_vault.py integration
+Same as above — not in COMMANDS. Runnable directly only.
+
+5. compare_reports.py integration
+Not in COMMANDS. Only runnable directly.
+
+6. Vault Improvement Cycle.md in core/
+A markdown file exists at core/Vault Improvement Cycle.md. Its content and purpose relative to the code are UNVERIFIED — it is not imported or referenced by any code.
+
+7. examples/agent_loop.md
+This file exists. Its content and relationship to any executable code are UNVERIFIED.
+
+8. mcp/contract_check.py
+This file exists at the mcp/ root level. Its content was not read. Its purpose relative to mcp/core/contract_runner.py and mcp/core/system_contract.py is UNVERIFIED.
+
+9. drift_check.py in core/
+File exists at core/drift_check.py. Not in COMMANDS, not imported by any read module. Its relationship to the periodic recheck system in the MCP server is UNVERIFIED.
+
+10. Signal handler re-raise behaviour
+_install_signal_handlers installs a handler that calls raise SystemExit(0). The docstring says "Re-raise to let uvicorn handle actual shutdown." Whether uvicorn intercepts SystemExit(0) from a signal handler correctly (vs a direct call) is dependent on uvicorn's internal signal handling — UNVERIFIED from code alone.
+
+11. _shutting_down flag usage
+_shutting_down is set True in the signal handler and in the lifespan shutdown path. It is never read by any endpoint or middleware — its value does not affect any visible behaviour in the code that was read. Whether there is a consumer of this flag is UNVERIFIED.
+
+12. parse_yaml_frontmatter multi-value fields
+The hand-rolled YAML parser reads key: value by partitioning on the first :. YAML values containing colons (e.g., url: https://example.com) would produce key="url", value="https://example.com" — correct only because the partition is on the first colon. Multi-line YAML values, YAML lists, and YAML nested maps are not handled. If any schema field value contains leading whitespace after :, it is stripped. Whether any vault notes use YAML constructs beyond simple key: value pairs is not tested and would silently parse incorrectly.
+
+Completed: Compile full forensic report (5/5)
+
+The forensic analysis is complete. All 17 sections have been derived strictly from code. Key findings:
+
+The CLI and MCP API are architecturally diverged: the primary query path (/query, /note, /stats) is a full reimplementation in mcp/core/; adapter endpoints (/validation, /tasks) bridge back to core/shared/ via importlib + sys.modules surgery
+The schema loading mechanism is CWD-dependent for the CLI path and path-explicit for the MCP path — a hidden coupling that breaks silently if run.py's os.chdir is reordered
+Determinism verdict: PARTIAL — repeatable outputs are proven for fixed filesystem state, but the discover_files sort is Path object comparison (case-sensitive) while the MCP index sort is path.lower() (case-insensitive), creating a theoretical divergence on Linux
+Test coverage gap: the entire CLI layer, all 7 core/shared tools beyond validate/upgrade, generate_templates.py, and all failure paths have zero test coverage
+9 unverified behaviours identified including analysis_6/7, drift_check.py, contract_check.py, and the _shutting_down flag which is written but never read

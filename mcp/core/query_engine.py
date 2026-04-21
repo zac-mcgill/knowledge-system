@@ -18,8 +18,8 @@ import time
 import urllib.parse
 from collections import Counter
 
-from core.vault_registry import get_schema, get_vault_path
-from core.note_index import get_index
+from mcp.core.vault_registry import get_schema, get_vault_path
+from mcp.core.note_index import get_index
 
 _QUERY_TIMEOUT_MS = 200
 _DEFAULT_LIMIT = 50

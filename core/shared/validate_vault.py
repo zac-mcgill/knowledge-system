@@ -14,34 +14,75 @@ import re
 import sys
 from pathlib import Path
 
-from core.shared import load_schema as _load_schema
+from core.shared import load_schema as _load_schema, _resolve_vault_path
 
-_schema = _load_schema()
+# ============================================================================
+# MODULE-LEVEL GLOBALS (populated by _bind before use)
+# ============================================================================
 
-ALL_KNOWN_FIELDS = _schema.ALL_KNOWN_FIELDS
-CORE_CONCEPT_FIELDS = _schema.CORE_CONCEPT_FIELDS
-CORE_CONCEPT_FIELDS_WITH_TOPIC = _schema.CORE_CONCEPT_FIELDS_WITH_TOPIC
-OPTIONAL_SECTION_MAP = _schema.OPTIONAL_SECTION_MAP
-PATTERN_TECHNIQUE_FIELDS = _schema.PATTERN_TECHNIQUE_FIELDS
-SECTION_MAP = _schema.SECTION_MAP
-VALID_DIFFICULTIES = _schema.VALID_DIFFICULTIES
-VALID_DOMAINS = _schema.VALID_DOMAINS
-VALID_STATUSES = _schema.VALID_STATUSES
-VALID_SUBDOMAINS = _schema.VALID_SUBDOMAINS
-VALID_TOPICS = _schema.VALID_TOPICS
-VALID_TYPES = _schema.VALID_TYPES
-VAULT_ROOT = _schema.VAULT_ROOT
-derive_difficulty = _schema.derive_difficulty
-derive_domain = _schema.derive_domain
-derive_subdomain = _schema.derive_subdomain
-derive_topic = _schema.derive_topic
-derive_type = _schema.derive_type
-detect_section_content = _schema.detect_section_content
-discover_files = _schema.discover_files
-extract_section_body = _schema.extract_section_body
-find_headings = _schema.find_headings
-parse_yaml_frontmatter = _schema.parse_yaml_frontmatter
-read_file_safe = _schema.read_file_safe
+ALL_KNOWN_FIELDS = None
+CORE_CONCEPT_FIELDS = None
+CORE_CONCEPT_FIELDS_WITH_TOPIC = None
+OPTIONAL_SECTION_MAP = None
+PATTERN_TECHNIQUE_FIELDS = None
+SECTION_MAP = None
+VALID_DIFFICULTIES = None
+VALID_DOMAINS = None
+VALID_STATUSES = None
+VALID_SUBDOMAINS = None
+VALID_TOPICS = None
+VALID_TYPES = None
+VAULT_ROOT = None
+derive_difficulty = None
+derive_domain = None
+derive_subdomain = None
+derive_topic = None
+derive_type = None
+detect_section_content = None
+discover_files = None
+extract_section_body = None
+find_headings = None
+parse_yaml_frontmatter = None
+read_file_safe = None
+
+
+def _bind(vault_path: Path) -> None:
+    """Load schema and bind all module-level globals. Must be called before use."""
+    global ALL_KNOWN_FIELDS, CORE_CONCEPT_FIELDS, CORE_CONCEPT_FIELDS_WITH_TOPIC
+    global OPTIONAL_SECTION_MAP, PATTERN_TECHNIQUE_FIELDS, SECTION_MAP
+    global VALID_DIFFICULTIES, VALID_DOMAINS, VALID_STATUSES, VALID_SUBDOMAINS
+    global VALID_TOPICS, VALID_TYPES, VAULT_ROOT
+    global derive_difficulty, derive_domain, derive_subdomain, derive_topic, derive_type
+    global detect_section_content, discover_files, extract_section_body
+    global find_headings, parse_yaml_frontmatter, read_file_safe
+
+    _schema = _load_schema(vault_path)
+
+    ALL_KNOWN_FIELDS = _schema.ALL_KNOWN_FIELDS
+    CORE_CONCEPT_FIELDS = _schema.CORE_CONCEPT_FIELDS
+    CORE_CONCEPT_FIELDS_WITH_TOPIC = _schema.CORE_CONCEPT_FIELDS_WITH_TOPIC
+    OPTIONAL_SECTION_MAP = _schema.OPTIONAL_SECTION_MAP
+    PATTERN_TECHNIQUE_FIELDS = _schema.PATTERN_TECHNIQUE_FIELDS
+    SECTION_MAP = _schema.SECTION_MAP
+    VALID_DIFFICULTIES = _schema.VALID_DIFFICULTIES
+    VALID_DOMAINS = _schema.VALID_DOMAINS
+    VALID_STATUSES = _schema.VALID_STATUSES
+    VALID_SUBDOMAINS = _schema.VALID_SUBDOMAINS
+    VALID_TOPICS = _schema.VALID_TOPICS
+    VALID_TYPES = _schema.VALID_TYPES
+    VAULT_ROOT = _schema.VAULT_ROOT
+    derive_difficulty = _schema.derive_difficulty
+    derive_domain = _schema.derive_domain
+    derive_subdomain = _schema.derive_subdomain
+    derive_topic = _schema.derive_topic
+    derive_type = _schema.derive_type
+    detect_section_content = _schema.detect_section_content
+    discover_files = _schema.discover_files
+    extract_section_body = _schema.extract_section_body
+    find_headings = _schema.find_headings
+    parse_yaml_frontmatter = _schema.parse_yaml_frontmatter
+    read_file_safe = _schema.read_file_safe
+
 
 # ============================================================================
 # STRICT SECTION QUALITY VALIDATORS
@@ -280,7 +321,11 @@ def validate_file(filepath: Path, root: Path) -> list[str]:
 # ============================================================================
 
 
-def main() -> int:
+def main(vault_path: Path | None = None) -> int:
+    if vault_path is None:
+        vault_path = _resolve_vault_path()
+    _bind(vault_path)
+
     print(f"{'='*60}")
     print("Vault Validation Engine")
     print(f"Schema: v3.0.0 (Unified)")
