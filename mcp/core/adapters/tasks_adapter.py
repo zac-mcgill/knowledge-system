@@ -11,6 +11,9 @@ from pathlib import Path
 
 from mcp.core.vault_registry import get_vault_path, list_vaults
 from core.shared.upgrade_vault import _bind, load_all, generate_tasks
+from mcp.core.result_cache import get_cached, set_cached
+
+_ENDPOINT = "tasks"
 
 
 def get_tasks(vault_name: str | None = None, limit: int = 10) -> dict:
@@ -37,14 +40,23 @@ def get_tasks(vault_name: str | None = None, limit: int = 10) -> dict:
                 return {"error": "No vaults registered"}
             vault_name = vaults[0]
 
+        # Cache check — full task list is cached; limit applied on return
+        cached = get_cached(vault_name, _ENDPOINT)
+        if cached is not None:
+            return {
+                "total": cached["total"],
+                "tasks": cached["tasks"][:limit],
+            }
+
         vault_path = get_vault_path(vault_name)
         _bind(vault_path)
 
         records = load_all(vault_path)
         all_tasks = generate_tasks(records)
 
+        # Build full transformed list (no early limit — enables correct caching)
         result_tasks: list[dict] = []
-        for task in all_tasks[:limit]:
+        for task in all_tasks:
             missing: list[str] = []
             actions: list[str] = []
             for issue in task["issues"]:
@@ -62,9 +74,16 @@ def get_tasks(vault_name: str | None = None, limit: int = 10) -> dict:
                 "action": ", ".join(actions),
             })
 
-        return {
+        # Cache the complete result before applying limit
+        full_result = {
             "total": len(all_tasks),
             "tasks": result_tasks,
+        }
+        set_cached(vault_name, _ENDPOINT, full_result)
+
+        return {
+            "total": len(all_tasks),
+            "tasks": result_tasks[:limit],
         }
 
     except Exception as exc:

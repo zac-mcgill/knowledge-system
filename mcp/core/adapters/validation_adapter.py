@@ -9,6 +9,9 @@ from __future__ import annotations
 
 import core.shared.validate_vault as _validate_mod
 from mcp.core.vault_registry import get_vault_path, list_vaults
+from mcp.core.result_cache import get_cached, set_cached
+
+_ENDPOINT = "validation"
 
 
 def get_validation(vault_name: str | None = None) -> dict:
@@ -28,6 +31,11 @@ def get_validation(vault_name: str | None = None) -> dict:
                 return {"error": "No vaults registered"}
             vault_name = vaults[0]
 
+        # Cache check — skip full recomputation if vault + schema unchanged
+        cached = get_cached(vault_name, _ENDPOINT)
+        if cached is not None:
+            return cached
+
         vault_path = get_vault_path(vault_name)
         _validate_mod._bind(vault_path)
 
@@ -40,11 +48,15 @@ def get_validation(vault_name: str | None = None) -> dict:
                 rel = str(filepath.relative_to(vault_path))
                 invalid_notes.append(rel)
 
-        return {
+        result = {
             "status": "fail" if invalid_notes else "pass",
             "invalid_count": len(invalid_notes),
             "invalid_notes": invalid_notes,
         }
+
+        # Cache the successful, complete result
+        set_cached(vault_name, _ENDPOINT, result)
+        return result
 
     except Exception as exc:
         return {"error": str(exc)}
