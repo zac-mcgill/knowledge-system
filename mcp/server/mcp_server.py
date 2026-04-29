@@ -50,6 +50,7 @@ from mcp.core.adapters.quality_adapter import get_quality
 from mcp.core.adapters.missing_adapter import get_missing
 from mcp.core.adapters.compare_adapter import get_compare
 from mcp.core.graph_builder import build_graph
+from mcp.core.graph_query import get_neighbors, get_related_nodes, get_missing_neighbors
 
 
 # ---------- Structured Logging (Phase 7) ----------
@@ -918,6 +919,105 @@ def endpoint_graph(
         }
     except Exception as exc:
         return _error("GRAPH_FAILED", f"Graph build failed: {exc}", 500)
+
+
+# ---------- Phase 6: Graph Query Layer ----------
+
+
+@app.get("/graph/neighbors")
+def endpoint_graph_neighbors(
+    node: str = Query(..., description="Node id to query"),
+    vault: str = Query(None, description="Vault name (defaults to first registered vault)"),
+):
+    """Return all nodes directly connected to the given node (both edge directions).
+
+    Response data:
+        node_id (str): The queried node id.
+        found (bool): Whether the node exists in the graph.
+        neighbors (list): Directly connected nodes, sorted ascending by id.
+
+    Each neighbor:
+        id (str): Node id.
+        type (str): Node type.
+        label (str): Human-readable name.
+        edge_type (str): The type of the connecting edge.
+    """
+    if vault is not None:
+        err = _validate_vault(vault)
+        if err:
+            return err
+    try:
+        graph = build_graph(vault_name=vault)
+        result = get_neighbors(graph, node)
+        return {"status": "ok", "data": result}
+    except Exception as exc:
+        return _error("GRAPH_QUERY_FAILED", f"Neighbors query failed: {exc}", 500)
+
+
+@app.get("/graph/related")
+def endpoint_graph_related(
+    node: str = Query(..., description="Node id to query"),
+    vault: str = Query(None, description="Vault name (defaults to first registered vault)"),
+):
+    """Return notes that share a group hub (domain/subdomain/topic) with the given node.
+
+    Traversal: note → group node → all other notes in that group.
+    No pairwise edges. Relationships are implicit through shared hub membership.
+
+    Response data:
+        node_id (str): The queried node id.
+        found (bool): Whether the node exists in the graph.
+        related (list): Related notes, sorted ascending by id.
+
+    Each related entry:
+        id (str): Note id (vault-relative path).
+        type (str): Node type.
+        label (str): Human-readable name.
+        via (str): The group node id through which the relationship was found.
+    """
+    if vault is not None:
+        err = _validate_vault(vault)
+        if err:
+            return err
+    try:
+        graph = build_graph(vault_name=vault)
+        result = get_related_nodes(graph, node)
+        return {"status": "ok", "data": result}
+    except Exception as exc:
+        return _error("GRAPH_QUERY_FAILED", f"Related query failed: {exc}", 500)
+
+
+@app.get("/graph/missing")
+def endpoint_graph_missing(
+    node: str = Query(..., description="Node id to query"),
+    vault: str = Query(None, description="Vault name (defaults to first registered vault)"),
+):
+    """Return expected concepts missing from this note's group hubs.
+
+    These are concepts the schema declares as expected (EXPECTED_CONCEPTS)
+    near this note's domain/subdomain/topic cluster that are not yet present
+    in the vault.
+
+    Response data:
+        node_id (str): The queried node id.
+        found (bool): Whether the node exists in the graph.
+        missing (list): Missing expected concepts, sorted ascending by id.
+
+    Each missing entry:
+        id (str): expected_concept node id.
+        label (str): Concept name.
+        via (str): The group node that declared this expected concept.
+    """
+    if vault is not None:
+        err = _validate_vault(vault)
+        if err:
+            return err
+    try:
+        graph = build_graph(vault_name=vault)
+        result = get_missing_neighbors(graph, node)
+        return {"status": "ok", "data": result}
+    except Exception as exc:
+        return _error("GRAPH_QUERY_FAILED", f"Missing neighbors query failed: {exc}", 500)
 
 
 # ---------- Run ----------
