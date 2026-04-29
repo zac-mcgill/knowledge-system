@@ -49,6 +49,7 @@ from mcp.core.adapters.notes_adapter import get_notes as get_all_notes
 from mcp.core.adapters.quality_adapter import get_quality
 from mcp.core.adapters.missing_adapter import get_missing
 from mcp.core.adapters.compare_adapter import get_compare
+from mcp.core.graph_builder import build_graph
 
 
 # ---------- Structured Logging (Phase 7) ----------
@@ -874,6 +875,49 @@ def endpoint_compare(req: CompareRequest):
         return {"status": "ok", "data": result}
     except Exception as exc:
         return _error("COMPARE_FAILED", f"Compare failed: {exc}", 500)
+
+
+# ---------- Phase 5: Relationship Graph ----------
+
+
+@app.get("/graph")
+def endpoint_graph(
+    vault: str = Query(None, description="Vault name (defaults to first registered vault)"),
+):
+    """Return a deterministic relationship graph of all vault notes.
+
+    Relationships are derived solely from schema-defined hierarchy
+    (domain / subdomain / topic) and note frontmatter fields.
+    No LLMs, no embeddings, no natural-language parsing.
+
+    Response data:
+        nodes (list): All graph nodes, sorted ascending by id.
+        edges (list): All graph edges, sorted ascending by (from, to, type).
+
+    Each node:
+        id (str): Unique node identifier.
+        type (str): One of ``note``, ``domain``, ``subdomain``, ``topic``,
+            ``expected_concept``.
+        label (str): Human-readable name.
+
+    Each edge:
+        from (str): Source node id.
+        to (str): Target node id.
+        type (str): One of ``parent``, ``same_domain``, ``same_subdomain``,
+            ``same_topic``, ``expected_coverage``.
+    """
+    if vault is not None:
+        err = _validate_vault(vault)
+        if err:
+            return err
+    try:
+        graph = build_graph(vault_name=vault)
+        return {
+            "status": "ok",
+            "data": graph,
+        }
+    except Exception as exc:
+        return _error("GRAPH_FAILED", f"Graph build failed: {exc}", 500)
 
 
 # ---------- Run ----------
