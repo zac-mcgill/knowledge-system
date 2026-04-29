@@ -22,49 +22,6 @@ from pathlib import Path
 
 from core.shared import load_schema as _load_schema, _resolve_vault_path
 
-# Module-level globals (populated by _bind before use)
-VALID_DIFFICULTIES = None
-VALID_DOMAINS = None
-VALID_STATUSES = None
-VALID_SUBDOMAINS = None
-VALID_TOPICS = None
-VALID_TYPES = None
-VAULT_ROOT = None
-detect_section_content = None
-derive_difficulty = None
-derive_domain = None
-derive_subdomain = None
-derive_topic = None
-derive_type = None
-discover_files = None
-read_file_safe = None
-
-
-def _bind(vault_path: Path) -> None:
-    """Load schema and bind all module-level globals."""
-    global VALID_DIFFICULTIES, VALID_DOMAINS, VALID_STATUSES, VALID_SUBDOMAINS
-    global VALID_TOPICS, VALID_TYPES, VAULT_ROOT
-    global detect_section_content, derive_difficulty, derive_domain
-    global derive_subdomain, derive_topic, derive_type, discover_files, read_file_safe
-
-    _schema = _load_schema(vault_path)
-    VALID_DIFFICULTIES = _schema.VALID_DIFFICULTIES
-    VALID_DOMAINS = _schema.VALID_DOMAINS
-    VALID_STATUSES = _schema.VALID_STATUSES
-    VALID_SUBDOMAINS = _schema.VALID_SUBDOMAINS
-    VALID_TOPICS = _schema.VALID_TOPICS
-    VALID_TYPES = _schema.VALID_TYPES
-    VAULT_ROOT = _schema.VAULT_ROOT
-    detect_section_content = _schema.detect_section_content
-    derive_difficulty = _schema.derive_difficulty
-    derive_domain = _schema.derive_domain
-    derive_subdomain = _schema.derive_subdomain
-    derive_topic = _schema.derive_topic
-    derive_type = _schema.derive_type
-    discover_files = _schema.discover_files
-    read_file_safe = _schema.read_file_safe
-
-
 # ============================================================================
 # PHASE 2 — PARSING (strip existing YAML)
 # ============================================================================
@@ -102,6 +59,7 @@ def validate_metadata(
     path_parts: list[str],
     content: str,
     filename: str,
+    schema,
 ) -> list[str]:
     """Validate all schema rules. Returns list of violation descriptions."""
     errors: list[str] = []
@@ -114,29 +72,29 @@ def validate_metadata(
     difficulty = metadata["difficulty"]
 
     # V-01: type enum
-    if note_type not in VALID_TYPES:
+    if note_type not in schema.VALID_TYPES:
         errors.append(f"V-01: type '{note_type}' not in enum")
     # V-02: domain enum
-    if domain not in VALID_DOMAINS:
+    if domain not in schema.schema.VALID_DOMAINS:
         errors.append(f"V-02: domain '{domain}' not in enum")
     # V-03: subdomain enum
-    if subdomain is not None and subdomain not in VALID_SUBDOMAINS:
+    if subdomain is not None and subdomain not in schema.VALID_SUBDOMAINS:
         errors.append(f"V-03: subdomain '{subdomain}' not in enum")
     # V-04: topic presence/absence and enum
     depth = len(path_parts)
     if depth >= 4:
         if topic is None:
             errors.append("V-04: topic MUST be present for depth-4 file")
-        elif topic not in VALID_TOPICS:
+        elif topic not in schema.VALID_TOPICS:
             errors.append(f"V-04: topic '{topic}' not in enum")
     else:
         if topic is not None:
             errors.append("V-04: topic MUST NOT be present for depth-3 file")
     # V-05: status enum
-    if status not in VALID_STATUSES:
+    if status not in schema.VALID_STATUSES:
         errors.append(f"V-05: status '{status}' not in enum")
     # V-09: difficulty enum
-    if difficulty not in VALID_DIFFICULTIES:
+    if difficulty not in schema.VALID_DIFFICULTIES:
         errors.append(f"V-09: difficulty '{difficulty}' not in enum")
 
     # V-06, V-07, V-08: boolean field presence
@@ -152,13 +110,13 @@ def validate_metadata(
                 errors.append(f"{field_name} MUST NOT exist for {note_type}")
 
     # C-01: type derivation consistency
-    derived_type = derive_type(filename)
+    derived_type = schema.derive_type(filename)
     if note_type != derived_type:
         errors.append(f"C-01: type mismatch: got '{note_type}', expected '{derived_type}'")
 
     # C-02: domain derivation
     try:
-        expected_domain = derive_domain(path_parts)
+        expected_domain = schema.derive_domain(path_parts)
         if domain != expected_domain:
             errors.append(f"C-02: domain mismatch: got '{domain}', expected '{expected_domain}'")
     except ValueError as e:
@@ -166,7 +124,7 @@ def validate_metadata(
 
     # C-03 + C-04: subdomain derivation and parent constraint
     try:
-        subdomain_result = derive_subdomain(path_parts)
+        subdomain_result = schema.derive_subdomain(path_parts)
         if subdomain_result is not None:
             expected_subdomain, expected_parent_domain = subdomain_result
             if subdomain != expected_subdomain:
@@ -181,7 +139,7 @@ def validate_metadata(
 
     # C-05 + C-06: topic derivation and parent constraint
     try:
-        topic_result = derive_topic(path_parts)
+        topic_result = schema.derive_topic(path_parts)
         if topic_result is not None:
             expected_topic, expected_parent_sub = topic_result
             if topic != expected_topic:
@@ -195,9 +153,9 @@ def validate_metadata(
 
     # C-07, C-08, C-09, C-10, C-11: section detection + status consistency
     if note_type == "core-concept":
-        expected_kp = detect_section_content(content, "## Key Principles")
-        expected_hw = detect_section_content(content, "## How It Works")
-        expected_to = detect_section_content(content, "## Trade-offs")
+        expected_kp = schema.detect_section_content(content, "## Key Principles")
+        expected_hw = schema.detect_section_content(content, "## How It Works")
+        expected_to = schema.detect_section_content(content, "## Trade-offs")
         if metadata.get("has_key_principles") != expected_kp:
             errors.append(f"C-07: has_key_principles mismatch: got {metadata.get('has_key_principles')}, expected {expected_kp}")
         if metadata.get("has_how_it_works") != expected_hw:
@@ -213,7 +171,7 @@ def validate_metadata(
 
     # C-12: difficulty derivation
     try:
-        expected_diff = derive_difficulty(subdomain, topic)
+        expected_diff = schema.derive_difficulty(subdomain, topic)
         if difficulty != expected_diff:
             errors.append(f"C-12: difficulty mismatch: got '{difficulty}', expected '{expected_diff}'")
     except ValueError as e:
@@ -281,6 +239,7 @@ def process_file(
     root: Path,
     dry_run: bool,
     warnings: list[str],
+    schema,
 ) -> tuple[str, str | None]:
     """Process a single file through the full pipeline.
 
@@ -295,7 +254,7 @@ def process_file(
 
     # --- Phase 2: Read & parse ---
     try:
-        raw_content = read_file_safe(filepath)
+        raw_content = schema.read_file_safe(filepath)
     except Exception as e:
         return ("error", f"Read failed: {e}")
 
@@ -303,9 +262,9 @@ def process_file(
 
     # --- Phase 3: Derive metadata ---
     try:
-        note_type = derive_type(filename)
-        domain = derive_domain(path_parts)
-        subdomain_result = derive_subdomain(path_parts)
+        note_type = schema.derive_type(filename)
+        domain = schema.derive_domain(path_parts)
+        subdomain_result = schema.derive_subdomain(path_parts)
 
         subdomain_val: str | None = None
         if subdomain_result is not None:
@@ -313,14 +272,14 @@ def process_file(
             if subdomain_parent != domain:
                 return ("error", f"C-04: subdomain parent '{subdomain_parent}' != domain '{domain}'")
 
-        topic_result = derive_topic(path_parts)
+        topic_result = schema.derive_topic(path_parts)
         topic_val: str | None = None
         if topic_result is not None:
             topic_val, topic_parent = topic_result
             if topic_parent != subdomain_val:
                 return ("error", f"C-06: topic parent '{topic_parent}' != subdomain '{subdomain_val}'")
 
-        difficulty = derive_difficulty(subdomain_val, topic_val)
+        difficulty = schema.derive_difficulty(subdomain_val, topic_val)
 
     except ValueError as e:
         return ("error", f"Derivation failed: {e}")
@@ -338,9 +297,9 @@ def process_file(
         metadata["topic"] = topic_val
 
     if note_type == "core-concept":
-        kp = detect_section_content(content_body, "## Key Principles")
-        hw = detect_section_content(content_body, "## How It Works")
-        to = detect_section_content(content_body, "## Trade-offs")
+        kp = schema.detect_section_content(content_body, "## Key Principles")
+        hw = schema.detect_section_content(content_body, "## How It Works")
+        to = schema.detect_section_content(content_body, "## Trade-offs")
         metadata["has_key_principles"] = kp
         metadata["has_how_it_works"] = hw
         metadata["has_tradeoffs"] = to
@@ -359,7 +318,7 @@ def process_file(
         metadata["status"] = "complete"
 
     # --- Phase 4: Validate ---
-    errors = validate_metadata(metadata, path_parts, content_body, filename)
+    errors = validate_metadata(metadata, path_parts, content_body, filename, schema)
     if errors:
         return ("error", "; ".join(errors))
 
@@ -386,7 +345,7 @@ def process_file(
 def main(vault_path: Path | None = None) -> int:
     if vault_path is None:
         vault_path = _resolve_vault_path()
-    _bind(vault_path)
+    _schema = _load_schema(vault_path)
 
     dry_run = "--dry-run" in sys.argv
 
@@ -394,11 +353,11 @@ def main(vault_path: Path | None = None) -> int:
     print(f"{'='*60}")
     print(f"YAML Frontmatter Injection Pipeline — {mode_label}")
     print(f"Schema: v3.0.0 (Unified)")
-    print(f"Vault:  {VAULT_ROOT}")
+    print(f"Vault:  {_schema.VAULT_ROOT}")
     print(f"{'='*60}")
     print()
 
-    files = discover_files(VAULT_ROOT)
+    files = _schema.discover_files(_schema.VAULT_ROOT)
     print(f"Files discovered: {len(files)}")
     print()
 
@@ -409,8 +368,8 @@ def main(vault_path: Path | None = None) -> int:
     warnings: list[str] = []
 
     for filepath in files:
-        rel = filepath.relative_to(VAULT_ROOT)
-        result, detail = process_file(filepath, VAULT_ROOT, dry_run, warnings)
+        rel = filepath.relative_to(_schema.VAULT_ROOT)
+        result, detail = process_file(filepath, _schema.VAULT_ROOT, dry_run, warnings, _schema)
 
         if result == "modified":
             modified += 1

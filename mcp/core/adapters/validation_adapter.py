@@ -8,6 +8,7 @@ manipulation, no os.chdir, no importlib workarounds.
 from __future__ import annotations
 
 import core.shared.validate_vault as _validate_mod
+from core.shared import load_schema as _load_schema
 from mcp.core.vault_registry import get_vault_path, list_vaults
 from mcp.core.result_cache import get_cached, set_cached
 
@@ -37,13 +38,13 @@ def get_validation(vault_name: str | None = None) -> dict:
             return cached
 
         vault_path = get_vault_path(vault_name)
-        _validate_mod._bind(vault_path)
+        _schema = _load_schema(vault_path)
 
-        files = _validate_mod.discover_files(vault_path)
+        files = _schema.discover_files(vault_path)
         invalid_notes: list[str] = []
 
         for filepath in files:
-            errors = _validate_mod.validate_file(filepath, vault_path)
+            errors = _validate_mod.validate_file(filepath, vault_path, _schema)
             if errors:
                 rel = str(filepath.relative_to(vault_path))
                 invalid_notes.append(rel)

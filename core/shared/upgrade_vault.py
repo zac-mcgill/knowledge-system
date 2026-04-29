@@ -40,40 +40,6 @@ if sys.stdout.encoding != "utf-8":
 
 from core.shared import load_schema as _load_schema, _resolve_vault_path
 
-# Module-level globals (populated by _bind before use)
-SECTION_MAP = None
-TRACKED_SECTIONS = None
-VALID_DIFFICULTIES = None
-VAULT_ROOT = None
-discover_files = None
-extract_section_body = None
-find_headings = None
-parse_yaml_frontmatter = None
-read_file_safe = None
-SUBDOMAIN_DIFFICULTY = None
-DOMAIN_PRIORITY_WEIGHT = None
-
-
-def _bind(vault_path: Path) -> None:
-    """Load schema and bind all module-level globals."""
-    global SECTION_MAP, TRACKED_SECTIONS, VALID_DIFFICULTIES, VAULT_ROOT
-    global discover_files, extract_section_body, find_headings
-    global parse_yaml_frontmatter, read_file_safe
-    global SUBDOMAIN_DIFFICULTY, DOMAIN_PRIORITY_WEIGHT
-
-    _schema = _load_schema(vault_path)
-    SECTION_MAP = _schema.SECTION_MAP
-    TRACKED_SECTIONS = _schema.TRACKED_SECTIONS
-    VALID_DIFFICULTIES = _schema.VALID_DIFFICULTIES
-    VAULT_ROOT = _schema.VAULT_ROOT
-    discover_files = _schema.discover_files
-    extract_section_body = _schema.extract_section_body
-    find_headings = _schema.find_headings
-    parse_yaml_frontmatter = _schema.parse_yaml_frontmatter
-    read_file_safe = _schema.read_file_safe
-    SUBDOMAIN_DIFFICULTY = _schema.SUBDOMAIN_DIFFICULTY
-    DOMAIN_PRIORITY_WEIGHT = _schema.DOMAIN_PRIORITY_WEIGHT
-
 # ============================================================================
 # QUALITY THRESHOLDS
 # ============================================================================
@@ -130,13 +96,13 @@ WRITING_CONSTRAINTS: dict[str, list[str]] = {
 # ============================================================================
 
 
-def load_all(root: Path) -> list[dict]:
+def load_all(root: Path, schema) -> list[dict]:
     """Load metadata + body + relative path for every content file."""
     records: list[dict] = []
-    for filepath in discover_files(root):
-        content = read_file_safe(filepath)
+    for filepath in schema.discover_files(root):
+        content = schema.read_file_safe(filepath)
         try:
-            fields, body = parse_yaml_frontmatter(content)
+            fields, body = schema.parse_yaml_frontmatter(content)
         except ValueError as exc:
             print(f"  WARN: {filepath.relative_to(root)} — {exc}")
             continue
@@ -154,9 +120,9 @@ def load_all(root: Path) -> list[dict]:
 # ============================================================================
 
 
-def check_how_it_works(body: str) -> tuple[str | None, int]:
+def check_how_it_works(body: str, schema) -> tuple[str | None, int]:
     """Return (issue_type | None, step_count)."""
-    section = extract_section_body(body, "## How It Works")
+    section = schema.extract_section_body(body, "## How It Works")
     if section is None:
         return "missing-how-it-works", 0
     steps = [line for line in section.split("\n") if _NUMBERED_STEP.match(line)]
@@ -165,9 +131,9 @@ def check_how_it_works(body: str) -> tuple[str | None, int]:
     return None, len(steps)
 
 
-def check_tradeoffs(body: str) -> tuple[str | None, int]:
+def check_tradeoffs(body: str, schema) -> tuple[str | None, int]:
     """Return (issue_type | None, data_row_count)."""
-    section = extract_section_body(body, "## Trade-offs")
+    section = schema.extract_section_body(body, "## Trade-offs")
     if section is None:
         return "missing-tradeoffs", 0
     table_lines = [
@@ -193,12 +159,12 @@ def check_key_principles(fields: dict) -> str | None:
     return None
 
 
-def check_family_b_sections(body: str, note_type: str) -> list[str]:
+def check_family_b_sections(body: str, note_type: str, schema) -> list[str]:
     """Return list of missing canonical sections for Family B notes."""
-    expected = SECTION_MAP.get(note_type, ())
+    expected = schema.SECTION_MAP.get(note_type, ())
     if not expected:
         return []
-    present = set(find_headings(body))
+    present = set(schema.find_headings(body))
     missing: list[str] = []
     for heading in expected:
         if heading not in present:
@@ -211,13 +177,13 @@ def check_family_b_sections(body: str, note_type: str) -> list[str]:
 # ============================================================================
 
 
-def score_core_concept(fields: dict, issues: list[dict]) -> float:
+def score_core_concept(fields: dict, issues: list[dict], schema) -> float:
     """Score a core-concept note based on difficulty + section gaps + domain weight."""
     base = 0.0
 
     # Difficulty component
     diff = fields.get("difficulty", "")
-    if "advanced" in VALID_DIFFICULTIES and diff == "advanced":
+    if "advanced" in schema.VALID_DIFFICULTIES and diff == "advanced":
         base += 3.0
     elif diff == "intermediate":
         base += 1.0
@@ -234,17 +200,17 @@ def score_core_concept(fields: dict, issues: list[dict]) -> float:
 
     # Domain weight multiplier
     dom = fields.get("domain", "foundations")
-    weight = DOMAIN_PRIORITY_WEIGHT.get(dom, 1.0)
+    weight = schema.DOMAIN_PRIORITY_WEIGHT.get(dom, 1.0)
 
     return base * weight
 
 
-def score_family_b(fields: dict, missing_sections: list[str]) -> float:
+def score_family_b(fields: dict, missing_sections: list[str], schema) -> float:
     """Score a Family B note based on difficulty + missing sections + domain weight."""
     base = 0.0
 
     diff = fields.get("difficulty", "")
-    if "advanced" in VALID_DIFFICULTIES and diff == "advanced":
+    if "advanced" in schema.VALID_DIFFICULTIES and diff == "advanced":
         base += 3.0
     elif diff == "intermediate":
         base += 1.0
@@ -253,7 +219,7 @@ def score_family_b(fields: dict, missing_sections: list[str]) -> float:
     base += len(missing_sections) * 1.5
 
     dom = fields.get("domain", "foundations")
-    weight = DOMAIN_PRIORITY_WEIGHT.get(dom, 1.0)
+    weight = schema.DOMAIN_PRIORITY_WEIGHT.get(dom, 1.0)
 
     return base * weight
 
@@ -263,7 +229,7 @@ def score_family_b(fields: dict, missing_sections: list[str]) -> float:
 # ============================================================================
 
 
-def generate_tasks(records: list[dict]) -> list[dict]:
+def generate_tasks(records: list[dict], schema) -> list[dict]:
     """Analyse all records and produce scored upgrade tasks."""
     tasks: list[dict] = []
 
@@ -281,7 +247,7 @@ def generate_tasks(records: list[dict]) -> list[dict]:
             issues: list[dict] = []
 
             # Check How It Works
-            hw_issue, hw_steps = check_how_it_works(body)
+            hw_issue, hw_steps = check_how_it_works(body, schema)
             if hw_issue:
                 issues.append({
                     "issue_type": hw_issue,
@@ -291,7 +257,7 @@ def generate_tasks(records: list[dict]) -> list[dict]:
                 })
 
             # Check Trade-offs
-            to_issue, to_rows = check_tradeoffs(body)
+            to_issue, to_rows = check_tradeoffs(body, schema)
             if to_issue:
                 issues.append({
                     "issue_type": to_issue,
@@ -313,7 +279,7 @@ def generate_tasks(records: list[dict]) -> list[dict]:
             if not issues:
                 continue
 
-            score = score_core_concept(rec, issues)
+            score = score_core_concept(rec, issues, schema)
 
             tasks.append({
                 "path": path,
@@ -326,11 +292,11 @@ def generate_tasks(records: list[dict]) -> list[dict]:
 
         else:
             # Family B — check for missing canonical sections
-            missing = check_family_b_sections(body, note_type)
+            missing = check_family_b_sections(body, note_type, schema)
             if not missing:
                 continue
 
-            score = score_family_b(rec, missing)
+            score = score_family_b(rec, missing, schema)
 
             tasks.append({
                 "path": path,
@@ -393,14 +359,14 @@ def table(
 # ============================================================================
 
 
-def render_summary(records: list[dict], tasks: list[dict], top_n: int) -> None:
+def render_summary(records: list[dict], tasks: list[dict], top_n: int, schema) -> None:
     """Print executive summary."""
     total = len(records)
     partial = sum(1 for r in records if r.get("status") == "partial")
     core = [r for r in records if r.get("type") == "core-concept"]
     core_partial = [r for r in core if r.get("status") == "partial"]
 
-    vault_name = VAULT_ROOT.name
+    vault_name = schema.VAULT_ROOT.name
     print("=" * 78)
     print(f"VAULT UPGRADE ENGINE \u2014 {vault_name}")
     print(f"Source: vault_schema.py v3.0.0 | {total} notes scanned")
@@ -530,7 +496,7 @@ def render_domain_breakdown(tasks: list[dict]) -> None:
 def main(vault_path: Path | None = None) -> int:
     if vault_path is None:
         vault_path = _resolve_vault_path()
-    _bind(vault_path)
+    _schema = _load_schema(vault_path)
 
     parser = argparse.ArgumentParser(
         description="Vault Upgrade Task Engine \u2014 generates prioritised upgrade tasks."
@@ -541,14 +507,14 @@ def main(vault_path: Path | None = None) -> int:
     )
     args = parser.parse_args()
 
-    records = load_all(VAULT_ROOT)
+    records = load_all(_schema.VAULT_ROOT, _schema)
     if not records:
         print("ERROR: No records loaded from vault.")
         return 1
 
-    tasks = generate_tasks(records)
+    tasks = generate_tasks(records, _schema)
 
-    render_summary(records, tasks, args.top)
+    render_summary(records, tasks, args.top, _schema)
     render_scoring(tasks)
     render_domain_breakdown(tasks)
     render_tasks(tasks, args.top)

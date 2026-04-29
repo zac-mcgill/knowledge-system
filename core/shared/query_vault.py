@@ -26,59 +26,28 @@ from pathlib import Path
 
 from core.shared import load_schema as _load_schema, _resolve_vault_path
 
-# Module-level globals (populated by _bind before use)
-VALID_DIFFICULTIES = None
-VALID_DOMAINS = None
-VALID_STATUSES = None
-VALID_SUBDOMAINS = None
-VALID_TYPES = None
-VAULT_ROOT = None
-discover_files = None
-extract_section_body = None
-parse_yaml_frontmatter = None
-read_file_safe = None
-
-
-def _bind(vault_path: Path) -> None:
-    """Load schema and bind all module-level globals."""
-    global VALID_DIFFICULTIES, VALID_DOMAINS, VALID_STATUSES, VALID_SUBDOMAINS
-    global VALID_TYPES, VAULT_ROOT, discover_files, extract_section_body
-    global parse_yaml_frontmatter, read_file_safe
-
-    _schema = _load_schema(vault_path)
-    VALID_DIFFICULTIES = _schema.VALID_DIFFICULTIES
-    VALID_DOMAINS = _schema.VALID_DOMAINS
-    VALID_STATUSES = _schema.VALID_STATUSES
-    VALID_SUBDOMAINS = _schema.VALID_SUBDOMAINS
-    VALID_TYPES = _schema.VALID_TYPES
-    VAULT_ROOT = _schema.VAULT_ROOT
-    discover_files = _schema.discover_files
-    extract_section_body = _schema.extract_section_body
-    parse_yaml_frontmatter = _schema.parse_yaml_frontmatter
-    read_file_safe = _schema.read_file_safe
-
 # ============================================================================
 # QUERY ENGINE
 # ============================================================================
 
 
-def load_all_metadata(root: Path) -> list[tuple[Path, dict]]:
+def load_all_metadata(root: Path, schema) -> list[tuple[Path, dict]]:
     """Load and parse YAML metadata from all content files."""
     results: list[tuple[Path, dict]] = []
-    for filepath in discover_files(root):
-        content = read_file_safe(filepath)
-        fields, _ = parse_yaml_frontmatter(content)
+    for filepath in schema.discover_files(root):
+        content = schema.read_file_safe(filepath)
+        fields, _ = schema.parse_yaml_frontmatter(content)
         if fields is not None:
             results.append((filepath, fields))
     return results
 
 
-def load_all_with_body(root: Path) -> list[tuple[Path, dict, str]]:
+def load_all_with_body(root: Path, schema) -> list[tuple[Path, dict, str]]:
     """Load YAML metadata and body text from all content files."""
     results: list[tuple[Path, dict, str]] = []
-    for filepath in discover_files(root):
-        content = read_file_safe(filepath)
-        fields, body = parse_yaml_frontmatter(content)
+    for filepath in schema.discover_files(root):
+        content = schema.read_file_safe(filepath)
+        fields, body = schema.parse_yaml_frontmatter(content)
         if fields is not None:
             results.append((filepath, fields, body))
     return results
@@ -360,15 +329,15 @@ REPORT_DISPATCH: dict[str, callable] = {
 # ============================================================================
 
 
-def build_parser() -> argparse.ArgumentParser:
+def build_parser(schema) -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Query vault by YAML metadata.",
     )
-    parser.add_argument("--type", choices=sorted(VALID_TYPES), help="Filter by note type")
-    parser.add_argument("--domain", choices=sorted(VALID_DOMAINS), help="Filter by domain")
-    parser.add_argument("--subdomain", choices=sorted(VALID_SUBDOMAINS), help="Filter by subdomain")
-    parser.add_argument("--status", choices=sorted(VALID_STATUSES), help="Filter by status")
-    parser.add_argument("--difficulty", choices=sorted(VALID_DIFFICULTIES), help="Filter by difficulty")
+    parser.add_argument("--type", choices=sorted(schema.VALID_TYPES), help="Filter by note type")
+    parser.add_argument("--domain", choices=sorted(schema.VALID_DOMAINS), help="Filter by domain")
+    parser.add_argument("--subdomain", choices=sorted(schema.VALID_SUBDOMAINS), help="Filter by subdomain")
+    parser.add_argument("--status", choices=sorted(schema.VALID_STATUSES), help="Filter by status")
+    parser.add_argument("--difficulty", choices=sorted(schema.VALID_DIFFICULTIES), help="Filter by difficulty")
     parser.add_argument(
         "--report",
         choices=sorted(REPORT_DISPATCH),
@@ -380,9 +349,9 @@ def build_parser() -> argparse.ArgumentParser:
 def main(vault_path: Path | None = None) -> int:
     if vault_path is None:
         vault_path = _resolve_vault_path()
-    _bind(vault_path)
+    _schema = _load_schema(vault_path)
 
-    parser = build_parser()
+    parser = build_parser(_schema)
     args = parser.parse_args()
 
     # Build filter dict from provided flags
@@ -394,14 +363,14 @@ def main(vault_path: Path | None = None) -> int:
 
     # Report mode
     if args.report:
-        entries = load_all_with_body(VAULT_ROOT)
-        REPORT_DISPATCH[args.report](VAULT_ROOT, entries)
+        entries = load_all_with_body(_schema.VAULT_ROOT, _schema)
+        REPORT_DISPATCH[args.report](_schema.VAULT_ROOT, entries)
         return 0
 
     # Standard query mode
-    entries = load_all_metadata(VAULT_ROOT)
+    entries = load_all_metadata(_schema.VAULT_ROOT, _schema)
     matched = apply_filters(entries, filters)
-    print_results(matched, VAULT_ROOT, filters)
+    print_results(matched, _schema.VAULT_ROOT, filters)
     return 0
 
 

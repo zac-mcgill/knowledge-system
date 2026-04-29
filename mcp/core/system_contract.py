@@ -201,7 +201,7 @@ def check_index_integrity(vault_name: str) -> list[str]:
 
 def check_query_determinism(vault_name: str) -> list[str]:
     """Run identical queries twice and verify results are identical."""
-    from core.query_engine import query as run_query, list_notes
+    from mcp.core.query_engine import query as run_query, list_notes
 
     violations = []
 

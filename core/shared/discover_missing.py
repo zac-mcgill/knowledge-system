@@ -8,37 +8,6 @@ from pathlib import Path
 
 from core.shared import load_schema, _resolve_vault_path
 
-# Module-level globals (populated by _bind before use)
-VAULT_ROOT: Path = None
-discover_files = None
-derive_domain = None
-derive_subdomain = None
-DOMAIN_MAP: dict[str, str] = None
-SUBDOMAIN_MAP: dict = None
-EXPECTED_CONCEPTS: dict[str, frozenset[str]] = None
-SUBDOMAIN_DIFFICULTY: dict[str, str] = None
-DOMAIN_PRIORITY_WEIGHT: dict[str, float] = None
-CONCEPT_PRIORITY: dict[str, float] = None
-
-
-def _bind(vault_path: Path) -> None:
-    """Load schema and bind all module-level globals."""
-    global VAULT_ROOT, discover_files, derive_domain, derive_subdomain
-    global DOMAIN_MAP, SUBDOMAIN_MAP, EXPECTED_CONCEPTS
-    global SUBDOMAIN_DIFFICULTY, DOMAIN_PRIORITY_WEIGHT, CONCEPT_PRIORITY
-
-    _schema = load_schema(vault_path)
-    VAULT_ROOT = _schema.VAULT_ROOT
-    discover_files = _schema.discover_files
-    derive_domain = _schema.derive_domain
-    derive_subdomain = _schema.derive_subdomain
-    DOMAIN_MAP = _schema.DOMAIN_MAP
-    SUBDOMAIN_MAP = _schema.SUBDOMAIN_MAP
-    EXPECTED_CONCEPTS = _schema.EXPECTED_CONCEPTS
-    SUBDOMAIN_DIFFICULTY = _schema.SUBDOMAIN_DIFFICULTY
-    DOMAIN_PRIORITY_WEIGHT = _schema.DOMAIN_PRIORITY_WEIGHT
-    CONCEPT_PRIORITY = _schema.CONCEPT_PRIORITY
-
 DIFFICULTY_SCORE: dict[str, float] = {
     "advanced": 3.0,
     "intermediate": 2.0,
@@ -61,17 +30,17 @@ def normalise_filename(name: str) -> str:
 # ── Schema resolution ──────────────────────────────────────────
 
 
-def build_subdomain_to_domain() -> dict[str, str]:
+def build_subdomain_to_domain(schema) -> dict[str, str]:
     mapping: dict[str, str] = {}
     domains_with_subdomains: set[str] = set()
-    for value in SUBDOMAIN_MAP.values():
+    for value in schema.SUBDOMAIN_MAP.values():
         if isinstance(value, tuple):
             sub_slug, domain_slug = value[0], value[1]
         else:
             sub_slug, domain_slug = value, value
         mapping[sub_slug] = domain_slug
         domains_with_subdomains.add(domain_slug)
-    for domain_slug in DOMAIN_MAP.values():
+    for domain_slug in schema.DOMAIN_MAP.values():
         if domain_slug not in domains_with_subdomains:
             mapping[domain_slug] = domain_slug
     return mapping
@@ -124,14 +93,14 @@ def validate_concept_uniqueness(
 # ── Data loading ───────────────────────────────────────────────
 
 
-def load_actual_concepts(root: Path) -> dict[str, set[str]]:
+def load_actual_concepts(root: Path, schema) -> dict[str, set[str]]:
     actual: dict[str, set[str]] = {}
-    for filepath in discover_files(root):
+    for filepath in schema.discover_files(root):
         rel = filepath.relative_to(root)
         parts = list(rel.parts)
 
         try:
-            sub = derive_subdomain(parts)
+            sub = schema.derive_subdomain(parts)
         except ValueError:
             sub = None
         if isinstance(sub, tuple):
@@ -141,7 +110,7 @@ def load_actual_concepts(root: Path) -> dict[str, set[str]]:
             key = sub
         else:
             try:
-                dom = derive_domain(parts)
+                dom = schema.derive_domain(parts)
             except ValueError:
                 continue
             if isinstance(dom, tuple):
@@ -175,24 +144,26 @@ def score_concept(
     concept_slug: str,
     subdomain_slug: str,
     subdomain_to_domain: dict[str, str],
+    schema,
 ) -> float:
-    difficulty = SUBDOMAIN_DIFFICULTY.get(subdomain_slug, "intermediate")
+    difficulty = schema.SUBDOMAIN_DIFFICULTY.get(subdomain_slug, "intermediate")
     base = DIFFICULTY_SCORE.get(difficulty, 2.0)
     domain_slug = subdomain_to_domain.get(subdomain_slug, subdomain_slug)
-    weight = DOMAIN_PRIORITY_WEIGHT.get(domain_slug, 1.0)
-    priority = CONCEPT_PRIORITY.get(concept_slug, 1.0)
+    weight = schema.DOMAIN_PRIORITY_WEIGHT.get(domain_slug, 1.0)
+    priority = schema.CONCEPT_PRIORITY.get(concept_slug, 1.0)
     return round(base * weight * priority, 1)
 
 
 def score_gaps(
     gaps: dict[str, list[str]],
     subdomain_to_domain: dict[str, str],
+    schema,
 ) -> dict[str, list[tuple[str, float]]]:
     scored: dict[str, list[tuple[str, float]]] = {}
     for sub in sorted(gaps):
         entries: list[tuple[str, float]] = []
         for c in gaps[sub]:
-            s = score_concept(c, sub, subdomain_to_domain)
+            s = score_concept(c, sub, subdomain_to_domain, schema)
             entries.append((c, s))
         entries.sort(key=lambda x: (-x[1], x[0]))
         scored[sub] = entries
@@ -352,7 +323,7 @@ def render_ranked_list(
 def main(vault_path: Path | None = None) -> int:
     if vault_path is None:
         vault_path = _resolve_vault_path()
-    _bind(vault_path)
+    _schema = load_schema(vault_path)
 
     parser = argparse.ArgumentParser(
         description="Coverage Derivation Engine",
@@ -367,42 +338,42 @@ def main(vault_path: Path | None = None) -> int:
     )
     args = parser.parse_args()
 
-    if not EXPECTED_CONCEPTS:
+    if not _schema.EXPECTED_CONCEPTS:
         print("ERROR: EXPECTED_CONCEPTS not defined or empty in vault_schema.py")
         return 1
 
-    subdomain_to_domain = build_subdomain_to_domain()
+    subdomain_to_domain = build_subdomain_to_domain(_schema)
     valid_subdomains = set(subdomain_to_domain.keys())
 
-    key_errors = validate_expected_keys(EXPECTED_CONCEPTS, valid_subdomains)
+    key_errors = validate_expected_keys(_schema.EXPECTED_CONCEPTS, valid_subdomains)
     if key_errors:
         for e in key_errors:
             print(f"  SCHEMA ERROR: {e}")
         return 1
 
-    slug_errors = validate_expected_slugs(EXPECTED_CONCEPTS)
+    slug_errors = validate_expected_slugs(_schema.EXPECTED_CONCEPTS)
     if slug_errors:
         for e in slug_errors:
             print(f"  SCHEMA ERROR: {e}")
         return 1
 
     try:
-        validate_concept_uniqueness(EXPECTED_CONCEPTS)
+        validate_concept_uniqueness(_schema.EXPECTED_CONCEPTS)
     except ValueError as exc:
         print(f"  SCHEMA ERROR: {exc}")
         return 1
 
-    actual = load_actual_concepts(VAULT_ROOT)
+    actual = load_actual_concepts(_schema.VAULT_ROOT, _schema)
 
-    for sub in sorted(EXPECTED_CONCEPTS):
+    for sub in sorted(_schema.EXPECTED_CONCEPTS):
         if sub not in actual:
             print(
                 f"  WARNING: subdomain '{sub}' has expected concepts "
                 f"but no actual notes"
             )
 
-    raw_gaps = detect_gaps(EXPECTED_CONCEPTS, actual)
-    scored_gaps = score_gaps(raw_gaps, subdomain_to_domain)
+    raw_gaps = detect_gaps(_schema.EXPECTED_CONCEPTS, actual)
+    scored_gaps = score_gaps(raw_gaps, subdomain_to_domain, _schema)
 
     if args.domain:
         matching = {
@@ -411,11 +382,11 @@ def main(vault_path: Path | None = None) -> int:
         }
         scored_gaps = {k: v for k, v in scored_gaps.items() if k in matching}
         filtered_expected = {
-            k: v for k, v in EXPECTED_CONCEPTS.items() if k in matching
+            k: v for k, v in _schema.EXPECTED_CONCEPTS.items() if k in matching
         }
         filtered_actual = {k: v for k, v in actual.items() if k in matching}
     else:
-        filtered_expected = dict(EXPECTED_CONCEPTS)
+        filtered_expected = dict(_schema.EXPECTED_CONCEPTS)
         filtered_actual = actual
 
     render_summary(

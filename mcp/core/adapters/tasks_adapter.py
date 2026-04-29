@@ -10,7 +10,8 @@ from __future__ import annotations
 from pathlib import Path
 
 from mcp.core.vault_registry import get_vault_path, list_vaults
-from core.shared.upgrade_vault import _bind, load_all, generate_tasks
+from core.shared.upgrade_vault import load_all, generate_tasks
+from core.shared import load_schema as _load_schema
 from mcp.core.result_cache import get_cached, set_cached
 
 _ENDPOINT = "tasks"
@@ -49,10 +50,10 @@ def get_tasks(vault_name: str | None = None, limit: int = 10) -> dict:
             }
 
         vault_path = get_vault_path(vault_name)
-        _bind(vault_path)
+        _schema = _load_schema(vault_path)
 
-        records = load_all(vault_path)
-        all_tasks = generate_tasks(records)
+        records = load_all(vault_path, _schema)
+        all_tasks = generate_tasks(records, _schema)
 
         # Build full transformed list (no early limit — enables correct caching)
         result_tasks: list[dict] = []

@@ -17,85 +17,15 @@ from pathlib import Path
 from core.shared import load_schema as _load_schema, _resolve_vault_path
 
 # ============================================================================
-# MODULE-LEVEL GLOBALS (populated by _bind before use)
-# ============================================================================
-
-ALL_KNOWN_FIELDS = None
-CORE_CONCEPT_FIELDS = None
-CORE_CONCEPT_FIELDS_WITH_TOPIC = None
-MIN_SECTION_CONTENT_CHARS = None
-OPTIONAL_SECTION_MAP = None
-PATTERN_TECHNIQUE_FIELDS = None
-SECTION_MAP = None
-VALID_DIFFICULTIES = None
-VALID_DOMAINS = None
-VALID_STATUSES = None
-VALID_SUBDOMAINS = None
-VALID_TOPICS = None
-VALID_TYPES = None
-VAULT_ROOT = None
-derive_difficulty = None
-derive_domain = None
-derive_subdomain = None
-derive_topic = None
-derive_type = None
-detect_section_content = None
-discover_files = None
-extract_section_body = None
-find_headings = None
-parse_yaml_frontmatter = None
-read_file_safe = None
-
-
-def _bind(vault_path: Path) -> None:
-    """Load schema and bind all module-level globals. Must be called before use."""
-    global ALL_KNOWN_FIELDS, CORE_CONCEPT_FIELDS, CORE_CONCEPT_FIELDS_WITH_TOPIC
-    global MIN_SECTION_CONTENT_CHARS, OPTIONAL_SECTION_MAP, PATTERN_TECHNIQUE_FIELDS, SECTION_MAP
-    global VALID_DIFFICULTIES, VALID_DOMAINS, VALID_STATUSES, VALID_SUBDOMAINS
-    global VALID_TOPICS, VALID_TYPES, VAULT_ROOT
-    global derive_difficulty, derive_domain, derive_subdomain, derive_topic, derive_type
-    global detect_section_content, discover_files, extract_section_body
-    global find_headings, parse_yaml_frontmatter, read_file_safe
-
-    _schema = _load_schema(vault_path)
-
-    ALL_KNOWN_FIELDS = _schema.ALL_KNOWN_FIELDS
-    CORE_CONCEPT_FIELDS = _schema.CORE_CONCEPT_FIELDS
-    CORE_CONCEPT_FIELDS_WITH_TOPIC = _schema.CORE_CONCEPT_FIELDS_WITH_TOPIC
-    MIN_SECTION_CONTENT_CHARS = _schema.MIN_SECTION_CONTENT_CHARS
-    OPTIONAL_SECTION_MAP = _schema.OPTIONAL_SECTION_MAP
-    PATTERN_TECHNIQUE_FIELDS = _schema.PATTERN_TECHNIQUE_FIELDS
-    SECTION_MAP = _schema.SECTION_MAP
-    VALID_DIFFICULTIES = _schema.VALID_DIFFICULTIES
-    VALID_DOMAINS = _schema.VALID_DOMAINS
-    VALID_STATUSES = _schema.VALID_STATUSES
-    VALID_SUBDOMAINS = _schema.VALID_SUBDOMAINS
-    VALID_TOPICS = _schema.VALID_TOPICS
-    VALID_TYPES = _schema.VALID_TYPES
-    VAULT_ROOT = _schema.VAULT_ROOT
-    derive_difficulty = _schema.derive_difficulty
-    derive_domain = _schema.derive_domain
-    derive_subdomain = _schema.derive_subdomain
-    derive_topic = _schema.derive_topic
-    derive_type = _schema.derive_type
-    detect_section_content = _schema.detect_section_content
-    discover_files = _schema.discover_files
-    extract_section_body = _schema.extract_section_body
-    find_headings = _schema.find_headings
-    parse_yaml_frontmatter = _schema.parse_yaml_frontmatter
-    read_file_safe = _schema.read_file_safe
-
-
-# ============================================================================
 # STRICT SECTION QUALITY VALIDATORS
 # ============================================================================
 
 _NUMBERED_STEP = re.compile(r"^\d+\.\s+")
 
 
-def validate_how_it_works(body: str) -> str | None:
+def validate_how_it_works(body: str, schema) -> str | None:
     """Return an error string if ## How It Works fails strict validation."""
-    section = extract_section_body(body, "## How It Works")
+    section = schema.extract_section_body(body, "## How It Works")
     if section is None:
         return "Missing section: ## How It Works"
     steps = [line for line in section.split("\n") if _NUMBERED_STEP.match(line)]
@@ -106,9 +36,9 @@ def validate_how_it_works(body: str) -> str | None:
     return None
 
 
-def validate_tradeoffs(body: str) -> str | None:
+def validate_tradeoffs(body: str, schema) -> str | None:
     """Return an error string if ## Trade-offs fails strict validation."""
-    section = extract_section_body(body, "## Trade-offs")
+    section = schema.extract_section_body(body, "## Trade-offs")
     if section is None:
         return "Missing section: ## Trade-offs"
     lines = [line for line in section.split("\n") if line.strip()]
@@ -137,7 +67,7 @@ def validate_tradeoffs(body: str) -> str | None:
 # ============================================================================
 
 
-def validate_file(filepath: Path, root: Path) -> list[str]:
+def validate_file(filepath: Path, root: Path, schema) -> list[str]:
     """Run all validation checks on a single file. Returns list of errors."""
     errors: list[str] = []
     rel = filepath.relative_to(root)
@@ -146,20 +76,20 @@ def validate_file(filepath: Path, root: Path) -> list[str]:
 
     # Read
     try:
-        content = read_file_safe(filepath)
+        content = schema.read_file_safe(filepath)
     except Exception as e:
         return [f"Read error: {e}"]
 
     # ── YAML existence and integrity ──
     try:
-        fields, body = parse_yaml_frontmatter(content)
+        fields, body = schema.parse_yaml_frontmatter(content)
     except ValueError as exc:
         return [str(exc)]  # "Malformed YAML: <reason>"
     if fields is None:
         return ["Missing or invalid YAML frontmatter"]
 
     # ── Unknown fields ──
-    unknown = set(fields.keys()) - ALL_KNOWN_FIELDS
+    unknown = set(fields.keys()) - schema.ALL_KNOWN_FIELDS
     if unknown:
         errors.append(f"Unknown fields: {sorted(unknown)}")
 
@@ -168,16 +98,16 @@ def validate_file(filepath: Path, root: Path) -> list[str]:
     if note_type is None:
         errors.append("Missing field: type")
         return errors
-    if note_type not in VALID_TYPES:
+    if note_type not in schema.VALID_TYPES:
         errors.append(f"Invalid type: '{note_type}'")
         return errors
 
     # ── Required fields check ──
     depth = len(path_parts)
     if note_type == "core-concept":
-        expected_fields = CORE_CONCEPT_FIELDS_WITH_TOPIC if depth >= 4 else CORE_CONCEPT_FIELDS
+        expected_fields = schema.CORE_CONCEPT_FIELDS_WITH_TOPIC if depth >= 4 else schema.CORE_CONCEPT_FIELDS
     else:
-        expected_fields = PATTERN_TECHNIQUE_FIELDS
+        expected_fields = schema.PATTERN_TECHNIQUE_FIELDS
 
     for field_name in expected_fields:
         if field_name == "subdomain" and depth < 3:
@@ -197,35 +127,35 @@ def validate_file(filepath: Path, root: Path) -> list[str]:
 
     # ── Enum validation ──
     domain = fields.get("domain")
-    if domain is not None and domain not in VALID_DOMAINS:
+    if domain is not None and domain not in schema.VALID_DOMAINS:
         errors.append(f"Invalid domain: '{domain}'")
 
     subdomain = fields.get("subdomain")
-    if subdomain is not None and subdomain not in VALID_SUBDOMAINS:
+    if subdomain is not None and subdomain not in schema.VALID_SUBDOMAINS:
         errors.append(f"Invalid subdomain: '{subdomain}'")
 
     topic = fields.get("topic")
-    if topic is not None and topic not in VALID_TOPICS:
+    if topic is not None and topic not in schema.VALID_TOPICS:
         errors.append(f"Invalid topic: '{topic}'")
 
     status = fields.get("status")
-    if status is not None and status not in VALID_STATUSES:
+    if status is not None and status not in schema.VALID_STATUSES:
         errors.append(f"Invalid status: '{status}'")
 
     difficulty = fields.get("difficulty")
-    if difficulty is not None and difficulty not in VALID_DIFFICULTIES:
+    if difficulty is not None and difficulty not in schema.VALID_DIFFICULTIES:
         errors.append(f"Invalid difficulty: '{difficulty}'")
 
     # ── Derivation consistency ──
 
     # Type derivation
-    expected_type = derive_type(filename)
+    expected_type = schema.derive_type(filename)
     if note_type != expected_type:
         errors.append(f"Type mismatch: YAML='{note_type}', derived='{expected_type}'")
 
     # Domain derivation
     try:
-        expected_domain = derive_domain(path_parts)
+        expected_domain = schema.derive_domain(path_parts)
         if domain != expected_domain:
             errors.append(f"Domain mismatch: YAML='{domain}', derived='{expected_domain}'")
     except ValueError as e:
@@ -233,7 +163,7 @@ def validate_file(filepath: Path, root: Path) -> list[str]:
 
     # Subdomain derivation + parent constraint
     try:
-        subdomain_result = derive_subdomain(path_parts)
+        subdomain_result = schema.derive_subdomain(path_parts)
         if subdomain_result is not None:
             expected_sub, expected_parent_domain = subdomain_result
             if subdomain != expected_sub:
@@ -248,7 +178,7 @@ def validate_file(filepath: Path, root: Path) -> list[str]:
 
     # Topic derivation + parent constraint
     try:
-        topic_result = derive_topic(path_parts)
+        topic_result = schema.derive_topic(path_parts)
         if topic_result is not None:
             expected_topic, expected_parent_sub = topic_result
             if topic != expected_topic:
@@ -260,7 +190,7 @@ def validate_file(filepath: Path, root: Path) -> list[str]:
 
     # Difficulty derivation
     try:
-        expected_diff = derive_difficulty(
+        expected_diff = schema.derive_difficulty(
             str(subdomain) if subdomain else None,
             str(topic) if topic else None,
         )
@@ -276,7 +206,7 @@ def validate_file(filepath: Path, root: Path) -> list[str]:
             ("## How It Works", "has_how_it_works"),
             ("## Trade-offs", "has_tradeoffs"),
         ]:
-            expected = detect_section_content(body, heading)
+            expected = schema.detect_section_content(body, heading)
             actual = fields.get(field_name)
             if actual is not None and actual != expected:
                 errors.append(
@@ -291,13 +221,13 @@ def validate_file(filepath: Path, root: Path) -> list[str]:
         if status != expected_status:
             errors.append(f"Status mismatch: YAML='{status}', derived='{expected_status}'")
     else:
-        if status not in VALID_STATUSES:
+        if status not in schema.VALID_STATUSES:
             errors.append(f"{note_type} status must be in VALID_STATUSES, got '{status}'")
 
     # ── Structural validation: canonical sections ──
-    headings_in_file = find_headings(body)
-    expected_sections = SECTION_MAP.get(note_type, ())
-    optional_sections = OPTIONAL_SECTION_MAP.get(note_type, ())
+    headings_in_file = schema.find_headings(body)
+    expected_sections = schema.SECTION_MAP.get(note_type, ())
+    optional_sections = schema.OPTIONAL_SECTION_MAP.get(note_type, ())
 
     for section in expected_sections:
         if section not in headings_in_file:
@@ -311,21 +241,21 @@ def validate_file(filepath: Path, root: Path) -> list[str]:
 
     # ── Strict section quality (core-concept only) ──
     if note_type == "core-concept":
-        hw_err = validate_how_it_works(body)
+        hw_err = validate_how_it_works(body, schema)
         if hw_err:
             errors.append(hw_err)
-        to_err = validate_tradeoffs(body)
+        to_err = validate_tradeoffs(body, schema)
         if to_err:
             errors.append(to_err)
 
     # ── Configurable minimum section content ──
-    if MIN_SECTION_CONTENT_CHARS > 0:
-        for section_heading in SECTION_MAP.get(note_type, ()):
-            section_body = extract_section_body(body, section_heading)
-            if section_body is not None and len(section_body.strip()) < MIN_SECTION_CONTENT_CHARS:
+    if schema.MIN_SECTION_CONTENT_CHARS > 0:
+        for section_heading in schema.SECTION_MAP.get(note_type, ()):
+            section_body = schema.extract_section_body(body, section_heading)
+            if section_body is not None and len(section_body.strip()) < schema.MIN_SECTION_CONTENT_CHARS:
                 errors.append(
                     f"Section '{section_heading}' has fewer than "
-                    f"{MIN_SECTION_CONTENT_CHARS} character(s) of content"
+                    f"{schema.MIN_SECTION_CONTENT_CHARS} character(s) of content"
                 )
 
     return errors
@@ -339,16 +269,16 @@ def validate_file(filepath: Path, root: Path) -> list[str]:
 def main(vault_path: Path | None = None) -> int:
     if vault_path is None:
         vault_path = _resolve_vault_path()
-    _bind(vault_path)
+    _schema = _load_schema(vault_path)
 
     print(f"{'='*60}")
     print("Vault Validation Engine")
     print(f"Schema: v3.0.0 (Unified)")
-    print(f"Vault:  {VAULT_ROOT}")
+    print(f"Vault:  {_schema.VAULT_ROOT}")
     print(f"{'='*60}")
     print()
 
-    files = discover_files(VAULT_ROOT)
+    files = _schema.discover_files(_schema.VAULT_ROOT)
     print(f"Files discovered: {len(files)}")
     print()
 
@@ -357,8 +287,8 @@ def main(vault_path: Path | None = None) -> int:
     all_errors: list[tuple[str, list[str]]] = []
 
     for filepath in files:
-        rel = str(filepath.relative_to(VAULT_ROOT))
-        errors = validate_file(filepath, VAULT_ROOT)
+        rel = str(filepath.relative_to(_schema.VAULT_ROOT))
+        errors = validate_file(filepath, _schema.VAULT_ROOT, _schema)
         if errors:
             invalid_count += 1
             all_errors.append((rel, errors))
@@ -389,6 +319,7 @@ def main(vault_path: Path | None = None) -> int:
 
     print("Validation PASSED. All files are schema-compliant.")
     return 0
+
 
 
 if __name__ == "__main__":

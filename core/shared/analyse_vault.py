@@ -26,37 +26,12 @@ if sys.stdout.encoding != "utf-8":
 
 from core.shared import load_schema as _load_schema, _resolve_vault_path
 
-# Module-level globals (populated by _bind before use)
-VALID_DIFFICULTIES = None
-VAULT_ROOT = None
-discover_files = None
-parse_yaml_frontmatter = None
-read_file_safe = None
-DOMAIN_PRIORITY_WEIGHT = None
-TRACKED_SECTIONS = None
-
-
-def _bind(vault_path: Path) -> None:
-    """Load schema and bind all module-level globals."""
-    global VALID_DIFFICULTIES, VAULT_ROOT, discover_files
-    global parse_yaml_frontmatter, read_file_safe, DOMAIN_PRIORITY_WEIGHT
-    global TRACKED_SECTIONS
-
-    _schema = _load_schema(vault_path)
-    VALID_DIFFICULTIES = _schema.VALID_DIFFICULTIES
-    VAULT_ROOT = _schema.VAULT_ROOT
-    discover_files = _schema.discover_files
-    parse_yaml_frontmatter = _schema.parse_yaml_frontmatter
-    read_file_safe = _schema.read_file_safe
-    DOMAIN_PRIORITY_WEIGHT = _schema.DOMAIN_PRIORITY_WEIGHT
-    TRACKED_SECTIONS = _schema.TRACKED_SECTIONS
-
 # ============================================================================
 # DATA LOADING
 # ============================================================================
 
 
-def load_all(root: Path) -> list[dict]:
+def load_all(root: Path, schema) -> list[dict]:
     """Load metadata + relative path for every content file.
 
     Files with missing or malformed YAML frontmatter are skipped with an
@@ -64,10 +39,10 @@ def load_all(root: Path) -> list[dict]:
     misled by a reduced file count.
     """
     records: list[dict] = []
-    for filepath in discover_files(root):
-        content = read_file_safe(filepath)
+    for filepath in schema.discover_files(root):
+        content = schema.read_file_safe(filepath)
         try:
-            fields, _ = parse_yaml_frontmatter(content)
+            fields, _ = schema.parse_yaml_frontmatter(content)
         except ValueError as exc:
             print(f"  WARN: {filepath.relative_to(root)} — {exc}")
             continue
@@ -245,14 +220,14 @@ def analysis_2_subdomain_weak_points(records: list[dict]) -> None:
     print()
 
 
-def analysis_3_difficulty_vs_completeness(records: list[dict]) -> None:
+def analysis_3_difficulty_vs_completeness(records: list[dict], schema) -> None:
     """Difficulty \u00d7 completeness cross-tabulation."""
     print("=" * 72)
     print("ANALYSIS 3 \u2014 DIFFICULTY vs COMPLETENESS")
     print("=" * 72)
     print()
 
-    order = sorted(VALID_DIFFICULTIES)
+    order = sorted(schema.VALID_DIFFICULTIES)
     stats: dict[str, dict[str, int]] = {
         d: {"total": 0, "complete": 0, "partial": 0} for d in order
     }
@@ -286,7 +261,7 @@ def analysis_3_difficulty_vs_completeness(records: list[dict]) -> None:
     print()
 
     # Insight: is advanced disproportionately incomplete?
-    if "advanced" in VALID_DIFFICULTIES and "foundational" in VALID_DIFFICULTIES:
+    if "advanced" in schema.VALID_DIFFICULTIES and "foundational" in schema.VALID_DIFFICULTIES:
         found = stats["foundational"]
         inter = stats["intermediate"]
         adv = stats["advanced"]
@@ -308,7 +283,7 @@ def analysis_3_difficulty_vs_completeness(records: list[dict]) -> None:
     print()
 
 
-def analysis_4_critical_gaps(records: list[dict]) -> None:
+def analysis_4_critical_gaps(records: list[dict], schema) -> None:
     """Notes that are partial + advanced = highest-value upgrade targets."""
     print("=" * 72)
     print("ANALYSIS 4 \u2014 CRITICAL GAPS (partial + advanced)")
@@ -321,7 +296,7 @@ def analysis_4_critical_gaps(records: list[dict]) -> None:
     ]
     gaps.sort(key=lambda r: r["_path"])
 
-    if "advanced" not in VALID_DIFFICULTIES or not gaps:
+    if "advanced" not in schema.VALID_DIFFICULTIES or not gaps:
         print("  No critical gaps found.")
         print()
         return
@@ -345,14 +320,14 @@ def analysis_4_critical_gaps(records: list[dict]) -> None:
     print()
 
 
-def analysis_5_section_deficiency_heatmap(records: list[dict]) -> None:
-    """Missing tracked sections by domain — driven by TRACKED_SECTIONS from schema."""
+def analysis_5_section_deficiency_heatmap(records: list[dict], schema) -> None:
+    """Missing tracked sections by domain \u2014 driven by TRACKED_SECTIONS from schema."""
     print("=" * 72)
     print("ANALYSIS 5 \u2014 SECTION DEFICIENCY HEATMAP")
     print("=" * 72)
     print()
 
-    fields = list(TRACKED_SECTIONS)  # list of (yaml_key, label)
+    fields = list(schema.TRACKED_SECTIONS)  # list of (yaml_key, label)
 
     if not fields:
         print("  No tracked sections defined in this vault schema.")
@@ -495,7 +470,7 @@ def analysis_6_structural_balance(records: list[dict]) -> None:
     print()
 
 
-def analysis_7_prioritised_action_list(records: list[dict]) -> None:
+def analysis_7_prioritised_action_list(records: list[dict], schema) -> None:
     """Top 20 notes to improve, scored and ranked."""
     print("=" * 72)
     print("ANALYSIS 7 \u2014 PRIORITISED ACTION LIST (top 20)")
@@ -511,11 +486,11 @@ def analysis_7_prioritised_action_list(records: list[dict]) -> None:
 
     scored: list[tuple[float, dict]] = []
     for r in candidates:
-        diff = r.get("difficulty", sorted(VALID_DIFFICULTIES)[0])
+        diff = r.get("difficulty", sorted(schema.VALID_DIFFICULTIES)[0])
         base = 0.0
 
         # Difficulty score
-        if "advanced" in VALID_DIFFICULTIES and diff == "advanced":
+        if "advanced" in schema.VALID_DIFFICULTIES and diff == "advanced":
             base += 3.0
         elif diff == "intermediate":
             base += 1.0
@@ -530,7 +505,7 @@ def analysis_7_prioritised_action_list(records: list[dict]) -> None:
 
         # Domain weight
         dom = r.get("domain", "foundations")
-        weight = DOMAIN_PRIORITY_WEIGHT.get(dom, 1.0)
+        weight = schema.DOMAIN_PRIORITY_WEIGHT.get(dom, 1.0)
         score = base * weight
 
         scored.append((score, r))
@@ -572,7 +547,7 @@ def analysis_7_prioritised_action_list(records: list[dict]) -> None:
 # ============================================================================
 
 
-def executive_summary(records: list[dict]) -> None:
+def executive_summary(records: list[dict], schema) -> None:
     """One-screen overview printed at the top."""
     total = len(records)
     complete = sum(1 for r in records if r.get("status") == "complete")
@@ -580,7 +555,7 @@ def executive_summary(records: list[dict]) -> None:
     advanced_partial = sum(
         1 for r in records
         if r.get("status") == "partial" and r.get("difficulty") == "advanced"
-    ) if "advanced" in VALID_DIFFICULTIES else 0
+    ) if "advanced" in schema.VALID_DIFFICULTIES else 0
 
     core = [r for r in records if r.get("type") == "core-concept"]
     missing_kp = sum(1 for r in core if r.get("has_key_principles") is not True)
@@ -588,7 +563,7 @@ def executive_summary(records: list[dict]) -> None:
     missing_to = sum(1 for r in core if r.get("has_tradeoffs") is not True)
     total_section_gaps = missing_kp + missing_hw + missing_to
 
-    vault_name = VAULT_ROOT.name
+    vault_name = schema.VAULT_ROOT.name
     print("=" * 72)
     print(f"VAULT ANALYSIS \u2014 {vault_name}")
     print(f"Source: vault_schema.py v3.0.0 | {total} notes analysed")
@@ -610,21 +585,21 @@ def executive_summary(records: list[dict]) -> None:
 def main(vault_path: Path | None = None) -> int:
     if vault_path is None:
         vault_path = _resolve_vault_path()
-    _bind(vault_path)
+    _schema = _load_schema(vault_path)
 
-    records = load_all(VAULT_ROOT)
+    records = load_all(_schema.VAULT_ROOT, _schema)
     if not records:
         print("ERROR: No records loaded.")
         return 1
 
-    executive_summary(records)
+    executive_summary(records, _schema)
     analysis_1_completeness_by_domain(records)
     analysis_2_subdomain_weak_points(records)
-    analysis_3_difficulty_vs_completeness(records)
-    analysis_4_critical_gaps(records)
-    analysis_5_section_deficiency_heatmap(records)
+    analysis_3_difficulty_vs_completeness(records, _schema)
+    analysis_4_critical_gaps(records, _schema)
+    analysis_5_section_deficiency_heatmap(records, _schema)
     analysis_6_structural_balance(records)
-    analysis_7_prioritised_action_list(records)
+    analysis_7_prioritised_action_list(records, _schema)
 
     return 0
 

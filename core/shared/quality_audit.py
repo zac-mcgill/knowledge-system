@@ -32,25 +32,6 @@ from pathlib import Path
 
 from core.shared import load_schema as _load_schema, _resolve_vault_path
 
-# Module-level globals (populated by _bind before use)
-VAULT_ROOT = None
-derive_type = None
-discover_files = None
-parse_yaml_frontmatter = None
-read_file_safe = None
-
-
-def _bind(vault_path: Path) -> None:
-    """Load schema and bind all module-level globals."""
-    global VAULT_ROOT, derive_type, discover_files, parse_yaml_frontmatter, read_file_safe
-
-    _schema = _load_schema(vault_path)
-    VAULT_ROOT = _schema.VAULT_ROOT
-    derive_type = _schema.derive_type
-    discover_files = _schema.discover_files
-    parse_yaml_frontmatter = _schema.parse_yaml_frontmatter
-    read_file_safe = _schema.read_file_safe
-
 # ============================================================================
 # CONSTANTS
 # ============================================================================
@@ -357,7 +338,7 @@ def _fix_guidance(issues: list[tuple[str, int, str]]) -> list[str]:
 # ============================================================================
 
 
-def format_summary(results: list[dict]) -> str:
+def format_summary(results: list[dict], schema) -> str:
     """Format the summary block."""
     total = len(results)
     flagged = [r for r in results if r["score"] > 0]
@@ -367,7 +348,7 @@ def format_summary(results: list[dict]) -> str:
 
     lines = [
         "=" * 72,
-        f"CONTENT QUALITY AUDIT — {VAULT_ROOT.name}",
+        f"CONTENT QUALITY AUDIT — {schema.VAULT_ROOT.name}",
         "=" * 72,
         "",
         f"Total notes analysed: {total}",
@@ -379,7 +360,7 @@ def format_summary(results: list[dict]) -> str:
     return "\n".join(lines)
 
 
-def format_ranked_table(results: list[dict], top_n: int | None) -> str:
+def format_ranked_table(results: list[dict], top_n: int | None, schema) -> str:
     """Format the ranked issues table."""
     flagged = [r for r in results if r["score"] > 0]
     flagged.sort(key=lambda r: (-r["score"], str(r["file"]).lower()))
@@ -401,7 +382,7 @@ def format_ranked_table(results: list[dict], top_n: int | None) -> str:
 
     for i, r in enumerate(flagged, 1):
         issue_ids = ", ".join(rid for rid, _, _ in r["issues"])
-        rel_path = str(r["file"].relative_to(VAULT_ROOT))
+        rel_path = str(r["file"].relative_to(schema.VAULT_ROOT))
         lines.append(
             f"{i:<6} {r['score']:<7} {r['severity']:<20} "
             f"{issue_ids:<22} {rel_path}"
@@ -411,7 +392,7 @@ def format_ranked_table(results: list[dict], top_n: int | None) -> str:
     return "\n".join(lines)
 
 
-def format_details(results: list[dict], top_n: int | None) -> str:
+def format_details(results: list[dict], top_n: int | None, schema) -> str:
     """Format detailed findings per note."""
     flagged = [r for r in results if r["score"] > 0]
     flagged.sort(key=lambda r: (-r["score"], str(r["file"]).lower()))
@@ -429,7 +410,7 @@ def format_details(results: list[dict], top_n: int | None) -> str:
     ]
 
     for r in flagged:
-        rel_path = str(r["file"].relative_to(VAULT_ROOT))
+        rel_path = str(r["file"].relative_to(schema.VAULT_ROOT))
         lines.append("")
         lines.append(f"File:     {rel_path}")
         lines.append(f"Score:    {r['score']}")
@@ -453,7 +434,7 @@ def format_details(results: list[dict], top_n: int | None) -> str:
 def main(vault_path: Path | None = None) -> int:
     if vault_path is None:
         vault_path = _resolve_vault_path()
-    _bind(vault_path)
+    _schema = _load_schema(vault_path)
 
     parser = argparse.ArgumentParser(
         description="Content Quality Audit — deterministic analysis of "
@@ -465,18 +446,18 @@ def main(vault_path: Path | None = None) -> int:
     )
     args = parser.parse_args()
 
-    files = discover_files(VAULT_ROOT)
+    files = _schema.discover_files(_schema.VAULT_ROOT)
     if not files:
         print("FATAL: No files discovered.", file=sys.stderr)
         return 1
 
     results: list[dict] = []
     for filepath in files:
-        if derive_type(filepath.name) != "core-concept":
+        if _schema.derive_type(filepath.name) != "core-concept":
             continue
 
-        content = read_file_safe(filepath)
-        _, body = parse_yaml_frontmatter(content)
+        content = _schema.read_file_safe(filepath)
+        _, body = _schema.parse_yaml_frontmatter(content)
         sections = extract_sections(body)
         result = score_note(filepath, sections)
         results.append(result)
@@ -485,9 +466,9 @@ def main(vault_path: Path | None = None) -> int:
         print("FATAL: No core-concept notes discovered.", file=sys.stderr)
         return 1
 
-    print(format_summary(results))
-    print(format_ranked_table(results, args.top))
-    print(format_details(results, args.top))
+    print(format_summary(results, _schema))
+    print(format_ranked_table(results, args.top, _schema))
+    print(format_details(results, args.top, _schema))
 
     return 0
 

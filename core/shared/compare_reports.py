@@ -23,28 +23,6 @@ from pathlib import Path
 
 from core.shared import load_schema as _load_schema, _resolve_vault_path
 
-# Module-level globals (populated by _bind before use)
-TRACKED_SECTIONS = None
-VAULT_ROOT = None
-OUTPUT_DIR = None
-discover_files = None
-parse_yaml_frontmatter = None
-read_file_safe = None
-
-
-def _bind(vault_path: Path) -> None:
-    """Load schema and bind all module-level globals."""
-    global TRACKED_SECTIONS, VAULT_ROOT, OUTPUT_DIR
-    global discover_files, parse_yaml_frontmatter, read_file_safe
-
-    _schema = _load_schema(vault_path)
-    TRACKED_SECTIONS = _schema.TRACKED_SECTIONS
-    VAULT_ROOT = _schema.VAULT_ROOT
-    OUTPUT_DIR = _schema.OUTPUT_DIR
-    discover_files = _schema.discover_files
-    parse_yaml_frontmatter = _schema.parse_yaml_frontmatter
-    read_file_safe = _schema.read_file_safe
-
 # ============================================================================
 # CONSTANTS
 # ============================================================================
@@ -96,12 +74,12 @@ class VaultSnapshot:
 # LIVE ANALYSIS — build snapshot from vault on disk
 # ============================================================================
 
-def load_all(root: Path) -> list[dict]:
+def load_all(root: Path, schema) -> list[dict]:
     """Load metadata + relative path for every content file."""
     records: list[dict] = []
-    for filepath in discover_files(root):
-        content = read_file_safe(filepath)
-        fields, _ = parse_yaml_frontmatter(content)
+    for filepath in schema.discover_files(root):
+        content = schema.read_file_safe(filepath)
+        fields, _ = schema.parse_yaml_frontmatter(content)
         if fields is None:
             continue
         fields["_path"] = str(filepath.relative_to(root))
@@ -109,7 +87,7 @@ def load_all(root: Path) -> list[dict]:
     return records
 
 
-def snapshot_from_records(records: list[dict]) -> VaultSnapshot:
+def snapshot_from_records(records: list[dict], schema) -> VaultSnapshot:
     """Build a VaultSnapshot from loaded records."""
     total = len(records)
     complete = sum(1 for r in records if r.get("status") == "complete")
@@ -124,7 +102,7 @@ def snapshot_from_records(records: list[dict]) -> VaultSnapshot:
     # Section deficiencies (core-concept notes only)
     core = [r for r in records if r.get("type") == "core-concept"]
     section_missing: dict[str, int] = {}
-    for yaml_key, label in TRACKED_SECTIONS:
+    for yaml_key, label in schema.TRACKED_SECTIONS:
         section_missing[label] = sum(1 for r in core if r.get(yaml_key) is not True)
 
     # Domain stats
@@ -156,9 +134,9 @@ def snapshot_from_records(records: list[dict]) -> VaultSnapshot:
     )
 
 
-def snapshot_from_vault(root: Path) -> VaultSnapshot:
+def snapshot_from_vault(root: Path, schema) -> VaultSnapshot:
     """Analyse the live vault and return a snapshot."""
-    return snapshot_from_records(load_all(root))
+    return snapshot_from_records(load_all(root, schema), schema)
 
 
 # ============================================================================
@@ -596,9 +574,9 @@ def section_interpretation(before: VaultSnapshot, after: VaultSnapshot) -> str:
 # REPORT ASSEMBLY
 # ============================================================================
 
-def generate_delta_report(before: VaultSnapshot, after: VaultSnapshot) -> str:
+def generate_delta_report(before: VaultSnapshot, after: VaultSnapshot, schema) -> str:
     """Assemble the full delta comparison report."""
-    vault_name = VAULT_ROOT.name
+    vault_name = schema.VAULT_ROOT.name
     parts: list[str] = []
 
     parts.append(f"# {vault_name} \u2014 Vault Delta Report")
@@ -621,7 +599,7 @@ def generate_delta_report(before: VaultSnapshot, after: VaultSnapshot) -> str:
 def main(vault_path: Path | None = None) -> None:
     if vault_path is None:
         vault_path = _resolve_vault_path()
-    _bind(vault_path)
+    _schema = _load_schema(vault_path)
 
     parser = argparse.ArgumentParser(
         description="Generate a delta comparison report between two vault states",
@@ -644,7 +622,7 @@ def main(vault_path: Path | None = None) -> None:
     # Build BEFORE snapshot
     before_path = Path(args.before)
     if not before_path.is_absolute():
-        before_path = VAULT_ROOT / before_path
+        before_path = _schema.VAULT_ROOT / before_path
     before = snapshot_from_report(before_path)
     print(f"BEFORE: {before_path.name}  ({before.complete}/{before.total} complete)")
 
@@ -652,20 +630,20 @@ def main(vault_path: Path | None = None) -> None:
     if args.after:
         after_path = Path(args.after)
         if not after_path.is_absolute():
-            after_path = VAULT_ROOT / after_path
+            after_path = _schema.VAULT_ROOT / after_path
         after = snapshot_from_report(after_path)
         print(f"AFTER:  {after_path.name}  ({after.complete}/{after.total} complete)")
     else:
-        after = snapshot_from_vault(VAULT_ROOT)
+        after = snapshot_from_vault(_schema.VAULT_ROOT, _schema)
         print(f"AFTER:  live vault analysis  ({after.complete}/{after.total} complete)")
 
     # Generate and write
-    report = generate_delta_report(before, after)
+    report = generate_delta_report(before, after, _schema)
 
     if not args.output or args.output.strip() == "":
         raise ValueError("Output filename must be non-empty")
 
-    resolved_output_dir = OUTPUT_DIR.resolve()
+    resolved_output_dir = _schema.OUTPUT_DIR.resolve()
     resolved_output_dir.mkdir(parents=True, exist_ok=True)
 
     out_path = (resolved_output_dir / args.output).resolve()

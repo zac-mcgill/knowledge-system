@@ -21,33 +21,6 @@ from pathlib import Path
 
 from core.shared import load_schema as _load_schema, _resolve_vault_path
 
-# Module-level globals (populated by _bind before use)
-TRACKED_SECTIONS = None
-VALID_DIFFICULTIES = None
-VAULT_ROOT = None
-OUTPUT_DIR = None
-discover_files = None
-parse_yaml_frontmatter = None
-read_file_safe = None
-PRIORITY_DOMAINS = None
-
-
-def _bind(vault_path: Path) -> None:
-    """Load schema and bind all module-level globals."""
-    global TRACKED_SECTIONS, VALID_DIFFICULTIES, VAULT_ROOT, OUTPUT_DIR
-    global discover_files, parse_yaml_frontmatter, read_file_safe, PRIORITY_DOMAINS
-
-    _schema = _load_schema(vault_path)
-    TRACKED_SECTIONS = _schema.TRACKED_SECTIONS
-    VALID_DIFFICULTIES = _schema.VALID_DIFFICULTIES
-    VAULT_ROOT = _schema.VAULT_ROOT
-    OUTPUT_DIR = _schema.OUTPUT_DIR
-    discover_files = _schema.discover_files
-    parse_yaml_frontmatter = _schema.parse_yaml_frontmatter
-    read_file_safe = _schema.read_file_safe
-    PRIORITY_DOMAINS = _schema.PRIORITY_DOMAINS
-
-
 # ============================================================================
 # CONSTANTS
 # ============================================================================
@@ -60,7 +33,7 @@ DEFAULT_OUTPUT = "Vault Report.md"
 # ============================================================================
 
 
-def load_all(root: Path) -> list[dict]:
+def load_all(root: Path, schema) -> list[dict]:
     """Load metadata + relative path for every content file.
 
     Files with missing or malformed YAML frontmatter are skipped with an
@@ -68,10 +41,10 @@ def load_all(root: Path) -> list[dict]:
     misled by a reduced file count.
     """
     records: list[dict] = []
-    for filepath in discover_files(root):
-        content = read_file_safe(filepath)
+    for filepath in schema.discover_files(root):
+        content = schema.read_file_safe(filepath)
         try:
-            fields, _ = parse_yaml_frontmatter(content)
+            fields, _ = schema.parse_yaml_frontmatter(content)
         except ValueError as exc:
             print(f"  WARN: {filepath.relative_to(root)} — {exc}")
             continue
@@ -103,9 +76,9 @@ def domain_stats(records: list[dict]) -> dict[str, dict[str, int]]:
     return stats
 
 
-def difficulty_stats(records: list[dict]) -> dict[str, dict[str, int]]:
+def difficulty_stats(records: list[dict], schema) -> dict[str, dict[str, int]]:
     """Compute per-difficulty completion statistics."""
-    order = sorted(VALID_DIFFICULTIES)
+    order = sorted(schema.VALID_DIFFICULTIES)
     stats: dict[str, dict[str, int]] = {d: {"total": 0, "complete": 0, "partial": 0} for d in order}
     for r in records:
         diff = r.get("difficulty", "unknown")
@@ -119,18 +92,18 @@ def difficulty_stats(records: list[dict]) -> dict[str, dict[str, int]]:
     return stats
 
 
-def section_gaps(records: list[dict]) -> dict[str, int]:
+def section_gaps(records: list[dict], schema) -> dict[str, int]:
     """Count missing tracked sections across core-concept notes."""
     core = [r for r in records if r.get("type") == "core-concept"]
     missing: dict[str, int] = {}
-    for yaml_key, label in TRACKED_SECTIONS:
+    for yaml_key, label in schema.TRACKED_SECTIONS:
         missing[label] = sum(1 for r in core if r.get(yaml_key) is not True)
     return missing
 
 
-def critical_gaps(records: list[dict]) -> list[dict]:
+def critical_gaps(records: list[dict], schema) -> list[dict]:
     """Return advanced + partial records, sorted by path."""
-    if "advanced" not in VALID_DIFFICULTIES:
+    if "advanced" not in schema.VALID_DIFFICULTIES:
         return []
     gaps = [
         r for r in records
@@ -140,20 +113,20 @@ def critical_gaps(records: list[dict]) -> list[dict]:
     return gaps
 
 
-def detect_missing(record: dict) -> list[str]:
+def detect_missing(record: dict, schema) -> list[str]:
     """Return list of missing section names for a record."""
     missing: list[str] = []
-    for yaml_key, section_name in TRACKED_SECTIONS:
+    for yaml_key, section_name in schema.TRACKED_SECTIONS:
         if not record.get(yaml_key, False):
             missing.append(section_name)
     return missing
 
 
-def score_record(record: dict, missing: list[str]) -> int:
+def score_record(record: dict, missing: list[str], schema) -> int:
     """Priority score: difficulty + missing sections + domain weight."""
     score = 0
     diff = record.get("difficulty", "")
-    if "advanced" in VALID_DIFFICULTIES and diff == "advanced":
+    if "advanced" in schema.VALID_DIFFICULTIES and diff == "advanced":
         score += 3
     elif diff == "intermediate":
         score += 1
@@ -163,12 +136,12 @@ def score_record(record: dict, missing: list[str]) -> int:
         score += 2
     if "Key Principles" in missing:
         score += 1
-    if record.get("domain", "") in PRIORITY_DOMAINS:
+    if record.get("domain", "") in schema.PRIORITY_DOMAINS:
         score += 2
     return score
 
 
-def top_priorities(records: list[dict], n: int = 10) -> list[tuple[dict, list[str], int]]:
+def top_priorities(records: list[dict], schema, n: int = 10) -> list[tuple[dict, list[str], int]]:
     """Return top-N priority upgrade targets."""
     scored: list[tuple[dict, list[str], int]] = []
     for rec in records:
@@ -176,10 +149,10 @@ def top_priorities(records: list[dict], n: int = 10) -> list[tuple[dict, list[st
             continue
         if rec.get("status") != "partial":
             continue
-        missing = detect_missing(rec)
+        missing = detect_missing(rec, schema)
         if not missing:
             continue
-        score = score_record(rec, missing)
+        score = score_record(rec, missing, schema)
         scored.append((rec, missing, score))
     scored.sort(key=lambda x: (-x[2], x[0]["_path"]))
     return scored[:n]
@@ -229,17 +202,17 @@ def pct(n: int, total: int) -> str:
 # ============================================================================
 
 
-def section_executive_summary(records: list[dict]) -> str:
+def section_executive_summary(records: list[dict], schema) -> str:
     """Section 1: Executive Summary."""
     total = len(records)
     complete = sum(1 for r in records if r.get("status") == "complete")
     partial = total - complete
     rate = 100 * complete / max(total, 1)
-    critical = len(critical_gaps(records))
-    gaps = section_gaps(records)
+    critical = len(critical_gaps(records, schema))
+    gaps = section_gaps(records, schema)
     total_gaps = sum(gaps.values())
 
-    vault_name = VAULT_ROOT.name
+    vault_name = schema.VAULT_ROOT.name
     domain_count = len(set(r.get("domain", "unknown") for r in records))
 
     lines: list[str] = []
@@ -313,17 +286,17 @@ def section_domain_analysis(records: list[dict]) -> str:
     return "\n".join(lines)
 
 
-def section_key_insights(records: list[dict]) -> str:
+def section_key_insights(records: list[dict], schema) -> str:
     """Section 3: Key Insights."""
-    d_stats = difficulty_stats(records)
+    d_stats = difficulty_stats(records, schema)
     dom_stats = domain_stats(records)
-    gaps = section_gaps(records)
-    critical = critical_gaps(records)
+    gaps = section_gaps(records, schema)
+    critical = critical_gaps(records, schema)
 
     # Compute rates
     inter = d_stats.get("intermediate", {"total": 0, "complete": 0})
-    adv = d_stats.get("advanced", {"total": 0, "complete": 0}) if "advanced" in VALID_DIFFICULTIES else {"total": 0, "complete": 0}
-    found = d_stats.get("foundational", {"total": 0, "complete": 0}) if "foundational" in VALID_DIFFICULTIES else {"total": 0, "complete": 0}
+    adv = d_stats.get("advanced", {"total": 0, "complete": 0}) if "advanced" in schema.VALID_DIFFICULTIES else {"total": 0, "complete": 0}
+    found = d_stats.get("foundational", {"total": 0, "complete": 0}) if "foundational" in schema.VALID_DIFFICULTIES else {"total": 0, "complete": 0}
     inter_rate = inter["complete"] / max(inter["total"], 1)
     adv_rate = adv["complete"] / max(adv["total"], 1)
     found_rate = found["complete"] / max(found["total"], 1)
@@ -334,7 +307,7 @@ def section_key_insights(records: list[dict]) -> str:
     insights: list[str] = []
 
     # Insight 1: Difficulty distribution
-    if "advanced" in VALID_DIFFICULTIES and "intermediate" in VALID_DIFFICULTIES:
+    if "advanced" in schema.VALID_DIFFICULTIES and "intermediate" in schema.VALID_DIFFICULTIES:
         if inter_rate < adv_rate:
             insights.append(
                 f"Intermediate-level topics show the lowest completion rate "
@@ -391,7 +364,7 @@ def section_key_insights(records: list[dict]) -> str:
         )
 
     # Insight 5: Foundational strength
-    if "foundational" in VALID_DIFFICULTIES and found_rate >= 0.7:
+    if "foundational" in schema.VALID_DIFFICULTIES and found_rate >= 0.7:
         insights.append(
             f"Foundational-level topics are {pct(found['complete'], found['total'])} complete, "
             f"confirming a solid base layer. "
@@ -407,9 +380,9 @@ def section_key_insights(records: list[dict]) -> str:
     return "\n".join(lines)
 
 
-def section_critical_gaps(records: list[dict]) -> str:
+def section_critical_gaps(records: list[dict], schema) -> str:
     """Section 4: Critical Gaps."""
-    gaps = critical_gaps(records)
+    gaps = critical_gaps(records, schema)
 
     lines: list[str] = []
     lines.append("## Critical Gaps")
@@ -441,9 +414,9 @@ def section_critical_gaps(records: list[dict]) -> str:
     return "\n".join(lines)
 
 
-def section_deficiencies(records: list[dict]) -> str:
+def section_deficiencies(records: list[dict], schema) -> str:
     """Section 5: Section Deficiencies."""
-    gaps = section_gaps(records)  # keys are labels from TRACKED_SECTIONS
+    gaps = section_gaps(records, schema)  # keys are labels from TRACKED_SECTIONS
     core_count = sum(1 for r in records if r.get("type") == "core-concept")
 
     lines: list[str] = []
@@ -488,9 +461,9 @@ def section_deficiencies(records: list[dict]) -> str:
     return "\n".join(lines)
 
 
-def section_priority_actions(records: list[dict]) -> str:
+def section_priority_actions(records: list[dict], schema) -> str:
     """Section 6: Priority Actions (top 10)."""
-    priorities = top_priorities(records, n=10)
+    priorities = top_priorities(records, schema, n=10)
 
     rows: list[list[str]] = []
     for rec, missing, score in priorities:
@@ -565,20 +538,20 @@ def section_system_description(records: list[dict]) -> str:
 # ============================================================================
 
 
-def generate_report(records: list[dict]) -> str:
+def generate_report(records: list[dict], schema) -> str:
     """Assemble the full markdown report."""
-    vault_name = VAULT_ROOT.name
+    vault_name = schema.VAULT_ROOT.name
     parts: list[str] = []
 
     parts.append(f"# {vault_name} \u2014 Vault Report")
     parts.append("")
 
-    parts.append(section_executive_summary(records))
+    parts.append(section_executive_summary(records, schema))
     parts.append(section_domain_analysis(records))
-    parts.append(section_key_insights(records))
-    parts.append(section_critical_gaps(records))
-    parts.append(section_deficiencies(records))
-    parts.append(section_priority_actions(records))
+    parts.append(section_key_insights(records, schema))
+    parts.append(section_critical_gaps(records, schema))
+    parts.append(section_deficiencies(records, schema))
+    parts.append(section_priority_actions(records, schema))
     parts.append(section_system_description(records))
 
     return "\n".join(parts)
@@ -594,7 +567,7 @@ def main(vault_path: Path | None = None) -> None:
 
     if vault_path is None:
         vault_path = _resolve_vault_path()
-    _bind(vault_path)
+    _schema = _load_schema(vault_path)
 
     parser = argparse.ArgumentParser(
         description="Generate a portfolio-ready markdown report for the vault",
@@ -605,13 +578,13 @@ def main(vault_path: Path | None = None) -> None:
     )
     args = parser.parse_args()
 
-    records = load_all(VAULT_ROOT)
-    report = generate_report(records)
+    records = load_all(_schema.VAULT_ROOT, _schema)
+    report = generate_report(records, _schema)
 
     if not args.output or args.output.strip() == "":
         raise ValueError("Output filename must be non-empty")
 
-    resolved_output_dir = OUTPUT_DIR.resolve()
+    resolved_output_dir = _schema.OUTPUT_DIR.resolve()
     resolved_output_dir.mkdir(parents=True, exist_ok=True)
 
     out_path = (resolved_output_dir / args.output).resolve()
