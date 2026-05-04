@@ -53,6 +53,7 @@ from mcp.core.graph_builder import build_graph
 from mcp.core.graph_query import get_neighbors, get_related_nodes, get_missing_neighbors
 from core.shared.context_bundle import generate_bundle as _generate_bundle
 from core.shared.feedback import load_feedback as _load_feedback
+from core.shared.context_package import export_context_package as _export_package
 
 
 # ---------- Structured Logging (Phase 7) ----------
@@ -422,6 +423,48 @@ class BundleRequest(BaseModel):
     allow_partial: bool = Field(
         default=False,
         description="Include notes with status=partial",
+    )
+
+
+class ExportRequest(BaseModel):
+    """Request body for POST /context/export."""
+
+    vault: str = Field(..., description="Vault name")
+    filters: dict = Field(
+        default_factory=dict,
+        description="Equality filters on frontmatter fields (e.g. {\"domain\": \"fundamentals\"})",
+    )
+    include_sections: list[str] = Field(
+        default_factory=lambda: ["Key Principles", "How It Works", "Trade-offs"],
+        description="Section names to extract (without '## ' prefix)",
+    )
+    include_related: bool = Field(
+        default=False,
+        description="Include graph relationship IDs for each note",
+    )
+    include_body: bool = Field(
+        default=True,
+        description="Include full note body text",
+    )
+    max_notes: int = Field(
+        default=10,
+        ge=1,
+        le=100,
+        description="Maximum notes to include (1–100)",
+    )
+    max_chars: int = Field(
+        default=20000,
+        ge=100,
+        le=500000,
+        description="Character budget (100–500000)",
+    )
+    allow_partial: bool = Field(
+        default=False,
+        description="Include notes with status=partial",
+    )
+    overwrite: bool = Field(
+        default=False,
+        description="Overwrite an existing package for this bundle_id",
     )
 
 
@@ -1371,6 +1414,96 @@ def endpoint_feedback(
         }
     except Exception as exc:
         return _error("FEEDBACK_ERROR", f"Feedback retrieval failed: {exc}", 500)
+
+
+# ---------- Phase 4: Context Export ----------
+
+
+@app.post("/context/export")
+def endpoint_context_export(req: ExportRequest):
+    """Generate a context bundle and write it to disk as a portable package.
+
+    Combines bundle generation (same logic as POST /context/bundle) with
+    package export.  The package is written to:
+        dist/context-bundles/<bundle_id>/
+
+    Request body:
+        vault (str, required): Vault name.
+        filters (dict): Equality filters on frontmatter fields.
+        include_sections (list[str]): Section names to extract (without '## ').
+            Defaults to ['Key Principles', 'How It Works', 'Trade-offs'].
+        include_related (bool): Include graph relationship IDs per note.
+        include_body (bool): Include full note body text. Default True.
+        max_notes (int): Maximum notes (1–100). Default 10.
+        max_chars (int): Character budget (100–500000). Default 20000.
+        allow_partial (bool): Include status=partial notes. Default False.
+        overwrite (bool): Replace existing package. Default False.
+
+    Response:
+        status (str): ``"ok"`` on success.
+        bundle_id (str): Deterministic 16-char hex bundle ID.
+        package_dir (str): Relative path to the written package directory.
+        files (dict): Per-file sha256 and byte count for all six package files.
+        warnings (list[str]): Non-fatal issues propagated from bundle generation.
+
+    Error codes:
+        INVALID_VAULT:    Vault name is not registered.
+        INVALID_FILTER:   Filter key is not a known schema field.
+        PACKAGE_EXISTS:   Package already exists and overwrite=False (HTTP 409).
+        BUNDLE_FAILED:    Unexpected error during bundle generation.
+        EXPORT_FAILED:    Unexpected error during package export.
+
+    Package files written:
+        context.json          Full bundle JSON
+        context.md            Human-readable Markdown rendering
+        manifest.json         Manifest with SHA-256 hashes for all other files
+        validation.json       Validation status and warnings
+        graph.json            Graph relationships
+        feedback-summary.json Feedback entries for selected notes
+    """
+    err = _validate_vault(req.vault)
+    if err:
+        return err
+
+    # Validate filter field names against the vault's known schema fields.
+    if req.filters:
+        schema = get_schema(req.vault)
+        known_fields = schema.ALL_KNOWN_FIELDS
+        invalid_filters = [k for k in req.filters if k not in known_fields]
+        if invalid_filters:
+            return _error(
+                "INVALID_FILTER",
+                f"Unknown filter field(s): {sorted(invalid_filters)}. "
+                f"Known fields: {sorted(known_fields)}",
+            )
+
+    try:
+        bundle = _generate_bundle(
+            vault_name=req.vault,
+            filters=req.filters,
+            include_sections=req.include_sections,
+            include_related=req.include_related,
+            include_body=req.include_body,
+            max_notes=req.max_notes,
+            max_chars=req.max_chars,
+            allow_partial=req.allow_partial,
+        )
+        if bundle.get("status") == "error":
+            code = bundle.get("error", {}).get("code", "BUNDLE_FAILED")
+            msg = bundle.get("error", {}).get("message", "Bundle generation failed")
+            return _error(code, msg, 500)
+
+        result = _export_package(bundle, overwrite=req.overwrite)
+        if result["status"] == "error":
+            code = result["error"]["code"]
+            msg = result["error"]["message"]
+            status_code = 409 if code == "PACKAGE_EXISTS" else 500
+            return _error(code, msg, status_code)
+
+        return result
+
+    except Exception as exc:
+        return _error("EXPORT_FAILED", f"Export failed: {exc}", 500)
 
 
 # ---------- Run ----------

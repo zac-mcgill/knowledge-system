@@ -100,8 +100,6 @@ Prints a JSON context bundle to stdout. The bundle packages selected notes with 
 
 `max_notes` caps the candidate pool first; `max_chars` then stops adding notes once the character budget is exhausted. `budget.truncated` is `true` only when notes were excluded by the character budget (not by `max_notes`). A `warnings` entry names the first note that was excluded by budget.
 
-**Note:** bundle files are not written to disk in this phase. Export belongs to Phase 4.
-
 ---
 
 ## 5c. Feedback Loop (Phase 3)
@@ -147,6 +145,56 @@ GET /tasks?vault=demo-vault&include_feedback=true
 Each task gains a `feedback_weight` field showing the score delta and contributing entries. The response includes `feedback_status` and `feedback_errors`.
 
 **Important:** feedback never modifies notes. It only adjusts which notes the task engine recommends working on next.
+
+---
+
+## 5d. Export Context Package (Phase 4)
+
+**Export the default bundle to disk:**
+```bash
+py run.py export
+```
+
+Generates the same default bundle as `run.py bundle` and writes it to `dist/context-bundles/<bundle-id>/`. Prints structured JSON to stdout. Returns exit code 1 if the package already exists (use `--overwrite` to replace it).
+
+```bash
+py run.py export --overwrite
+```
+
+**Output shape:**
+```json
+{
+  "status": "ok",
+  "bundle_id": "c240ffb1e9250194",
+  "package_dir": "dist/context-bundles/c240ffb1e9250194",
+  "files": {
+    "context.json":          {"sha256": "...", "bytes": 12345},
+    "context.md":            {"sha256": "...", "bytes": 6789},
+    "manifest.json":         {"sha256": "...", "bytes": 890},
+    "validation.json":       {"sha256": "...", "bytes": 234},
+    "graph.json":            {"sha256": "...", "bytes": 56},
+    "feedback-summary.json": {"sha256": "...", "bytes": 78}
+  },
+  "warnings": []
+}
+```
+
+**Package files written:**
+
+| File | Purpose |
+|------|---------|
+| `context.json` | Full bundle JSON |
+| `context.md` | Human-readable Markdown rendering |
+| `manifest.json` | SHA-256 hashes + metadata for all other files |
+| `validation.json` | Validation status and warnings |
+| `graph.json` | Graph relationships for selected notes |
+| `feedback-summary.json` | Feedback entries relevant to selected notes |
+
+**Overwrite behaviour:**
+- Without `--overwrite`: exits 1 with `PACKAGE_EXISTS` error if the package directory already exists.
+- With `--overwrite`: removes and recreates the package directory atomically.
+
+**Note:** generated packages are build artefacts. The `dist/` directory is gitignored.
 
 ---
 
@@ -197,6 +245,17 @@ POST /context/bundle
 }
 ```
 All fields except `vault` are optional — the defaults above apply.
+
+**Context export** (POST with JSON body — same fields as bundle, plus `overwrite`):
+```json
+POST /context/export
+{
+  "vault": "demo-vault",
+  "filters": {"status": "complete"},
+  "overwrite": false
+}
+```
+Writes a portable package to `dist/context-bundles/<bundle-id>/`. Returns `PACKAGE_EXISTS` (HTTP 409) if the package already exists and `overwrite` is false.
 
 **Compare** (POST with JSON body):
 ```json

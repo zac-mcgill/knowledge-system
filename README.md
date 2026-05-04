@@ -135,6 +135,7 @@ All adapter endpoints accept an optional `vault` query parameter. If omitted, th
 | `GET /note?vault=&path=` | Single note by path |
 | `GET /stats?vault=&field=` | Field-value frequency aggregation |
 | `POST /context/bundle` | Generate a deterministic context bundle |
+| `POST /context/export` | Export a context bundle as a portable package to disk |
 | `GET /feedback[?vault=]` | Load and validate vault feedback entries |
 | `GET /health` | Server health and metrics |
 | `GET /contract` | System contract check |
@@ -194,7 +195,7 @@ POST /context/bundle
 
 `max_notes` caps the candidate pool first; `max_chars` then stops adding notes once the character budget is exhausted. `budget.truncated` is `true` only when notes were excluded by the character budget (not by `max_notes`). A `warnings` entry names the first note excluded by budget.
 
-**Current limitation:** bundle files are not written to disk in Phase 2. Export/packaging belongs to Phase 4.
+**Note:** `run.py bundle` and `POST /context/bundle` print the bundle as JSON to stdout only. To write the bundle to disk as a portable package, use `run.py export` or `POST /context/export` (see [Export and Packaging](#export-and-packaging-phase-4) below).
 
 **CLI equivalent:**
 ```bash
@@ -202,6 +203,102 @@ py run.py bundle
 ```
 
 Prints a default bundle as JSON to stdout. Uses `status=complete` notes if any exist; falls back to partial notes with a warning.
+
+### Export and Packaging (Phase 4)
+
+Context bundles can be exported to disk as portable packages using `POST /context/export` or `py run.py export`.
+
+**Package directory:** `dist/context-bundles/<bundle-id>/`
+
+**Package files:**
+
+| File | Purpose |
+|------|---------|
+| `context.json` | Full bundle JSON |
+| `context.md` | Human-readable Markdown rendering of selected notes |
+| `manifest.json` | Package manifest with SHA-256 hashes for all other files |
+| `validation.json` | Validation status and warnings |
+| `graph.json` | Graph relationships for selected notes |
+| `feedback-summary.json` | Feedback entries relevant to selected notes |
+
+**CLI:**
+```bash
+py run.py export
+```
+Exports the default bundle (same defaults as `bundle`) to `dist/context-bundles/<bundle-id>/`. Prints structured JSON to stdout. Returns exit code 1 if the package already exists.
+
+```bash
+py run.py export --overwrite
+```
+Replaces an existing package for the same bundle ID.
+
+**API (minimal request):**
+```json
+POST /context/export
+{
+  "vault": "demo-vault"
+}
+```
+
+**API (full request):**
+```json
+POST /context/export
+{
+  "vault": "demo-vault",
+  "filters": {"status": "complete"},
+  "include_sections": ["Key Principles", "How It Works", "Trade-offs"],
+  "include_related": false,
+  "include_body": true,
+  "max_notes": 10,
+  "max_chars": 20000,
+  "allow_partial": false,
+  "overwrite": false
+}
+```
+
+**Response shape:**
+```json
+{
+  "status": "ok",
+  "bundle_id": "a1b2c3d4e5f6a7b8",
+  "package_dir": "dist/context-bundles/a1b2c3d4e5f6a7b8",
+  "files": {
+    "context.json":          {"sha256": "...", "bytes": 1234},
+    "context.md":            {"sha256": "...", "bytes": 1234},
+    "manifest.json":         {"sha256": "...", "bytes": 1234},
+    "validation.json":       {"sha256": "...", "bytes": 1234},
+    "graph.json":            {"sha256": "...", "bytes": 1234},
+    "feedback-summary.json": {"sha256": "...", "bytes": 1234}
+  },
+  "warnings": []
+}
+```
+
+**manifest.json shape:**
+```json
+{
+  "bundle_id": "a1b2c3d4e5f6a7b8",
+  "vault": "demo-vault",
+  "schema_version": null,
+  "created_at": "2026-05-04T12:00:00+00:00",
+  "source_notes": ["Fundamentals/Algorithms.md"],
+  "validation_status": "pass",
+  "warnings": [],
+  "files": {
+    "context.json": {"sha256": "...", "bytes": 1234},
+    "context.md":   {"sha256": "...", "bytes": 1234},
+    "...": "..."
+  }
+}
+```
+
+The manifest hashes cover all five non-manifest files. `manifest.json` does not include its own hash (circular dependency). The return value from the API and CLI does include the manifest hash.
+
+**Overwrite behaviour:**
+- `overwrite=false` (default): Returns `PACKAGE_EXISTS` error (HTTP 409) if a package with the same bundle ID already exists.
+- `overwrite=true`: Removes the existing package directory and replaces it atomically.
+
+**Generated packages are build artefacts.** The `dist/` directory is ignored by git. Do not commit generated packages.
 
 ### Feedback Loop (Phase 3)
 
@@ -389,6 +486,7 @@ knowledge-system/
 │       ├── analyse_vault.py        # 7-analysis engine
 │       ├── compare_reports.py      # Report comparison
 │       ├── context_bundle.py       # Deterministic context bundle generation
+│       ├── context_package.py      # Context package export (Phase 4)
 │       ├── discover_missing.py     # Missing note discovery
 │       ├── feedback.py             # Feedback parser, validator, and weight calculator
 │       ├── generate_report.py      # Markdown report generator

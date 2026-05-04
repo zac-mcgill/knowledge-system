@@ -27,3 +27,6 @@ temp/
 # MCP runtime artefacts
 mcp/*.log
 mcp/tmp/
+
+# Generated context packages (Phase 4 build artefacts)
+dist/

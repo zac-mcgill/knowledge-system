@@ -2855,6 +2855,638 @@ def test_p3_cli_feedback():
 
 
 # ============================================================
+# Phase 4 — Export and Packaging
+# ============================================================
+
+def _make_test_bundle() -> dict:
+    """Return a minimal valid bundle for use in export tests."""
+    from core.shared.context_bundle import generate_bundle
+    vault = list_vaults()[0]
+    build_index(vault)
+    return generate_bundle(
+        vault_name=vault,
+        filters={"status": "complete"},
+        include_sections=["Key Principles", "How It Works", "Trade-offs"],
+        include_related=False,
+        include_body=False,
+        max_notes=2,
+        max_chars=50000,
+        allow_partial=False,
+    )
+
+
+def test_p4_export_writes_all_six_files():
+    """P4-E1: export_context_package writes all six expected files."""
+    print("\n=== Test P4-E1: export writes all six files ===")
+    import tempfile
+    import shutil
+    from core.shared.context_package import export_context_package
+
+    bundle = _make_test_bundle()
+    tmp = tempfile.mkdtemp()
+    try:
+        result = export_context_package(bundle, output_root=tmp)
+        assert result["status"] == "ok", f"Expected ok: {result}"
+        bundle_id = result["bundle_id"]
+        pkg_dir = Path(tmp) / bundle_id
+        assert pkg_dir.is_dir(), f"Package dir not created: {pkg_dir}"
+        expected = {
+            "context.json", "context.md", "manifest.json",
+            "validation.json", "graph.json", "feedback-summary.json",
+        }
+        actual = {f.name for f in pkg_dir.iterdir()}
+        assert expected == actual, f"Expected files {expected}, got {actual}"
+        print(f"  All 6 files present in {pkg_dir.name} ✓")
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_p4_context_json_valid():
+    """P4-E2: context.json is valid JSON and contains bundle_id and status."""
+    print("\n=== Test P4-E2: context.json is valid JSON ===")
+    import tempfile
+    import shutil
+    import json as _json
+    from core.shared.context_package import export_context_package
+
+    bundle = _make_test_bundle()
+    tmp = tempfile.mkdtemp()
+    try:
+        result = export_context_package(bundle, output_root=tmp)
+        assert result["status"] == "ok", f"Expected ok: {result}"
+        pkg_dir = Path(tmp) / result["bundle_id"]
+        raw = (pkg_dir / "context.json").read_text(encoding="utf-8")
+        obj = _json.loads(raw)
+        assert "bundle_id" in obj, "context.json missing bundle_id"
+        assert obj["bundle_id"] == bundle["bundle_id"]
+        assert "status" in obj
+        print(f"  context.json: valid JSON, bundle_id={obj['bundle_id']!r} ✓")
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_p4_context_md_contains_required_fields():
+    """P4-E3: context.md contains bundle_id, vault, validation_status, source paths."""
+    print("\n=== Test P4-E3: context.md contains required fields ===")
+    import tempfile
+    import shutil
+    from core.shared.context_package import export_context_package
+
+    bundle = _make_test_bundle()
+    tmp = tempfile.mkdtemp()
+    try:
+        result = export_context_package(bundle, output_root=tmp)
+        assert result["status"] == "ok", f"Expected ok: {result}"
+        pkg_dir = Path(tmp) / result["bundle_id"]
+        md = (pkg_dir / "context.md").read_text(encoding="utf-8")
+        assert bundle["bundle_id"] in md, "bundle_id not in context.md"
+        assert bundle["vault"] in md, "vault not in context.md"
+        assert bundle["validation_status"] in md, "validation_status not in context.md"
+        for path in bundle["manifest"]["source_paths"]:
+            assert path in md, f"source path {path!r} not in context.md"
+        print(f"  context.md: all required fields present ✓")
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_p4_manifest_contains_all_files():
+    """P4-E4: manifest.json contains entries for all six package files."""
+    print("\n=== Test P4-E4: manifest.json contains all file entries ===")
+    import tempfile
+    import shutil
+    import json as _json
+    from core.shared.context_package import export_context_package
+
+    bundle = _make_test_bundle()
+    tmp = tempfile.mkdtemp()
+    try:
+        result = export_context_package(bundle, output_root=tmp)
+        assert result["status"] == "ok", f"Expected ok: {result}"
+        pkg_dir = Path(tmp) / result["bundle_id"]
+        manifest = _json.loads((pkg_dir / "manifest.json").read_text(encoding="utf-8"))
+        assert "files" in manifest, "manifest.json missing 'files'"
+        expected_files = {
+            "context.json", "context.md", "validation.json",
+            "graph.json", "feedback-summary.json",
+        }
+        for fname in expected_files:
+            assert fname in manifest["files"], f"manifest missing entry for {fname!r}"
+            entry = manifest["files"][fname]
+            assert "sha256" in entry, f"{fname}: missing sha256 in manifest"
+            assert "bytes" in entry, f"{fname}: missing bytes in manifest"
+        assert "bundle_id" in manifest
+        assert "validation_status" in manifest
+        assert "source_notes" in manifest
+        print(f"  manifest.json: all required fields present ✓")
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_p4_manifest_hashes_match():
+    """P4-E5: SHA-256 hashes in manifest.json match actual file bytes."""
+    print("\n=== Test P4-E5: manifest hashes match actual files ===")
+    import tempfile
+    import shutil
+    import hashlib
+    import json as _json
+    from core.shared.context_package import export_context_package
+
+    bundle = _make_test_bundle()
+    tmp = tempfile.mkdtemp()
+    try:
+        result = export_context_package(bundle, output_root=tmp)
+        assert result["status"] == "ok", f"Expected ok: {result}"
+        pkg_dir = Path(tmp) / result["bundle_id"]
+        manifest = _json.loads((pkg_dir / "manifest.json").read_text(encoding="utf-8"))
+        for fname, info in manifest["files"].items():
+            file_bytes = (pkg_dir / fname).read_bytes()
+            actual_hash = hashlib.sha256(file_bytes).hexdigest()
+            assert actual_hash == info["sha256"], (
+                f"{fname}: manifest hash {info['sha256']!r} != actual {actual_hash!r}"
+            )
+            assert len(file_bytes) == info["bytes"], (
+                f"{fname}: manifest bytes {info['bytes']} != actual {len(file_bytes)}"
+            )
+        print(f"  Manifest hashes verified for {len(manifest['files'])} files ✓")
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_p4_return_hashes_match():
+    """P4-E6: SHA-256 hashes in the return value match actual file bytes."""
+    print("\n=== Test P4-E6: return value hashes match actual files ===")
+    import tempfile
+    import shutil
+    import hashlib
+    from core.shared.context_package import export_context_package
+
+    bundle = _make_test_bundle()
+    tmp = tempfile.mkdtemp()
+    try:
+        result = export_context_package(bundle, output_root=tmp)
+        assert result["status"] == "ok", f"Expected ok: {result}"
+        pkg_dir = Path(tmp) / result["bundle_id"]
+        for fname, info in result["files"].items():
+            file_bytes = (pkg_dir / fname).read_bytes()
+            actual_hash = hashlib.sha256(file_bytes).hexdigest()
+            assert actual_hash == info["sha256"], (
+                f"{fname}: return hash {info['sha256']!r} != actual {actual_hash!r}"
+            )
+        print(f"  Return value hashes verified for {len(result['files'])} files ✓")
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_p4_validation_json_structured():
+    """P4-E7: validation.json is structured with required keys."""
+    print("\n=== Test P4-E7: validation.json is structured ===")
+    import tempfile
+    import shutil
+    import json as _json
+    from core.shared.context_package import export_context_package
+
+    bundle = _make_test_bundle()
+    tmp = tempfile.mkdtemp()
+    try:
+        result = export_context_package(bundle, output_root=tmp)
+        assert result["status"] == "ok", f"Expected ok: {result}"
+        pkg_dir = Path(tmp) / result["bundle_id"]
+        obj = _json.loads((pkg_dir / "validation.json").read_text(encoding="utf-8"))
+        assert "validation_status" in obj, "validation.json missing validation_status"
+        assert "source_note_count" in obj, "validation.json missing source_note_count"
+        assert "warnings" in obj, "validation.json missing warnings"
+        assert isinstance(obj["warnings"], list)
+        print(f"  validation.json: structured, status={obj['validation_status']!r} ✓")
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_p4_graph_json_structured():
+    """P4-E8: graph.json is structured with 'related' key."""
+    print("\n=== Test P4-E8: graph.json is structured ===")
+    import tempfile
+    import shutil
+    import json as _json
+    from core.shared.context_package import export_context_package
+
+    bundle = _make_test_bundle()
+    tmp = tempfile.mkdtemp()
+    try:
+        result = export_context_package(bundle, output_root=tmp)
+        assert result["status"] == "ok", f"Expected ok: {result}"
+        pkg_dir = Path(tmp) / result["bundle_id"]
+        obj = _json.loads((pkg_dir / "graph.json").read_text(encoding="utf-8"))
+        assert "related" in obj, "graph.json missing 'related' key"
+        assert isinstance(obj["related"], dict)
+        print(f"  graph.json: structured, related_count={len(obj['related'])} ✓")
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_p4_feedback_summary_json_structured():
+    """P4-E9: feedback-summary.json is structured with 'entries' and 'warnings'."""
+    print("\n=== Test P4-E9: feedback-summary.json is structured ===")
+    import tempfile
+    import shutil
+    import json as _json
+    from core.shared.context_package import export_context_package
+
+    bundle = _make_test_bundle()
+    tmp = tempfile.mkdtemp()
+    try:
+        result = export_context_package(bundle, output_root=tmp)
+        assert result["status"] == "ok", f"Expected ok: {result}"
+        pkg_dir = Path(tmp) / result["bundle_id"]
+        obj = _json.loads((pkg_dir / "feedback-summary.json").read_text(encoding="utf-8"))
+        assert "entries" in obj, "feedback-summary.json missing 'entries'"
+        assert "warnings" in obj, "feedback-summary.json missing 'warnings'"
+        assert isinstance(obj["entries"], list)
+        assert isinstance(obj["warnings"], list)
+        print(f"  feedback-summary.json: structured, entries={len(obj['entries'])} ✓")
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_p4_no_overwrite_returns_error():
+    """P4-E10: existing package with overwrite=False returns structured error."""
+    print("\n=== Test P4-E10: no-overwrite conflict returns structured error ===")
+    import tempfile
+    import shutil
+    from core.shared.context_package import export_context_package
+
+    bundle = _make_test_bundle()
+    tmp = tempfile.mkdtemp()
+    try:
+        # First export succeeds.
+        r1 = export_context_package(bundle, output_root=tmp, overwrite=False)
+        assert r1["status"] == "ok", f"First export failed: {r1}"
+        # Second export without overwrite must fail.
+        r2 = export_context_package(bundle, output_root=tmp, overwrite=False)
+        assert r2["status"] == "error", f"Expected error on duplicate, got: {r2}"
+        assert r2["error"]["code"] == "PACKAGE_EXISTS", (
+            f"Expected PACKAGE_EXISTS, got: {r2['error']['code']!r}"
+        )
+        print(f"  Conflict detected: {r2['error']['code']!r} ✓")
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_p4_overwrite_succeeds():
+    """P4-E11: existing package with overwrite=True is replaced successfully."""
+    print("\n=== Test P4-E11: overwrite=True replaces existing package ===")
+    import tempfile
+    import shutil
+    from core.shared.context_package import export_context_package
+
+    bundle = _make_test_bundle()
+    tmp = tempfile.mkdtemp()
+    try:
+        r1 = export_context_package(bundle, output_root=tmp, overwrite=False)
+        assert r1["status"] == "ok", f"First export failed: {r1}"
+        r2 = export_context_package(bundle, output_root=tmp, overwrite=True)
+        assert r2["status"] == "ok", f"Overwrite failed: {r2}"
+        assert r2["bundle_id"] == bundle["bundle_id"]
+        print(f"  Overwrite succeeded: bundle_id={r2['bundle_id']!r} ✓")
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_p4_error_bundle_returns_structured_error():
+    """P4-E12: passing an error bundle returns a structured error."""
+    print("\n=== Test P4-E12: error bundle returns structured error ===")
+    import tempfile
+    import shutil
+    from core.shared.context_package import export_context_package
+
+    error_bundle = {
+        "status": "error",
+        "error": {"code": "INVALID_VAULT", "message": "Vault not found"},
+    }
+    tmp = tempfile.mkdtemp()
+    try:
+        result = export_context_package(error_bundle, output_root=tmp)
+        assert result["status"] == "error", f"Expected error: {result}"
+        assert result["error"]["code"] == "BUNDLE_ERROR"
+        print(f"  Error bundle rejected: {result['error']['code']!r} ✓")
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_p4_no_extra_files_in_package():
+    """P4-E13: package directory contains exactly the six expected files."""
+    print("\n=== Test P4-E13: no extra files in package ===")
+    import tempfile
+    import shutil
+    from core.shared.context_package import export_context_package
+
+    bundle = _make_test_bundle()
+    tmp = tempfile.mkdtemp()
+    try:
+        result = export_context_package(bundle, output_root=tmp)
+        assert result["status"] == "ok", f"Expected ok: {result}"
+        pkg_dir = Path(tmp) / result["bundle_id"]
+        actual = {f.name for f in pkg_dir.iterdir()}
+        expected = {
+            "context.json", "context.md", "manifest.json",
+            "validation.json", "graph.json", "feedback-summary.json",
+        }
+        assert actual == expected, f"Unexpected files: {actual - expected}"
+        print(f"  Exactly 6 files, no extras ✓")
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_p4_cli_export_returns_valid_json():
+    """P4-CLI1: python run.py export --overwrite returns valid JSON with status=ok."""
+    print("\n=== Test P4-CLI1: CLI export --overwrite returns valid JSON ===")
+    import json
+    import subprocess
+
+    result = subprocess.run(
+        [sys.executable, "run.py", "export", "--overwrite"],
+        capture_output=True,
+        text=True,
+        cwd=str(Path(__file__).resolve().parent.parent),
+        timeout=60,
+    )
+
+    assert result.returncode == 0, (
+        f"CLI export exited {result.returncode}\n"
+        f"stdout: {result.stdout[:500]}\n"
+        f"stderr: {result.stderr[:500]}"
+    )
+
+    try:
+        output = json.loads(result.stdout)
+    except json.JSONDecodeError as exc:
+        raise AssertionError(
+            f"CLI export output is not valid JSON: {exc}\n"
+            f"stdout: {result.stdout[:500]}"
+        ) from exc
+
+    assert output["status"] == "ok", f"CLI export status not ok: {output}"
+    for key in ("bundle_id", "package_dir", "files", "warnings"):
+        assert key in output, f"CLI export missing key: {key!r}"
+    assert len(output["files"]) == 6, (
+        f"Expected 6 files, got {len(output['files'])}: {list(output['files'])}"
+    )
+    print(f"  CLI export: status=ok, bundle_id={output['bundle_id']!r}, "
+          f"package_dir={output['package_dir']!r} ✓")
+
+
+def test_p4_cli_export_writes_package_dir():
+    """P4-CLI2: CLI export creates the package directory on disk."""
+    print("\n=== Test P4-CLI2: CLI export creates package directory ===")
+    import json
+    import subprocess
+    from core.shared.context_package import _REPO_ROOT
+
+    result = subprocess.run(
+        [sys.executable, "run.py", "export", "--overwrite"],
+        capture_output=True,
+        text=True,
+        cwd=str(Path(__file__).resolve().parent.parent),
+        timeout=60,
+    )
+
+    assert result.returncode == 0, (
+        f"CLI export exited {result.returncode}\n"
+        f"stdout: {result.stdout[:500]}"
+    )
+
+    output = json.loads(result.stdout)
+    pkg_dir = _REPO_ROOT / output["package_dir"]
+    assert pkg_dir.is_dir(), f"Package directory not found: {pkg_dir}"
+    files = {f.name for f in pkg_dir.iterdir()}
+    expected = {
+        "context.json", "context.md", "manifest.json",
+        "validation.json", "graph.json", "feedback-summary.json",
+    }
+    assert files == expected, f"Unexpected files in package: {files}"
+    print(f"  Package directory verified at {output['package_dir']!r} ✓")
+
+
+def test_p4_cli_export_conflict_without_overwrite():
+    """P4-CLI3: CLI export without --overwrite on existing package returns non-zero exit."""
+    print("\n=== Test P4-CLI3: CLI export conflict without --overwrite ===")
+    import json
+    import subprocess
+
+    repo_root = Path(__file__).resolve().parent.parent
+
+    # Ensure the package exists first.
+    r = subprocess.run(
+        [sys.executable, "run.py", "export", "--overwrite"],
+        capture_output=True, text=True, cwd=str(repo_root), timeout=60,
+    )
+    assert r.returncode == 0, f"Setup export failed: {r.stdout[:300]}"
+
+    # Now try without --overwrite: should fail.
+    r2 = subprocess.run(
+        [sys.executable, "run.py", "export"],
+        capture_output=True, text=True, cwd=str(repo_root), timeout=60,
+    )
+
+    assert r2.returncode != 0, (
+        f"Expected non-zero exit on conflict, got 0\nstdout: {r2.stdout[:300]}"
+    )
+    try:
+        output = json.loads(r2.stdout)
+    except json.JSONDecodeError as exc:
+        raise AssertionError(
+            f"CLI conflict output is not valid JSON: {exc}\n"
+            f"stdout: {r2.stdout[:300]}"
+        ) from exc
+
+    assert output["status"] == "error", f"Expected error: {output}"
+    assert output["error"]["code"] == "PACKAGE_EXISTS", (
+        f"Expected PACKAGE_EXISTS, got: {output['error']['code']!r}"
+    )
+    print(f"  Conflict returned: {output['error']['code']!r}, exit={r2.returncode} ✓")
+
+
+def test_p4_cli_export_overwrite_succeeds():
+    """P4-CLI4: CLI export --overwrite on existing package succeeds."""
+    print("\n=== Test P4-CLI4: CLI export --overwrite on existing package ===")
+    import json
+    import subprocess
+
+    repo_root = Path(__file__).resolve().parent.parent
+
+    # First export.
+    r1 = subprocess.run(
+        [sys.executable, "run.py", "export", "--overwrite"],
+        capture_output=True, text=True, cwd=str(repo_root), timeout=60,
+    )
+    assert r1.returncode == 0, f"First export failed: {r1.stdout[:300]}"
+
+    # Second export with --overwrite: should succeed.
+    r2 = subprocess.run(
+        [sys.executable, "run.py", "export", "--overwrite"],
+        capture_output=True, text=True, cwd=str(repo_root), timeout=60,
+    )
+    assert r2.returncode == 0, (
+        f"Overwrite export failed: {r2.stdout[:300]}"
+    )
+    output = json.loads(r2.stdout)
+    assert output["status"] == "ok", f"Expected ok: {output}"
+    print(f"  --overwrite succeeded on second run ✓")
+
+
+def test_p4_api_export_ok():
+    """P4-API1: POST /context/export returns ok and package_dir."""
+    print("\n=== Test P4-API1: POST /context/export returns ok ===")
+    import shutil
+    try:
+        from fastapi.testclient import TestClient
+    except RuntimeError as exc:
+        print(f"  SKIP: TestClient unavailable — {exc}")
+        return
+
+    from mcp.server.mcp_server import app
+    from core.shared.context_package import _REPO_ROOT
+
+    vault = list_vaults()[0]
+    build_index(vault)
+
+    with TestClient(app, raise_server_exceptions=True) as client:
+        resp = client.post("/context/export", json={
+            "vault": vault,
+            "allow_partial": True,
+            "max_notes": 2,
+            "include_body": False,
+            "overwrite": True,
+        })
+        assert resp.status_code == 200, (
+            f"POST /context/export status {resp.status_code}: {resp.text[:300]}"
+        )
+        body = resp.json()
+        assert body["status"] == "ok", f"Expected ok: {body}"
+        for key in ("bundle_id", "package_dir", "files", "warnings"):
+            assert key in body, f"Missing key: {key!r}"
+        assert len(body["files"]) == 6, (
+            f"Expected 6 files, got {len(body['files'])}"
+        )
+        # Verify the package was actually written to disk.
+        pkg_dir = _REPO_ROOT / body["package_dir"]
+        assert pkg_dir.is_dir(), f"Package dir not on disk: {pkg_dir}"
+        print(f"  POST /context/export: 200 OK, bundle_id={body['bundle_id']!r} ✓")
+        # Cleanup after test.
+        shutil.rmtree(pkg_dir, ignore_errors=True)
+
+
+def test_p4_api_export_conflict():
+    """P4-API2: POST /context/export with overwrite=false on existing package returns 409."""
+    print("\n=== Test P4-API2: POST /context/export conflict returns 409 ===")
+    import shutil
+    try:
+        from fastapi.testclient import TestClient
+    except RuntimeError as exc:
+        print(f"  SKIP: TestClient unavailable — {exc}")
+        return
+
+    from mcp.server.mcp_server import app
+    from core.shared.context_package import _REPO_ROOT
+
+    vault = list_vaults()[0]
+    build_index(vault)
+
+    payload = {
+        "vault": vault,
+        "allow_partial": True,
+        "max_notes": 1,
+        "include_body": False,
+        "filters": {"status": "complete"},
+    }
+
+    with TestClient(app, raise_server_exceptions=True) as client:
+        # First call — must succeed.
+        resp1 = client.post("/context/export", json={**payload, "overwrite": True})
+        assert resp1.status_code == 200, f"Setup call failed: {resp1.text[:300]}"
+        bundle_id = resp1.json()["bundle_id"]
+        pkg_dir = _REPO_ROOT / resp1.json()["package_dir"]
+
+        try:
+            # Second call without overwrite — must return 409.
+            resp2 = client.post("/context/export", json={**payload, "overwrite": False})
+            assert resp2.status_code == 409, (
+                f"Expected 409 on conflict, got {resp2.status_code}: {resp2.text[:300]}"
+            )
+            body = resp2.json()
+            assert body["status"] == "error"
+            assert body["error"]["code"] == "PACKAGE_EXISTS"
+            print(f"  Conflict: 409 PACKAGE_EXISTS ✓")
+        finally:
+            shutil.rmtree(pkg_dir, ignore_errors=True)
+
+
+def test_p4_api_export_overwrite_ok():
+    """P4-API3: POST /context/export with overwrite=true on existing package returns ok."""
+    print("\n=== Test P4-API3: POST /context/export overwrite=true ===")
+    import shutil
+    try:
+        from fastapi.testclient import TestClient
+    except RuntimeError as exc:
+        print(f"  SKIP: TestClient unavailable — {exc}")
+        return
+
+    from mcp.server.mcp_server import app
+    from core.shared.context_package import _REPO_ROOT
+
+    vault = list_vaults()[0]
+    build_index(vault)
+
+    payload = {
+        "vault": vault,
+        "allow_partial": True,
+        "max_notes": 1,
+        "include_body": False,
+        "overwrite": True,
+    }
+
+    with TestClient(app, raise_server_exceptions=True) as client:
+        resp1 = client.post("/context/export", json=payload)
+        assert resp1.status_code == 200, f"First call failed: {resp1.text[:300]}"
+        pkg_dir = _REPO_ROOT / resp1.json()["package_dir"]
+
+        try:
+            resp2 = client.post("/context/export", json=payload)
+            assert resp2.status_code == 200, (
+                f"Second overwrite call failed: {resp2.text[:300]}"
+            )
+            body = resp2.json()
+            assert body["status"] == "ok"
+            print(f"  Overwrite succeeded: 200 OK ✓")
+        finally:
+            shutil.rmtree(pkg_dir, ignore_errors=True)
+
+
+def test_p4_api_export_unknown_vault():
+    """P4-API4: POST /context/export with unknown vault returns 404."""
+    print("\n=== Test P4-API4: POST /context/export unknown vault ===")
+    try:
+        from fastapi.testclient import TestClient
+    except RuntimeError as exc:
+        print(f"  SKIP: TestClient unavailable — {exc}")
+        return
+
+    from mcp.server.mcp_server import app
+
+    with TestClient(app, raise_server_exceptions=True) as client:
+        resp = client.post("/context/export", json={
+            "vault": "__nonexistent_vault__",
+            "allow_partial": True,
+        })
+        assert resp.status_code == 404, (
+            f"Expected 404 for unknown vault, got {resp.status_code}: {resp.text[:300]}"
+        )
+        body = resp.json()
+        assert body["status"] == "error"
+        assert body["error"]["code"] == "INVALID_VAULT"
+        print(f"  Unknown vault: 404 INVALID_VAULT ✓")
+
+
+# ============================================================
 # Main
 # ============================================================
 
@@ -2982,6 +3614,29 @@ def main():
     test_p3_bundle_feedback_only_selected_notes()
     test_p3_bundle_determinism_with_feedback()
     test_p3_cli_feedback()
+
+    # Phase 4 — Export and Packaging
+    test_p4_export_writes_all_six_files()
+    test_p4_context_json_valid()
+    test_p4_context_md_contains_required_fields()
+    test_p4_manifest_contains_all_files()
+    test_p4_manifest_hashes_match()
+    test_p4_return_hashes_match()
+    test_p4_validation_json_structured()
+    test_p4_graph_json_structured()
+    test_p4_feedback_summary_json_structured()
+    test_p4_no_overwrite_returns_error()
+    test_p4_overwrite_succeeds()
+    test_p4_error_bundle_returns_structured_error()
+    test_p4_no_extra_files_in_package()
+    test_p4_cli_export_returns_valid_json()
+    test_p4_cli_export_writes_package_dir()
+    test_p4_cli_export_conflict_without_overwrite()
+    test_p4_cli_export_overwrite_succeeds()
+    test_p4_api_export_ok()
+    test_p4_api_export_conflict()
+    test_p4_api_export_overwrite_ok()
+    test_p4_api_export_unknown_vault()
 
     print()
     print("=" * 60)
