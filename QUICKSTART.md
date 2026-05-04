@@ -73,7 +73,10 @@ py run.py report
 
 ## 6. Start API Server (Optional)
 
+Requires the MCP dependencies (fastapi + uvicorn):
+
 ```bash
+pip install -r mcp/requirements.txt
 py mcp/server/mcp_server.py
 ```
 
@@ -94,3 +97,20 @@ py mcp/server/mcp_server.py
 
 **Index freshness**  
 After editing, adding, or deleting a note file, the next API call automatically reflects the change (within a 2-second cooldown window). No server restart is needed.
+
+---
+
+## 8. Run Verification Tests (Optional)
+
+Core tests (requires only `requirements.txt`):
+
+```bash
+py mcp/test_verify.py
+```
+
+Tests 11 and 15 (rate limiter, structured logging) import from the MCP server and require the API dependencies:
+
+```bash
+pip install -r mcp/requirements.txt
+py mcp/test_verify.py
+```

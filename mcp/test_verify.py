@@ -1,9 +1,6 @@
 """Verification tests for the MCP server hardening — all phases."""
 
 import sys
-import tempfile
-import time
-import threading
 import concurrent.futures
 import logging
 from pathlib import Path
