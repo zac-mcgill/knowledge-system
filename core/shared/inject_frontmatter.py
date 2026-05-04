@@ -76,7 +76,7 @@ def validate_metadata(
     if note_type not in schema.VALID_TYPES:
         errors.append(f"V-01: type '{note_type}' not in enum")
     # V-02: domain enum
-    if domain not in schema.schema.VALID_DOMAINS:
+    if domain not in schema.VALID_DOMAINS:
         errors.append(f"V-02: domain '{domain}' not in enum")
     # V-03: subdomain enum
     if subdomain is not None and subdomain not in schema.VALID_SUBDOMAINS:

@@ -87,3 +87,10 @@ py mcp/server/mcp_server.py
 * http://127.0.0.1:8000/tasks?limit=5
 * http://127.0.0.1:8000/gaps
 * http://127.0.0.1:8000/notes
+
+**Query filter rules (POST /query)**  
+- Only schema-defined fields are accepted. Unknown fields, unsupported operators (e.g. `status__gt`), and `__in` with a non-list value all return `{"status": "error", "error": "INVALID_FILTER", ...}` with zero results.  
+- Supported operators: `field` (equality), `field__in` (list), `field__contains` (substring).  
+
+**Index freshness**  
+After editing, adding, or deleting a note file, the next API call automatically reflects the change (within a 2-second cooldown window). No server restart is needed.

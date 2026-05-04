@@ -34,6 +34,7 @@ _locks: dict[str, threading.Lock] = {}
 _global_lock = threading.Lock()
 
 # vault_name -> {"index": list[dict], "schema_hash": str,
+#                 "notes_fingerprint": str,
 #                 "last_build_time": float, "last_schema_check": float,
 #                 "baseline_size": int}
 _indices: dict[str, dict] = {}
@@ -54,6 +55,25 @@ def _compute_schema_hash(vault_name: str) -> str:
     schema_file = vault_path / _SCHEMA_RELATIVE_PATH
     content = schema_file.read_bytes()
     return hashlib.sha256(content).hexdigest()
+
+
+def _compute_notes_fingerprint(vault_name: str) -> str:
+    """Cheap fingerprint of indexed .md files: sorted (path, mtime_ns, size).
+
+    Uses the vault schema's discover_files() so the fingerprint covers
+    exactly the same files that are indexed — consistent with _do_build.
+    Only stat() calls are made; file contents are not read.
+    """
+    vault_path = get_vault_path(vault_name)
+    schema = get_schema(vault_name)
+    files = schema.discover_files(vault_path)
+    parts: list[str] = []
+    for p in files:
+        st = p.stat()
+        parts.append(
+            f"{p.relative_to(vault_path).as_posix()}:{st.st_mtime_ns}:{st.st_size}"
+        )
+    return hashlib.sha256("\n".join(parts).encode()).hexdigest()
 
 
 def _estimate_index_size(index: list[dict]) -> int:
@@ -147,6 +167,7 @@ def _build_index_internal(vault_name: str, *, timeout: bool = True) -> list[dict
     _indices[vault_name] = {
         "index": index,
         "schema_hash": schema_hash,
+        "notes_fingerprint": _compute_notes_fingerprint(vault_name),
         "last_build_time": now,
         "last_schema_check": now,
         "baseline_size": baseline,
@@ -190,8 +211,8 @@ def refresh_index(vault_name: str) -> list[dict]:
 def get_index(vault_name: str) -> list[dict]:
     """Return the cached index for a vault, building it if necessary.
 
-    Auto-refreshes if the schema file has changed since last build,
-    subject to a cooldown window to prevent rebuild spam.
+    Auto-refreshes when the schema file or any indexed note file has changed
+    since the last build, subject to a cooldown window to prevent rebuild spam.
     Returns a shallow copy to prevent external mutation of the cache.
     """
     lock = _get_vault_lock(vault_name)
@@ -202,22 +223,29 @@ def get_index(vault_name: str) -> list[dict]:
             entry = _indices[vault_name]
             last_check = entry.get("last_schema_check", 0.0)
 
-            # Cooldown: skip schema check if checked recently
+            # Cooldown: skip all content checks if checked very recently
             if (now - last_check) < _SCHEMA_COOLDOWN_SECONDS:
                 return list(entry["index"])
 
-            # Check schema hash
+            # Cooldown elapsed: check both schema hash and notes fingerprint
             current_hash = _compute_schema_hash(vault_name)
+            current_notes_fp = _compute_notes_fingerprint(vault_name)
             entry["last_schema_check"] = now
 
-            if entry["schema_hash"] == current_hash:
+            schema_changed = entry["schema_hash"] != current_hash
+            notes_changed = entry.get("notes_fingerprint") != current_notes_fp
+
+            if not schema_changed and not notes_changed:
                 return list(entry["index"])
 
-            # Schema changed — rebuild with timeout guard
-            logger.info(
-                "schema_mismatch vault=%s old_hash=%s new_hash=%s",
-                vault_name, entry["schema_hash"][:16], current_hash[:16],
-            )
+            # Something changed — rebuild with timeout guard
+            if schema_changed:
+                logger.info(
+                    "schema_mismatch vault=%s old_hash=%s new_hash=%s",
+                    vault_name, entry["schema_hash"][:16], current_hash[:16],
+                )
+            if notes_changed:
+                logger.info("notes_changed vault=%s rebuilding", vault_name)
             _build_index_internal(vault_name, timeout=True)
             return list(_indices[vault_name]["index"])
 

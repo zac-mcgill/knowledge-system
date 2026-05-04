@@ -1,6 +1,7 @@
 """Verification tests for the MCP server hardening — all phases."""
 
 import sys
+import tempfile
 import time
 import threading
 import concurrent.futures
@@ -126,18 +127,29 @@ def test_path_traversal_blocked():
 
 
 def test_strict_mode():
-    """Strict mode rejects unknown fields; non-strict ignores them."""
-    print("\n=== Test 7: Strict Mode ===")
+    """Both strict and non-strict modes now reject unknown fields (Phase 0 fix).
+
+    Pre-fix: non-strict silently ignored unknown fields and returned all notes.
+    Post-fix: all modes return a structured INVALID_FILTER error with zero results.
+    The `strict` parameter is preserved for backwards compatibility.
+    """
+    print("\n=== Test 7: Strict Mode / Filter Validation ===")
     vault = list_vaults()[0]
 
+    # Non-strict must also reject unknown fields (Phase 0 correctness fix)
     result = query(vault, {"fake_field": "value"}, strict=False)
-    assert result["status"] == "ok", "Non-strict should succeed"
-    print(f"  Non-strict with unknown field: ok ({result['count']} results)")
+    assert result["status"] == "error", "Non-strict must reject unknown fields"
+    assert result["error"] == "INVALID_FILTER", f"Wrong error code: {result['error']}"
+    assert result["results"] == [], "Must return empty results on error"
+    assert len(result["details"]) > 0, "Must include details"
+    print(f"  Non-strict with unknown field: correctly rejected (INVALID_FILTER)")
 
     result = query(vault, {"fake_field": "value"}, strict=True)
-    assert result["status"] == "error", "Strict should reject"
-    assert result["error"]["code"] == "INVALID_FIELDS"
-    print(f"  Strict with unknown field: rejected ({result['error']['message']})")
+    assert result["status"] == "error", "Strict must reject unknown fields"
+    assert result["error"] == "INVALID_FILTER", f"Wrong error code: {result['error']}"
+    assert result["results"] == [], "Must return empty results on error"
+    assert len(result["details"]) > 0, "Must include details"
+    print(f"  Strict with unknown field: correctly rejected (INVALID_FILTER)")
 
 
 def test_limit_and_timeout():
@@ -352,7 +364,7 @@ def test_concurrent_build_and_query():
 
 def test_contract_runner_pass():
     """Test 17: Full contract runner returns PASS on a healthy system."""
-    from core.contract_runner import run_all_checks
+    from mcp.core.contract_runner import run_all_checks
 
     result = run_all_checks(include_vault_scripts=False)
     assert result["status"] == "pass", f"Expected pass, got: {result['violations']}"
@@ -370,8 +382,8 @@ def test_contract_runner_pass():
 
 def test_contract_schema_interface():
     """Test 18: Missing schema symbol is detected."""
-    from core.system_contract import check_schema_interface, REQUIRED_CONSTANTS
-    from core.vault_registry import list_vaults, get_schema
+    from mcp.core.system_contract import check_schema_interface, REQUIRED_CONSTANTS
+    from mcp.core.vault_registry import list_vaults, get_schema
 
     vault_name = list_vaults()[0]
     schema = get_schema(vault_name)
@@ -398,8 +410,8 @@ def test_contract_schema_interface():
 
 def test_contract_index_integrity():
     """Test 19: Index integrity check works on valid index."""
-    from core.system_contract import check_index_integrity
-    from core.vault_registry import list_vaults
+    from mcp.core.system_contract import check_index_integrity
+    from mcp.core.vault_registry import list_vaults
 
     vault_name = list_vaults()[0]
     violations = check_index_integrity(vault_name)
@@ -409,8 +421,8 @@ def test_contract_index_integrity():
 
 def test_contract_query_determinism():
     """Test 20: Identical queries produce identical results."""
-    from core.system_contract import check_query_determinism
-    from core.vault_registry import list_vaults
+    from mcp.core.system_contract import check_query_determinism
+    from mcp.core.vault_registry import list_vaults
 
     vault_name = list_vaults()[0]
     violations = check_query_determinism(vault_name)
@@ -420,12 +432,475 @@ def test_contract_query_determinism():
 
 def test_contract_lightweight():
     """Test 21: Lightweight recheck runs and passes."""
-    from core.contract_runner import run_lightweight_checks
+    from mcp.core.contract_runner import run_lightweight_checks
 
     result = run_lightweight_checks()
     assert result["status"] == "pass", f"Expected pass, got: {result['violations']}"
     assert result["total_violations"] == 0
     print(f"  Lightweight recheck: PASS ({result['duration_ms']:.1f} ms)")
+
+
+# ============================================================
+# Phase 0 — Query Filter Safety Tests
+# ============================================================
+
+def test_unknown_field_returns_error():
+    """P0-Q1: Unknown filter field returns structured INVALID_FILTER error."""
+    print("\n=== Test P0-Q1: Unknown Field Returns Error ===")
+    vault = list_vaults()[0]
+
+    result = query(vault, {"nonexistent_field": "value"})
+    assert result["status"] == "error", "Unknown field must return error"
+    assert result["error"] == "INVALID_FILTER"
+    assert isinstance(result["details"], list)
+    assert len(result["details"]) > 0
+    assert result["results"] == []
+    detail = result["details"][0]
+    assert "filter" in detail and "reason" in detail
+    print(f"  Unknown field: INVALID_FILTER returned, details={result['details']}")
+
+
+def test_unknown_field_does_not_return_all_notes():
+    """P0-Q2: A query using only unknown fields must NOT return all notes."""
+    print("\n=== Test P0-Q2: Unknown Field Does Not Return All Notes ===")
+    vault = list_vaults()[0]
+
+    # Build index to have notes available
+    build_index(vault)
+    total_notes = list_notes(vault)["count"]
+    assert total_notes > 0, "Vault must have notes for this test"
+
+    result = query(vault, {"totally_fake": "anything"})
+    assert result["status"] == "error", "Must return error, not results"
+    assert result["results"] == [], "Must return empty results, not all notes"
+    # Explicitly verify it is NOT the full note list
+    assert len(result["results"]) != total_notes
+    print(f"  Total notes: {total_notes}, result.results: [] — correctly NOT returning all notes")
+
+
+def test_malformed_in_returns_error():
+    """P0-Q3: __in operator with a string value returns INVALID_FILTER error."""
+    print("\n=== Test P0-Q3: Malformed __in Returns Error ===")
+    vault = list_vaults()[0]
+
+    # status__in with a string (should be a list)
+    result = query(vault, {"status__in": "complete"})
+    assert result["status"] == "error", "__in with string must return error"
+    assert result["error"] == "INVALID_FILTER"
+    assert result["results"] == []
+    assert any("__in" in d["filter"] for d in result["details"])
+    print(f"  status__in='complete' (string): INVALID_FILTER — {result['details']}")
+
+    # Also verify a dict value fails
+    result = query(vault, {"status__in": {"a": "b"}})
+    assert result["status"] == "error"
+    assert result["error"] == "INVALID_FILTER"
+    print(f"  status__in={{dict}}: INVALID_FILTER — {result['details']}")
+
+
+def test_unsupported_operator_returns_error():
+    """P0-Q4: Unsupported operator (e.g. __gt) returns INVALID_FILTER error."""
+    print("\n=== Test P0-Q4: Unsupported Operator Returns Error ===")
+    vault = list_vaults()[0]
+
+    result = query(vault, {"difficulty__gt": "basic"})
+    assert result["status"] == "error", "__gt is unsupported, must return error"
+    assert result["error"] == "INVALID_FILTER"
+    assert result["results"] == []
+    print(f"  difficulty__gt: INVALID_FILTER — {result['details']}")
+
+    result = query(vault, {"status__lt": "complete"})
+    assert result["status"] == "error"
+    assert result["error"] == "INVALID_FILTER"
+    print(f"  status__lt: INVALID_FILTER — {result['details']}")
+
+
+def test_valid_equality_query():
+    """P0-Q5: Valid equality filter returns matching notes."""
+    print("\n=== Test P0-Q5: Valid Equality Query ===")
+    vault = list_vaults()[0]
+    build_index(vault)
+
+    result = query(vault, {"type": "core-concept"})
+    assert result["status"] == "ok", f"Valid equality query failed: {result}"
+    assert result["count"] > 0, "Expected at least one core-concept note"
+    assert all(n["fields"].get("type") == "core-concept" for n in result["results"])
+    print(f"  type=core-concept: {result['count']} results returned")
+
+    # Non-matching equality should return zero
+    result = query(vault, {"type": "nonexistent-type-xyz"})
+    assert result["status"] == "ok"
+    assert result["count"] == 0
+    print(f"  type=nonexistent-type-xyz: 0 results (correct)")
+
+
+def test_valid_in_query():
+    """P0-Q6: Valid __in filter with a list value returns matching notes."""
+    print("\n=== Test P0-Q6: Valid __in Query ===")
+    vault = list_vaults()[0]
+    build_index(vault)
+
+    result = query(vault, {"type__in": ["core-concept"]})
+    assert result["status"] == "ok", f"Valid __in query failed: {result}"
+    assert result["count"] > 0, "Expected results for type__in=['core-concept']"
+    assert all(n["fields"].get("type") in ["core-concept"] for n in result["results"])
+    print(f"  type__in=['core-concept']: {result['count']} results returned")
+
+    # Empty list should match nothing
+    result = query(vault, {"type__in": []})
+    assert result["status"] == "ok"
+    assert result["count"] == 0
+    print(f"  type__in=[]: 0 results (correct)")
+
+
+def test_valid_contains_query():
+    """P0-Q7: Valid __contains filter returns matching notes."""
+    print("\n=== Test P0-Q7: Valid __contains Query ===")
+    vault = list_vaults()[0]
+    build_index(vault)
+
+    # 'core' is a substring of 'core-concept'
+    result = query(vault, {"type__contains": "core"})
+    assert result["status"] == "ok", f"Valid __contains query failed: {result}"
+    # All results should have 'core' in their type field
+    for note in result["results"]:
+        assert "core" in (note["fields"].get("type") or ""), \
+            f"Note {note['path']} does not match __contains filter"
+    print(f"  type__contains='core': {result['count']} results returned")
+
+
+def test_pagination_preserved_after_fix():
+    """P0-Q8: Pagination still works correctly after query safety fixes."""
+    print("\n=== Test P0-Q8: Pagination Preserved ===")
+    vault = list_vaults()[0]
+    build_index(vault)
+
+    full = query(vault, {"type": "core-concept"}, limit=500)
+    total = full["count"]
+    assert full["status"] == "ok"
+
+    page1 = query(vault, {"type": "core-concept"}, limit=3, offset=0)
+    page2 = query(vault, {"type": "core-concept"}, limit=3, offset=3)
+
+    assert page1["status"] == "ok"
+    assert page1["returned"] == min(3, total)
+    assert page1["offset"] == 0
+    assert page1["limit"] == 3
+
+    paths1 = {n["path"] for n in page1["results"]}
+    paths2 = {n["path"] for n in page2["results"]}
+    assert not paths1 & paths2, "Pages must not overlap"
+
+    print(f"  total={total}, page1={page1['returned']}, page2={page2['returned']}, no overlap")
+
+
+# ============================================================
+# Phase 0 — Index Freshness Tests
+# ============================================================
+
+def _expire_cooldown(vault_name: str) -> None:
+    """Force the index cooldown to expire so get_index() will re-check content."""
+    lock = _get_vault_lock(vault_name)
+    with lock:
+        if vault_name in _indices:
+            _indices[vault_name]["last_schema_check"] = 0.0
+
+
+def test_note_edit_reflected_in_index():
+    """P0-I1: Editing a note's frontmatter is reflected in get_index() after cooldown."""
+    print("\n=== Test P0-I1: Note Edit Reflected in Index ===")
+    vault = list_vaults()[0]
+    vault_path = get_vault_path(vault)
+
+    # Find a real indexed note to edit
+    build_index(vault)
+    idx = get_index(vault)
+    assert len(idx) > 0
+    target = idx[0]
+    target_path = vault_path / target["path"]
+
+    # Read current content
+    original_content = target_path.read_text(encoding="utf-8")
+    # Append a harmless comment to the body to change mtime/size
+    modified_content = original_content.rstrip("\n") + "\n<!-- test-edit-marker -->\n"
+
+    try:
+        target_path.write_text(modified_content, encoding="utf-8")
+
+        # Expire the cooldown so get_index() will detect the change
+        _expire_cooldown(vault)
+
+        # get_index() should detect changed mtime and rebuild
+        new_idx = get_index(vault)
+        target_note = next((n for n in new_idx if n["path"] == target["path"]), None)
+        assert target_note is not None, "Edited note should still be in index"
+        assert "test-edit-marker" in target_note["body"], \
+            "Edited note body must be reflected in refreshed index"
+        print(f"  Edited {target['path']}: body change detected and indexed")
+    finally:
+        # Restore original content
+        target_path.write_text(original_content, encoding="utf-8")
+        _expire_cooldown(vault)
+        build_index(vault)
+
+
+def test_note_add_reflected_in_index():
+    """P0-I2: A new note added to the vault is reflected in get_index() after cooldown."""
+    print("\n=== Test P0-I2: Note Add Reflected in Index ===")
+    vault = list_vaults()[0]
+    vault_path = get_vault_path(vault)
+
+    build_index(vault)
+    before_count = len(get_index(vault))
+
+    # Write a minimal valid-looking note in the indexed area
+    new_note_path = vault_path / "Fundamentals" / "_test_temp_note.md"
+    new_content = (
+        "---\n"
+        "type: core-concept\n"
+        "domain: fundamentals\n"
+        "status: partial\n"
+        "has_key_principles: false\n"
+        "has_how_it_works: false\n"
+        "has_tradeoffs: false\n"
+        "difficulty: intermediate\n"
+        "---\n\n"
+        "Temporary test note for index freshness test.\n"
+    )
+
+    try:
+        new_note_path.write_text(new_content, encoding="utf-8")
+
+        _expire_cooldown(vault)
+        new_idx = get_index(vault)
+        after_count = len(new_idx)
+
+        assert after_count == before_count + 1, \
+            f"Expected {before_count + 1} notes after add, got {after_count}"
+        paths = [n["path"] for n in new_idx]
+        assert any("_test_temp_note" in p for p in paths), \
+            "New note must appear in refreshed index"
+        print(f"  Notes before: {before_count}, after add+refresh: {after_count} (+1 correct)")
+    finally:
+        if new_note_path.exists():
+            new_note_path.unlink()
+        _expire_cooldown(vault)
+        build_index(vault)
+
+
+def test_note_delete_reflected_in_index():
+    """P0-I3: A deleted note is removed from get_index() after cooldown."""
+    print("\n=== Test P0-I3: Note Delete Reflected in Index ===")
+    vault = list_vaults()[0]
+    vault_path = get_vault_path(vault)
+
+    # Create a temp note first
+    new_note_path = vault_path / "Fundamentals" / "_test_temp_del.md"
+    new_content = (
+        "---\n"
+        "type: core-concept\n"
+        "domain: fundamentals\n"
+        "status: partial\n"
+        "has_key_principles: false\n"
+        "has_how_it_works: false\n"
+        "has_tradeoffs: false\n"
+        "difficulty: intermediate\n"
+        "---\n\n"
+        "Temporary test note for deletion test.\n"
+    )
+    new_note_path.write_text(new_content, encoding="utf-8")
+    _expire_cooldown(vault)
+    idx_with = get_index(vault)
+    assert any("_test_temp_del" in n["path"] for n in idx_with), \
+        "Temp note should appear after add"
+    count_with = len(idx_with)
+
+    # Now delete it
+    new_note_path.unlink()
+    _expire_cooldown(vault)
+    idx_without = get_index(vault)
+    count_without = len(idx_without)
+
+    assert count_without == count_with - 1, \
+        f"Expected {count_with - 1} notes after delete, got {count_without}"
+    assert not any("_test_temp_del" in n["path"] for n in idx_without), \
+        "Deleted note must not appear in refreshed index"
+    print(f"  Notes with temp: {count_with}, after delete+refresh: {count_without} (-1 correct)")
+
+    # Cleanup (rebuild to stable state)
+    _expire_cooldown(vault)
+    build_index(vault)
+
+
+def test_get_note_reflects_edit():
+    """P0-I4: get_note() returns updated body after a note edit and index refresh."""
+    print("\n=== Test P0-I4: get_note() Reflects Edit ===")
+    vault = list_vaults()[0]
+    vault_path = get_vault_path(vault)
+
+    build_index(vault)
+    idx = get_index(vault)
+    target = idx[0]
+    target_path = vault_path / target["path"]
+
+    original_content = target_path.read_text(encoding="utf-8")
+    modified_content = original_content.rstrip("\n") + "\n<!-- get_note_test_marker -->\n"
+
+    try:
+        target_path.write_text(modified_content, encoding="utf-8")
+        _expire_cooldown(vault)
+
+        result = get_note(vault, target["path"])
+        assert result["status"] == "ok", f"get_note failed: {result}"
+        assert "get_note_test_marker" in result["data"]["body"], \
+            "get_note must return updated body after index refresh"
+        print(f"  get_note({target['path']}): edited body reflected after refresh")
+    finally:
+        target_path.write_text(original_content, encoding="utf-8")
+        _expire_cooldown(vault)
+        build_index(vault)
+
+
+def test_query_reflects_frontmatter_edit():
+    """P0-I5: POST /query reflects edited frontmatter after index refresh."""
+    print("\n=== Test P0-I5: query() Reflects Frontmatter Edit ===")
+    vault = list_vaults()[0]
+    vault_path = get_vault_path(vault)
+
+    build_index(vault)
+    idx = get_index(vault)
+    # Find a note with status=complete to edit
+    target = next((n for n in idx if n["fields"].get("status") == "complete"), None)
+    if target is None:
+        print("  SKIP: no note with status=complete found")
+        return
+
+    target_path = vault_path / target["path"]
+    original_content = target_path.read_text(encoding="utf-8")
+
+    # Change status: complete -> partial in frontmatter
+    modified_content = original_content.replace(
+        "status: complete", "status: partial", 1
+    )
+    assert modified_content != original_content, "Content must change"
+
+    try:
+        target_path.write_text(modified_content, encoding="utf-8")
+        _expire_cooldown(vault)
+
+        # After refresh, query for status=partial should include this note
+        result = query(vault, {"status": "partial"})
+        assert result["status"] == "ok"
+        paths = [n["path"] for n in result["results"]]
+        assert target["path"] in paths, \
+            f"Edited note ({target['path']}) must appear in query after frontmatter change"
+        print(f"  Edited {target['path']} status: complete→partial, query reflects change")
+    finally:
+        target_path.write_text(original_content, encoding="utf-8")
+        _expire_cooldown(vault)
+        build_index(vault)
+
+
+def test_schema_hash_rebuild_still_works():
+    """P0-I6: Schema hash change still triggers a rebuild (existing behaviour preserved)."""
+    print("\n=== Test P0-I6: Schema Hash Rebuild Still Works ===")
+    vault = list_vaults()[0]
+    vault_path = get_vault_path(vault)
+    schema_file = vault_path / "Vault Files" / "Scripts" / "vault_schema.py"
+
+    build_index(vault)
+    meta_before = get_index_metadata(vault)
+    build_time_before = meta_before["last_build_time"]
+
+    # Append a harmless comment to the schema file to change its hash
+    original_schema = schema_file.read_text(encoding="utf-8")
+    modified_schema = original_schema + "\n# test-schema-change-marker\n"
+
+    try:
+        schema_file.write_text(modified_schema, encoding="utf-8")
+        _expire_cooldown(vault)
+
+        get_index(vault)  # Should detect schema change and rebuild
+        meta_after = get_index_metadata(vault)
+        assert meta_after["last_build_time"] > build_time_before, \
+            "Index must be rebuilt when schema changes"
+        print(f"  Schema change detected, index rebuilt (build_time advanced)")
+    finally:
+        schema_file.write_text(original_schema, encoding="utf-8")
+        _expire_cooldown(vault)
+        build_index(vault)
+
+
+def test_deterministic_ordering_after_rebuild():
+    """P0-I7: Deterministic ordering is preserved after a note edit + rebuild."""
+    print("\n=== Test P0-I7: Deterministic Ordering After Rebuild ===")
+    vault = list_vaults()[0]
+    vault_path = get_vault_path(vault)
+
+    build_index(vault)
+    idx = get_index(vault)
+    target = idx[0]
+    target_path = vault_path / target["path"]
+    original_content = target_path.read_text(encoding="utf-8")
+    modified_content = original_content.rstrip("\n") + "\n<!-- ordering_test -->\n"
+
+    try:
+        target_path.write_text(modified_content, encoding="utf-8")
+        _expire_cooldown(vault)
+
+        new_idx = get_index(vault)
+        paths = [n["path"] for n in new_idx]
+        assert paths == sorted(paths, key=str.lower), \
+            "Index must remain sorted case-insensitively after rebuild"
+        print(f"  {len(paths)} notes, sorted correctly after rebuild")
+    finally:
+        target_path.write_text(original_content, encoding="utf-8")
+        _expire_cooldown(vault)
+        build_index(vault)
+
+
+# ============================================================
+# Phase 0 — inject_frontmatter Fix Test
+# ============================================================
+
+def test_inject_frontmatter_domain_validation():
+    """P0-F1: validate_metadata uses schema.VALID_DOMAINS, not schema.schema.VALID_DOMAINS."""
+    print("\n=== Test P0-F1: inject_frontmatter Domain Validation ===")
+    from core.shared.inject_frontmatter import validate_metadata
+    vault = list_vaults()[0]
+    schema = get_schema(vault)
+    vault_path = get_vault_path(vault)
+
+    # Build a minimal metadata dict with a valid domain
+    valid_domain = next(iter(schema.VALID_DOMAINS))
+    metadata = {
+        "type": "core-concept",
+        "domain": valid_domain,
+        "subdomain": None,
+        "status": "partial",
+        "difficulty": "intermediate",
+        "has_key_principles": False,
+        "has_how_it_works": False,
+        "has_tradeoffs": False,
+    }
+
+    # path_parts: [domain_dir, filename]
+    domain_dir = next(iter(schema.DOMAIN_MAP.keys()))
+    path_parts = [domain_dir, "Test Note.md"]
+    content = ""  # empty body
+
+    errors = validate_metadata(metadata, path_parts, content, "Test Note.md", schema)
+    domain_errors = [e for e in errors if "V-02" in e]
+    assert len(domain_errors) == 0, \
+        f"Valid domain '{valid_domain}' must not produce V-02 errors; got: {domain_errors}"
+    print(f"  Valid domain '{valid_domain}': no V-02 error (schema.VALID_DOMAINS accessed correctly)")
+
+    # Also verify an invalid domain IS caught
+    metadata_bad = {**metadata, "domain": "invalid-domain-xyz"}
+    errors_bad = validate_metadata(metadata_bad, path_parts, content, "Test Note.md", schema)
+    v02_errors = [e for e in errors_bad if "V-02" in e]
+    assert len(v02_errors) > 0, "Invalid domain must produce V-02 error"
+    print(f"  Invalid domain: V-02 error raised correctly — {v02_errors}")
 
 
 # ============================================================
@@ -464,9 +939,31 @@ def main():
     test_contract_query_determinism()
     test_contract_lightweight()
 
+    # Phase 0 — Query filter safety regression tests
+    test_unknown_field_returns_error()
+    test_unknown_field_does_not_return_all_notes()
+    test_malformed_in_returns_error()
+    test_unsupported_operator_returns_error()
+    test_valid_equality_query()
+    test_valid_in_query()
+    test_valid_contains_query()
+    test_pagination_preserved_after_fix()
+
+    # Phase 0 — Index freshness regression tests
+    test_note_edit_reflected_in_index()
+    test_note_add_reflected_in_index()
+    test_note_delete_reflected_in_index()
+    test_get_note_reflects_edit()
+    test_query_reflects_frontmatter_edit()
+    test_schema_hash_rebuild_still_works()
+    test_deterministic_ordering_after_rebuild()
+
+    # Phase 0 — inject_frontmatter fix test
+    test_inject_frontmatter_domain_validation()
+
     print()
     print("=" * 60)
-    print("ALL 21 VERIFICATION TESTS PASSED")
+    print("ALL VERIFICATION TESTS PASSED")
     print("=" * 60)
 
 

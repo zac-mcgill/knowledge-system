@@ -32,29 +32,51 @@ def _valid_fields(vault_name: str) -> frozenset[str]:
     return schema.ALL_KNOWN_FIELDS
 
 
+_KNOWN_OPERATORS: frozenset[str] = frozenset(("eq", "in", "contains"))
+
+
 def _parse_filter_key(key: str) -> tuple[str, str]:
     """Split a filter key into (field, operator).
 
     Supported suffixes: __in, __contains
-    No suffix means equality.
+    No suffix means equality.  Any other __<suffix> is returned as-is so
+    the query layer can report a clear unsupported-operator error.
     """
     for suffix in ("__in", "__contains"):
         if key.endswith(suffix):
             return key[: -len(suffix)], suffix.lstrip("_")
-        
+
+    # Detect unknown __<op> patterns (e.g. field__gt, field__lt)
+    idx = key.rfind("__")
+    if idx > 0 and idx < len(key) - 2:  # base and op both non-empty
+        base = key[:idx]
+        op_part = key[idx + 2:]
+        if op_part:  # defensive: op is non-empty
+            return base, op_part
+
     return key, "eq"
 
 
 def _match(note: dict, filters: dict, known: frozenset[str]) -> bool:
-    """Return True if a note matches all valid filters."""
+    """Return True if a note matches all filters.
+
+    Fail-closed: any invalid filter (unknown field, unknown operator,
+    malformed value) returns False rather than silently ignoring.
+    Query-level validation should have caught these before calling _match;
+    this is a defensive fallback.
+    """
     fields = note["fields"]
 
     for key, value in filters.items():
         field, op = _parse_filter_key(key)
 
-        # Skip unknown fields (strict validation done at query level)
+        # Unknown field — fail closed (do not silently pass all notes)
         if field not in known:
-            continue
+            return False
+
+        # Unknown operator — fail closed
+        if op not in _KNOWN_OPERATORS:
+            return False
 
         note_val = fields.get(field)
 
@@ -63,7 +85,7 @@ def _match(note: dict, filters: dict, known: frozenset[str]) -> bool:
                 return False
         elif op == "in":
             if not isinstance(value, list):
-                continue
+                return False  # malformed: fail closed
             if note_val not in value:
                 return False
         elif op == "contains":
@@ -83,21 +105,39 @@ def query(vault_name: str, filters: dict, *, limit: int = _DEFAULT_LIMIT,
     """
     known = _valid_fields(vault_name)
 
-    # Phase 8: strict field validation
-    if strict:
-        invalid = []
-        for key in filters:
-            field, _ = _parse_filter_key(key)
-            if field not in known:
-                invalid.append(field)
-        if invalid:
-            return {
-                "status": "error",
-                "error": {
-                    "code": "INVALID_FIELDS",
-                    "message": f"Unknown fields: {invalid}",
-                },
-            }
+    # Unified filter validation — applied in all modes (strict or not).
+    # Unknown fields, unsupported operators, and malformed __in values
+    # all return a structured error with zero results rather than being
+    # silently ignored.  The `strict` parameter is kept for backwards
+    # compatibility but no longer changes this behaviour.
+    invalid_details: list[dict] = []
+    for key, value in filters.items():
+        field, op = _parse_filter_key(key)
+        if field not in known:
+            invalid_details.append(
+                {"filter": key, "reason": f"unknown field: {field!r}"}
+            )
+        elif op not in _KNOWN_OPERATORS:
+            invalid_details.append(
+                {"filter": key, "reason": f"unsupported operator: {op!r}"}
+            )
+        elif op == "in" and not isinstance(value, list):
+            invalid_details.append(
+                {
+                    "filter": key,
+                    "reason": (
+                        f"__in operator requires a list value, "
+                        f"got {type(value).__name__!r}"
+                    ),
+                }
+            )
+    if invalid_details:
+        return {
+            "status": "error",
+            "error": "INVALID_FILTER",
+            "details": invalid_details,
+            "results": [],
+        }
 
     # Clamp pagination parameters
     limit = max(1, min(limit, _MAX_LIMIT))

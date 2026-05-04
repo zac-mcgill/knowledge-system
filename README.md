@@ -326,6 +326,8 @@ The server runs on `http://127.0.0.1:8000`.
 - **Read-only** — no vault data is modified through the API.
 - **Init compatible** — after `py run.py init <name>`, the server immediately serves the new vault.
 - **Schema-aware** — validates notes against `vault_schema.py` at startup and periodically.
+- **Fail-closed query filters** — `POST /query` validates all filter fields and operators before executing. Unknown fields, unsupported operators (e.g. `__gt`), and malformed `__in` values (non-list) return a structured `INVALID_FILTER` error with zero results rather than silently returning all notes. Supported operators: equality (no suffix), `__in` (list value), `__contains` (substring).
+- **Live index freshness** — the note index detects changes to any indexed `.md` file (additions, edits, deletions) as well as schema changes. After a short cooldown window (2 s), the next `POST /query` or `GET /note` request automatically rebuilds the index to reflect current note state. No server restart is required after editing notes.
 
 
 ## Agent Workflow Example
