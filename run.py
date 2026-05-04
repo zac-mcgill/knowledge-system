@@ -42,6 +42,9 @@ Commands:
   export         Export context bundle as portable package to dist/context-bundles/
                  Use --overwrite to replace an existing package
   feedback       Load and print vault feedback entries as JSON
+  security       Scan default context bundle for security issues; prints JSON to stdout
+                 Exit 0 on pass/warning, exit 1 on fail
+                 Use --fail-on-warning to exit 1 for warning results
   templates      Generate canonical templates from vault schema
                  Use --dry-run to preview without writing"""
 
@@ -259,6 +262,52 @@ def main():
             error_output = {
                 "status": "error",
                 "error": {"code": "FEEDBACK_FAILED", "message": str(exc)},
+            }
+            print(json.dumps(error_output, indent=2, ensure_ascii=False))
+            raise SystemExit(1)
+
+    if command == "security":
+        import json
+        fail_on_warning = "--fail-on-warning" in sys.argv[2:]
+        sys.path.insert(0, str(repo_root))
+        try:
+            from mcp.core.vault_registry import list_vaults
+            from mcp.core.note_index import build_index, get_index
+            from core.shared.context_security import scan_vault_context
+
+            vault_name = list_vaults()[0]
+            build_index(vault_name)
+            index = get_index(vault_name)
+
+            has_complete = any(
+                n["fields"].get("status") == "complete" for n in index
+            )
+            bundle_filters: dict = {"status": "complete"} if has_complete else {}
+            allow_partial = not has_complete
+
+            result = scan_vault_context(
+                vault_name=vault_name,
+                filters=bundle_filters,
+                include_sections=["Key Principles", "How It Works", "Trade-offs"],
+                include_body=True,
+                max_notes=10,
+                max_chars=20000,
+                allow_partial=allow_partial,
+            )
+
+            print(json.dumps(result, indent=2, ensure_ascii=False))
+
+            if result.get("status") == "fail":
+                raise SystemExit(1)
+            if fail_on_warning and result.get("status") == "warning":
+                raise SystemExit(1)
+            raise SystemExit(0)
+        except SystemExit:
+            raise
+        except Exception as exc:
+            error_output = {
+                "status": "error",
+                "error": {"code": "SECURITY_SCAN_FAILED", "message": str(exc)},
             }
             print(json.dumps(error_output, indent=2, ensure_ascii=False))
             raise SystemExit(1)

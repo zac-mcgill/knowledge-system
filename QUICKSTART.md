@@ -198,6 +198,101 @@ py run.py export --overwrite
 
 ---
 
+## 5e. Security Scan (Phase 5)
+
+Scan the default context bundle for security issues before delivering notes to an agent or LLM.
+
+**CLI:**
+```bash
+py run.py security
+```
+
+Scans the same default bundle as `run.py bundle`. Prints structured JSON to stdout. Exit code 0 for `pass`/`warning`, exit code 1 for `fail` or error.
+
+```bash
+py run.py security --fail-on-warning
+```
+Also exits 1 when status is `warning`.
+
+**Output shape:**
+```json
+{
+  "status": "pass",
+  "findings": [],
+  "summary": {"fail": 0, "warning": 0, "info": 0},
+  "scanned": {
+    "note_count": 7,
+    "source_paths": [
+      "Fundamentals/Algorithms.md",
+      "Fundamentals/Data Structures.md"
+    ]
+  }
+}
+```
+
+**Status levels:**
+
+| Status | Meaning |
+|--------|---------|
+| `pass` | No findings |
+| `warning` | Findings exist but none are blocking-severity |
+| `fail` | Blocking finding detected (private key, cloud API key, bearer token, password) |
+
+**API:**
+```json
+POST /context/security
+{
+  "vault": "demo-vault",
+  "max_notes": 10
+}
+```
+
+Full request body fields (all optional except `vault`):
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `vault` | string | required | Registered vault name |
+| `filters` | object | `{}` | Equality filters on frontmatter fields |
+| `include_sections` | array | `["Key Principles", "How It Works", "Trade-offs"]` | Section names to scan |
+| `include_body` | bool | `true` | Scan full note body |
+| `max_notes` | int | `10` | Maximum notes (1–100) |
+| `max_chars` | int | `20000` | Character budget |
+| `allow_partial` | bool | `false` | Include status=partial notes |
+
+**API response:**
+```json
+{
+  "status": "ok",
+  "data": {
+    "status": "warning",
+    "findings": [
+      {
+        "path": "Fundamentals/Networking Fundamentals.md",
+        "severity": "low",
+        "rule": "external-link",
+        "field": "body",
+        "detail": "https://example.com"
+      }
+    ],
+    "summary": {"fail": 0, "warning": 1, "info": 0},
+    "scanned": {"note_count": 7, "source_paths": ["..."]}
+  }
+}
+```
+
+**Export gate:** pass `require_security_pass: true` to `POST /context/export` to abort export when the bundle would fail the security scan:
+```json
+POST /context/export
+{
+  "vault": "demo-vault",
+  "overwrite": true,
+  "require_security_pass": true
+}
+```
+Returns HTTP 400 `SECURITY_SCAN_FAIL` if the scan status is `fail`. Default is `false` (backward-compatible).
+
+---
+
 ## 6. Start API Server (Optional)
 
 Requires the MCP dependencies (fastapi + uvicorn):

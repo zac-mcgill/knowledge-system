@@ -54,6 +54,8 @@ from mcp.core.graph_query import get_neighbors, get_related_nodes, get_missing_n
 from core.shared.context_bundle import generate_bundle as _generate_bundle
 from core.shared.feedback import load_feedback as _load_feedback
 from core.shared.context_package import export_context_package as _export_package
+from core.shared.context_security import scan_vault_context as _scan_vault_context
+from core.shared.context_security import scan_context_bundle as _scan_context_bundle
 
 
 # ---------- Structured Logging (Phase 7) ----------
@@ -465,6 +467,44 @@ class ExportRequest(BaseModel):
     overwrite: bool = Field(
         default=False,
         description="Overwrite an existing package for this bundle_id",
+    )
+    require_security_pass: bool = Field(
+        default=False,
+        description="If True, abort export when security scan status is 'fail'",
+    )
+
+
+class SecurityRequest(BaseModel):
+    """Request body for POST /context/security."""
+
+    vault: str = Field(..., description="Vault name")
+    filters: dict = Field(
+        default_factory=dict,
+        description="Equality filters on frontmatter fields (e.g. {\"status\": \"complete\"})",
+    )
+    include_sections: list[str] = Field(
+        default_factory=lambda: ["Key Principles", "How It Works", "Trade-offs"],
+        description="Section names to scan (without '## ' prefix)",
+    )
+    include_body: bool = Field(
+        default=True,
+        description="Include full note body text in scan scope",
+    )
+    max_notes: int = Field(
+        default=10,
+        ge=1,
+        le=100,
+        description="Maximum notes to include (1–100)",
+    )
+    max_chars: int = Field(
+        default=20000,
+        ge=100,
+        le=500000,
+        description="Character budget (100–500000)",
+    )
+    allow_partial: bool = Field(
+        default=False,
+        description="Include notes with status=partial",
     )
 
 
@@ -1493,6 +1533,18 @@ def endpoint_context_export(req: ExportRequest):
             msg = bundle.get("error", {}).get("message", "Bundle generation failed")
             return _error(code, msg, 500)
 
+        # Optional security gate
+        if req.require_security_pass:
+            sec_result = _scan_context_bundle(bundle)
+            if sec_result.get("status") == "fail":
+                finding_count = len(sec_result.get("findings", []))
+                return _error(
+                    "SECURITY_SCAN_FAIL",
+                    f"Security scan failed with {finding_count} finding(s); "
+                    "export blocked (require_security_pass=true)",
+                    400,
+                )
+
         result = _export_package(bundle, overwrite=req.overwrite)
         if result["status"] == "error":
             code = result["error"]["code"]
@@ -1504,6 +1556,81 @@ def endpoint_context_export(req: ExportRequest):
 
     except Exception as exc:
         return _error("EXPORT_FAILED", f"Export failed: {exc}", 500)
+
+
+# ---------- Run ----------
+
+
+# ---------- Phase 5: Context Security Scanning ----------
+
+
+@app.post("/context/security")
+def endpoint_context_security(req: SecurityRequest):
+    """Scan selected vault notes for security issues.
+
+    Runs deterministic, local, rule-based checks against note body text and
+    section content.  No LLM.  No network calls.  All rules are regex-based.
+
+    Request body:
+        vault (str, required): Vault name.
+        filters (dict): Equality filters on frontmatter fields.
+        include_sections (list[str]): Section names to scan.
+            Defaults to [\'Key Principles\', \'How It Works\', \'Trade-offs\'].
+        include_body (bool): Include full note body text in scan. Default True.
+        max_notes (int): Maximum notes (1–100). Default 10.
+        max_chars (int): Character budget (100–500000). Default 20000.
+        allow_partial (bool): Include status=partial notes. Default False.
+
+    Response data:
+        status (str): ``"pass"``, ``"warning"``, or ``"fail"``.
+        findings (list): Per-finding objects with path, severity, rule, field, detail.
+        summary (dict): Counts by severity group: fail, warning, info.
+        scanned (dict): note_count and source_paths.
+
+    Status levels:
+        pass     No findings.
+        warning  Findings exist but none meet the fail threshold.
+        fail     One or more findings with severity high/critical for a blocking rule
+                 (private-key, api-key-*, bearer-token, password-pattern).
+
+    Error codes:
+        INVALID_VAULT:          Vault name is not registered.
+        INVALID_FILTER:         Filter key is not a known schema field.
+        SECURITY_SCAN_FAILED:   Unexpected error during scan.
+    """
+    err = _validate_vault(req.vault)
+    if err:
+        return err
+
+    # Validate filter field names against vault schema
+    if req.filters:
+        schema = get_schema(req.vault)
+        known_fields = schema.ALL_KNOWN_FIELDS
+        invalid_filters = [k for k in req.filters if k not in known_fields]
+        if invalid_filters:
+            return _error(
+                "INVALID_FILTER",
+                f"Unknown filter field(s): {sorted(invalid_filters)}. "
+                f"Known fields: {sorted(known_fields)}",
+            )
+
+    try:
+        result = _scan_vault_context(
+            vault_name=req.vault,
+            filters=req.filters,
+            include_sections=req.include_sections,
+            include_body=req.include_body,
+            max_notes=req.max_notes,
+            max_chars=req.max_chars,
+            allow_partial=req.allow_partial,
+        )
+        if result.get("status") == "error":
+            code = result.get("error", {}).get("code", "SECURITY_SCAN_FAILED")
+            msg = result.get("error", {}).get("message", "Security scan failed")
+            return _error(code, msg, 500)
+        return {"status": "ok", "data": result}
+    except Exception as exc:
+        return _error("SECURITY_SCAN_FAILED", f"Security scan failed: {exc}", 500)
 
 
 # ---------- Run ----------

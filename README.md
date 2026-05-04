@@ -136,6 +136,7 @@ All adapter endpoints accept an optional `vault` query parameter. If omitted, th
 | `GET /stats?vault=&field=` | Field-value frequency aggregation |
 | `POST /context/bundle` | Generate a deterministic context bundle |
 | `POST /context/export` | Export a context bundle as a portable package to disk |
+| `POST /context/security` | Scan a context bundle for security issues |
 | `GET /feedback[?vault=]` | Load and validate vault feedback entries |
 | `GET /health` | Server health and metrics |
 | `GET /contract` | System contract check |
@@ -299,6 +300,111 @@ The manifest hashes cover all five non-manifest files. `manifest.json` does not 
 - `overwrite=true`: Removes the existing package directory and replaces it atomically.
 
 **Generated packages are build artefacts.** The `dist/` directory is ignored by git. Do not commit generated packages.
+
+**Optional security gate:** Set `require_security_pass: true` to abort export when the bundle fails the security scan (see [Security Scanning (Phase 5)](#security-scanning-phase-5)). On failure the endpoint returns HTTP 400 `SECURITY_SCAN_FAIL` and does not write any files. The default is `false` — fully backward-compatible.
+
+### Security Scanning (Phase 5)
+
+Context bundles can be scanned for security issues before delivery to an agent or LLM. Scanning is **deterministic**, **local**, and **rule-based** — no network calls, no LLM, no cloud dependency.
+
+The scanner checks note body text and named sections against a set of compiled regex rules. Each finding records the affected note path, the field (`body` or `section:<name>`), the matched rule, severity, and a short detail string.
+
+**Status levels:**
+
+| Status | Meaning |
+|--------|---------|
+| `pass` | No findings |
+| `warning` | Findings exist but none are blocking-severity |
+| `fail` | At least one finding from a blocking rule (private-key, api-key-*, bearer-token, password-pattern) |
+
+**Built-in rules:**
+
+| Rule | Severity | Category |
+|------|---------|----------|
+| `private-key` | critical | Credential |
+| `api-key-aws` | high | Credential |
+| `api-key-github` | high | Credential |
+| `api-key-slack` | high | Credential |
+| `bearer-token` | high | Credential |
+| `password-pattern` | high | Credential |
+| `prompt-injection-pattern` | medium | Prompt safety |
+| `tool-misuse` | medium | Prompt safety |
+| `broad-agent-instruction` | medium | Prompt safety |
+| `script-html` | medium | Code injection |
+| `executable-code-block` | low | Code injection |
+| `external-link` | low | Data exfiltration |
+
+Placeholder suppression: values matching known placeholder substrings (`example`, `changeme`, `redacted`, `dummy`, `your_api_key`, etc.) are not flagged for credential rules.
+
+**CLI:**
+```bash
+py run.py security
+```
+Scans the default bundle and prints the result as JSON to stdout. Exit code 0 for `pass`/`warning`, 1 for `fail` or error.
+
+```bash
+py run.py security --fail-on-warning
+```
+Also exits 1 when status is `warning`.
+
+**API (minimal request):**
+```json
+POST /context/security
+{
+  "vault": "demo-vault"
+}
+```
+
+**API (full request):**
+```json
+POST /context/security
+{
+  "vault": "demo-vault",
+  "filters": {"status": "complete"},
+  "include_sections": ["Key Principles", "How It Works", "Trade-offs"],
+  "include_body": true,
+  "max_notes": 10,
+  "max_chars": 20000,
+  "allow_partial": false
+}
+```
+
+**Response shape:**
+```json
+{
+  "status": "ok",
+  "data": {
+    "status": "pass",
+    "findings": [],
+    "summary": {"fail": 0, "warning": 0, "info": 0},
+    "scanned": {
+      "note_count": 7,
+      "source_paths": ["Fundamentals/Algorithms.md", "..."]
+    }
+  }
+}
+```
+
+**Finding shape:**
+```json
+{
+  "path": "Fundamentals/Example.md",
+  "severity": "high",
+  "rule": "api-key-aws",
+  "field": "body",
+  "detail": "AKIA..."
+}
+```
+
+**Error codes:**
+
+| Code | HTTP | Meaning |
+|------|------|---------|
+| `INVALID_VAULT` | 404 | Vault name not registered |
+| `INVALID_FILTER` | 400 | Filter key is not a known schema field |
+| `SECURITY_SCAN_FAILED` | 500 | Unexpected error during scan |
+
+The result is fully reproducible for the same input. Findings are sorted by `(path, -severity_rank, rule, field, detail)`.
 
 ### Feedback Loop (Phase 3)
 
@@ -487,6 +593,7 @@ knowledge-system/
 │       ├── compare_reports.py      # Report comparison
 │       ├── context_bundle.py       # Deterministic context bundle generation
 │       ├── context_package.py      # Context package export (Phase 4)
+│       ├── context_security.py     # Context security scanner (Phase 5)
 │       ├── discover_missing.py     # Missing note discovery
 │       ├── feedback.py             # Feedback parser, validator, and weight calculator
 │       ├── generate_report.py      # Markdown report generator
