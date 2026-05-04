@@ -1,6 +1,6 @@
 # Context Vault Engine — Roadmap
 
-This document describes the phased development plan for Context Vault Engine. Phases 0–5 are complete. Phase 6 (Documentation and Positioning) is in progress. Phases 7 and 8 are future work and are **not implemented**.
+This document describes the phased development plan for Context Vault Engine. Phases 0–6 are complete. Phases 7 and 8 are future work and are **not implemented**.
 
 > **Historical diagnostic reports** (e.g. `Vault Report.md`, `Vault Delta Report.md`) were generated during development as diagnostic snapshots. They are not permanent truth. When they conflict with live code, live code wins.
 
@@ -122,7 +122,7 @@ This document describes the phased development plan for Context Vault Engine. Ph
 
 ### Phase 6 — Documentation and Positioning
 
-**Status: In Progress**
+**Status: Complete**
 
 **Purpose:** Bring documentation into alignment with the implemented system and CDLC direction.
 

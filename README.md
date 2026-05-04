@@ -100,6 +100,8 @@ py mcp/server/mcp_server.py
 | ``POST`` | ``/compare`` | Delta comparison between two vault states |
 | ``GET`` | ``/graph`` | Full vault relationship graph |
 | ``GET`` | ``/graph/neighbors`` | Nodes directly connected to a given node |
+| ``GET`` | ``/graph/related`` | Notes related to a node (query-param form) |
+| ``GET`` | ``/graph/missing`` | Missing concepts near a node (query-param form) |
 | ``GET`` | ``/graph/{vault}`` | Graph by vault (path-param form) |
 | ``GET`` | ``/graph/{vault}/related`` | Notes related to a given node |
 | ``GET`` | ``/graph/{vault}/missing`` | Expected concepts missing near a node |
