@@ -1455,6 +1455,760 @@ def test_p1_missing_vault_param():
 
 
 # ============================================================
+# Phase 2 — Context Bundle Tests
+# ============================================================
+
+def test_p2_generate_bundle_basic():
+    """P2-B1: generate_bundle returns required top-level fields."""
+    print("\n=== Test P2-B1: generate_bundle Basic Shape ===")
+    from core.shared.context_bundle import generate_bundle
+
+    vault = list_vaults()[0]
+    build_index(vault)
+
+    bundle = generate_bundle(vault_name=vault)
+
+    assert bundle["status"] == "ok", f"Expected status=ok, got: {bundle}"
+    for key in ("bundle_id", "vault", "filters", "created_at",
+                "validation_status", "notes", "graph", "budget",
+                "warnings", "manifest"):
+        assert key in bundle, f"Missing key: {key!r}"
+
+    assert bundle["vault"] == vault
+    assert isinstance(bundle["bundle_id"], str) and len(bundle["bundle_id"]) == 16
+    assert bundle["validation_status"] in ("pass", "fail")
+    assert isinstance(bundle["notes"], list)
+    assert isinstance(bundle["warnings"], list)
+    assert "related" in bundle["graph"]
+    assert "max_chars" in bundle["budget"]
+    assert "used_chars" in bundle["budget"]
+    assert "note_count" in bundle["budget"]
+    assert "truncated" in bundle["budget"]
+    assert "source_paths" in bundle["manifest"]
+    assert "schema_version" in bundle["manifest"]
+    print(f"  bundle_id={bundle['bundle_id']}, "
+          f"notes={len(bundle['notes'])}, "
+          f"validation_status={bundle['validation_status']}")
+
+
+def test_p2_generate_bundle_posix_paths():
+    """P2-B2: All note paths in bundle are full vault-relative POSIX paths."""
+    print("\n=== Test P2-B2: POSIX Paths ===")
+    from core.shared.context_bundle import generate_bundle
+
+    vault = list_vaults()[0]
+    bundle = generate_bundle(vault_name=vault, allow_partial=True, max_notes=5)
+
+    assert bundle["status"] == "ok"
+    for note in bundle["notes"]:
+        path = note["path"]
+        assert "/" in path, f"Path has no forward slash: {path!r}"
+        assert "\\" not in path, f"Path uses backslash: {path!r}"
+        assert path.endswith(".md"), f"Path does not end with .md: {path!r}"
+    for src in bundle["manifest"]["source_paths"]:
+        assert "\\" not in src, f"Manifest path uses backslash: {src!r}"
+    print(f"  {len(bundle['notes'])} notes — all POSIX paths ✓")
+
+
+def test_p2_generate_bundle_max_notes():
+    """P2-B3: max_notes limits the number of returned notes."""
+    print("\n=== Test P2-B3: max_notes Respected ===")
+    from core.shared.context_bundle import generate_bundle
+
+    vault = list_vaults()[0]
+    bundle = generate_bundle(vault_name=vault, max_notes=2, allow_partial=True)
+
+    assert bundle["status"] == "ok"
+    assert len(bundle["notes"]) <= 2, (
+        f"Expected at most 2 notes, got {len(bundle['notes'])}"
+    )
+    assert bundle["budget"]["note_count"] == len(bundle["notes"])
+    print(f"  max_notes=2, returned={len(bundle['notes'])} ✓")
+
+
+def test_p2_generate_bundle_max_chars():
+    """P2-B4: max_chars budget is respected and truncated flag set."""
+    print("\n=== Test P2-B4: max_chars Respected ===")
+    from core.shared.context_bundle import generate_bundle
+
+    vault = list_vaults()[0]
+    build_index(vault)
+    full_idx = get_index(vault)
+
+    # Any non-empty body note will exceed budget=1
+    bundle = generate_bundle(
+        vault_name=vault, max_chars=1, allow_partial=True,
+        include_body=True, max_notes=50,
+    )
+
+    assert bundle["status"] == "ok"
+    # With max_chars=1 and bodies present, the first note should exhaust budget
+    assert bundle["budget"]["truncated"] is True or bundle["budget"]["note_count"] == 0 or (
+        bundle["budget"]["used_chars"] <= 1
+    ), f"Budget not enforced: {bundle['budget']}"
+    assert bundle["budget"]["used_chars"] <= bundle["budget"]["max_chars"] or (
+        bundle["budget"]["note_count"] == 0
+    ), "used_chars must not exceed max_chars"
+    print(f"  max_chars=1: truncated={bundle['budget']['truncated']}, "
+          f"note_count={bundle['budget']['note_count']}, "
+          f"used_chars={bundle['budget']['used_chars']}")
+
+
+def test_p2_generate_bundle_allow_partial_false():
+    """P2-B5: allow_partial=False excludes notes with status=partial."""
+    print("\n=== Test P2-B5: allow_partial=False Excludes Partial Notes ===")
+    from core.shared.context_bundle import generate_bundle
+
+    vault = list_vaults()[0]
+    build_index(vault)
+
+    bundle_strict = generate_bundle(
+        vault_name=vault, allow_partial=False, max_notes=50, filters={},
+    )
+    bundle_lenient = generate_bundle(
+        vault_name=vault, allow_partial=True, max_notes=50, filters={},
+    )
+
+    assert bundle_strict["status"] == "ok"
+    assert bundle_lenient["status"] == "ok"
+
+    # No partial note should appear when allow_partial=False
+    for note in bundle_strict["notes"]:
+        status = note["fields"].get("status", "")
+        assert status != "partial", (
+            f"Partial note found in strict bundle: {note['path']!r}"
+        )
+
+    # When there are partial notes, strict should have fewer or equal
+    partial_count = sum(
+        1 for n in get_index(vault) if n["fields"].get("status") == "partial"
+    )
+    if partial_count > 0:
+        assert len(bundle_strict["notes"]) <= len(bundle_lenient["notes"]), (
+            "Strict bundle must have fewer or equal notes when partial notes exist"
+        )
+    print(f"  strict={len(bundle_strict['notes'])} notes, "
+          f"lenient={len(bundle_lenient['notes'])} notes, "
+          f"partial_in_vault={partial_count}")
+
+
+def test_p2_generate_bundle_allow_partial_true():
+    """P2-B6: allow_partial=True can include notes with status=partial."""
+    print("\n=== Test P2-B6: allow_partial=True Includes Partial Notes ===")
+    from core.shared.context_bundle import generate_bundle
+
+    vault = list_vaults()[0]
+    build_index(vault)
+
+    # Check whether the vault actually has partial notes
+    partial_notes = [
+        n for n in get_index(vault) if n["fields"].get("status") == "partial"
+    ]
+
+    bundle = generate_bundle(
+        vault_name=vault, allow_partial=True, max_notes=50, filters={},
+    )
+    assert bundle["status"] == "ok"
+
+    if partial_notes:
+        partial_paths_in_bundle = [
+            n["path"] for n in bundle["notes"]
+            if n["fields"].get("status") == "partial"
+        ]
+        assert len(partial_paths_in_bundle) > 0, (
+            "Expected partial notes to appear when allow_partial=True"
+        )
+        print(f"  {len(partial_paths_in_bundle)} partial notes included ✓")
+    else:
+        print("  No partial notes in vault — skipping partial count check")
+
+
+def test_p2_generate_bundle_sections():
+    """P2-B7: include_sections extracts requested section content."""
+    print("\n=== Test P2-B7: include_sections ===")
+    from core.shared.context_bundle import generate_bundle
+
+    vault = list_vaults()[0]
+    sections = ["Key Principles", "How It Works", "Trade-offs"]
+
+    bundle = generate_bundle(
+        vault_name=vault,
+        include_sections=sections,
+        allow_partial=True,
+        max_notes=5,
+    )
+
+    assert bundle["status"] == "ok"
+    for note in bundle["notes"]:
+        for sec in sections:
+            assert sec in note["sections"], (
+                f"Section '{sec}' missing from note {note['path']!r}"
+            )
+            # Value must be a string (empty string is acceptable for missing sections)
+            assert isinstance(note["sections"][sec], str), (
+                f"Section '{sec}' value must be str in {note['path']!r}"
+            )
+    print(f"  {len(bundle['notes'])} notes — all have {sections} keys ✓")
+
+
+def test_p2_generate_bundle_include_body_false():
+    """P2-B8: include_body=False returns empty body consistently."""
+    print("\n=== Test P2-B8: include_body=False ===")
+    from core.shared.context_bundle import generate_bundle
+
+    vault = list_vaults()[0]
+    bundle = generate_bundle(
+        vault_name=vault, include_body=False, allow_partial=True, max_notes=5,
+    )
+
+    assert bundle["status"] == "ok"
+    for note in bundle["notes"]:
+        assert "body" in note, f"Note missing 'body' key: {note['path']!r}"
+        assert note["body"] == "", (
+            f"Expected empty body when include_body=False, got non-empty for {note['path']!r}"
+        )
+    print(f"  {len(bundle['notes'])} notes — all have body='' ✓")
+
+
+def test_p2_generate_bundle_include_body_true():
+    """P2-B9: include_body=True returns non-empty body for notes with content."""
+    print("\n=== Test P2-B9: include_body=True ===")
+    from core.shared.context_bundle import generate_bundle
+
+    vault = list_vaults()[0]
+    bundle = generate_bundle(
+        vault_name=vault, include_body=True, allow_partial=True, max_notes=3,
+    )
+
+    assert bundle["status"] == "ok"
+    bodies_with_content = [n for n in bundle["notes"] if n.get("body")]
+    assert len(bodies_with_content) > 0, (
+        "Expected at least one note with non-empty body when include_body=True"
+    )
+    print(f"  {len(bodies_with_content)}/{len(bundle['notes'])} notes have non-empty body ✓")
+
+
+def test_p2_generate_bundle_include_related():
+    """P2-B10: include_related=True returns graph relationship IDs."""
+    print("\n=== Test P2-B10: include_related=True ===")
+    from core.shared.context_bundle import generate_bundle
+
+    vault = list_vaults()[0]
+    bundle = generate_bundle(
+        vault_name=vault,
+        include_related=True,
+        allow_partial=True,
+        max_notes=3,
+    )
+
+    assert bundle["status"] == "ok"
+    related = bundle["graph"]["related"]
+    assert isinstance(related, dict), "graph.related must be a dict"
+
+    for note in bundle["notes"]:
+        path = note["path"]
+        assert path in related, (
+            f"Note path '{path}' missing from graph.related"
+        )
+        assert isinstance(related[path], list), (
+            f"graph.related['{path}'] must be a list"
+        )
+        # Related IDs must be sorted (deterministic)
+        ids = related[path]
+        assert ids == sorted(ids), f"Related IDs not sorted for '{path}'"
+
+    print(f"  {len(related)} notes in graph.related — all lists, sorted ✓")
+
+
+def test_p2_generate_bundle_validation_status():
+    """P2-B11: validation_status is included and has correct value."""
+    print("\n=== Test P2-B11: validation_status ===")
+    from core.shared.context_bundle import generate_bundle
+    from mcp.core.adapters.validation_adapter import get_validation
+
+    vault = list_vaults()[0]
+    build_index(vault)
+
+    bundle = generate_bundle(vault_name=vault, allow_partial=True, max_notes=50)
+    assert bundle["status"] == "ok"
+    assert bundle["validation_status"] in ("pass", "fail"), (
+        f"validation_status must be 'pass' or 'fail', got: {bundle['validation_status']!r}"
+    )
+
+    # For notes actually in the bundle, check consistency with validation adapter
+    val_result = get_validation(vault_name=vault)
+    invalid_set = set(val_result.get("invalid_notes", []))
+    bundle_paths = {n["path"] for n in bundle["notes"]}
+    expected_status = "fail" if (bundle_paths & invalid_set) else "pass"
+    assert bundle["validation_status"] == expected_status, (
+        f"validation_status mismatch: bundle={bundle['validation_status']!r}, "
+        f"expected={expected_status!r}"
+    )
+    print(f"  validation_status={bundle['validation_status']!r} — correct ✓")
+
+
+def test_p2_bundle_deterministic():
+    """P2-B12: Two identical calls return same bundle (except created_at)."""
+    print("\n=== Test P2-B12: Deterministic Ordering ===")
+    from core.shared.context_bundle import generate_bundle
+
+    vault = list_vaults()[0]
+    kwargs = dict(
+        vault_name=vault,
+        filters={},
+        include_sections=["Key Principles", "How It Works"],
+        include_related=True,
+        include_body=True,
+        max_notes=5,
+        max_chars=50000,
+        allow_partial=True,
+    )
+
+    bundle1 = generate_bundle(**kwargs)
+    bundle2 = generate_bundle(**kwargs)
+
+    assert bundle1["status"] == "ok"
+    assert bundle2["status"] == "ok"
+
+    # bundle_id must be identical (deterministic from params)
+    assert bundle1["bundle_id"] == bundle2["bundle_id"], (
+        f"bundle_id differs: {bundle1['bundle_id']!r} vs {bundle2['bundle_id']!r}"
+    )
+
+    # Note order must be identical
+    paths1 = [n["path"] for n in bundle1["notes"]]
+    paths2 = [n["path"] for n in bundle2["notes"]]
+    assert paths1 == paths2, f"Note order not deterministic: {paths1} vs {paths2}"
+
+    # All paths must be case-insensitively sorted
+    assert paths1 == sorted(paths1, key=str.lower), "Notes must be sorted case-insensitively"
+
+    # budget (excluding timestamp-independent fields) must match
+    assert bundle1["budget"] == bundle2["budget"], "Budget must be deterministic"
+    assert bundle1["manifest"]["source_paths"] == bundle2["manifest"]["source_paths"]
+
+    # graph.related must be identical
+    assert bundle1["graph"]["related"] == bundle2["graph"]["related"], (
+        "graph.related must be deterministic"
+    )
+
+    print(f"  bundle_id={bundle1['bundle_id']}, notes={len(paths1)} — deterministic ✓")
+
+
+def test_p2_bundle_unknown_vault():
+    """P2-B13: Unknown vault returns structured error."""
+    print("\n=== Test P2-B13: Unknown Vault ===")
+    from core.shared.context_bundle import generate_bundle
+
+    result = generate_bundle(vault_name="__nonexistent_vault_xyz__")
+
+    assert result["status"] == "error", (
+        f"Expected error for unknown vault, got: {result}"
+    )
+    assert "error" in result
+    assert result["error"].get("code") == "INVALID_VAULT"
+    print(f"  Unknown vault: structured error returned ✓ ({result['error']['message']!r})")
+
+
+def test_p2_bundle_empty_filter():
+    """P2-B14: Filter that matches nothing returns ok with empty notes and warning."""
+    print("\n=== Test P2-B14: Empty Filter Result ===")
+    from core.shared.context_bundle import generate_bundle
+
+    vault = list_vaults()[0]
+    bundle = generate_bundle(
+        vault_name=vault,
+        filters={"status": "__impossible_value__xyz__"},
+    )
+
+    assert bundle["status"] == "ok", (
+        "Empty filter result must return status=ok (not an error)"
+    )
+    assert bundle["notes"] == []
+    assert bundle["budget"]["note_count"] == 0
+    assert len(bundle["warnings"]) > 0, "Expected at least one warning for empty result"
+    print(f"  Empty filter: notes=[], warnings={bundle['warnings'][:1]} ✓")
+
+
+def test_p2_cli_bundle():
+    """P2-CLI: python run.py bundle returns valid JSON with required fields."""
+    print("\n=== Test P2-CLI: CLI bundle command ===")
+    import json
+    import subprocess
+
+    result = subprocess.run(
+        [sys.executable, "run.py", "bundle"],
+        capture_output=True,
+        text=True,
+        cwd=str(Path(__file__).resolve().parent.parent),
+        timeout=60,
+    )
+
+    assert result.returncode == 0, (
+        f"CLI bundle exited {result.returncode}\n"
+        f"stdout: {result.stdout[:500]}\n"
+        f"stderr: {result.stderr[:500]}"
+    )
+
+    try:
+        bundle = json.loads(result.stdout)
+    except json.JSONDecodeError as exc:
+        raise AssertionError(
+            f"CLI bundle output is not valid JSON: {exc}\n"
+            f"stdout: {result.stdout[:500]}"
+        ) from exc
+
+    assert bundle["status"] == "ok", f"CLI bundle status not ok: {bundle}"
+    for key in ("bundle_id", "vault", "notes", "budget", "manifest"):
+        assert key in bundle, f"CLI bundle missing key: {key!r}"
+
+    print(f"  CLI bundle: status=ok, notes={len(bundle['notes'])}, "
+          f"bundle_id={bundle['bundle_id']!r} ✓")
+
+
+def test_p2_http_bundle():
+    """P2-HTTP: HTTP-level tests for POST /context/bundle via TestClient."""
+    print("\n=== Test P2-HTTP: POST /context/bundle (TestClient) ===")
+    try:
+        from fastapi.testclient import TestClient
+    except RuntimeError as exc:
+        print(f"  SKIP: TestClient unavailable — {exc}")
+        return
+
+    from mcp.server.mcp_server import app
+
+    vault = list_vaults()[0]
+    build_index(vault)
+    idx = get_index(vault)
+
+    with TestClient(app, raise_server_exceptions=True) as client:
+
+        # --- Valid minimal request ---
+        resp = client.post("/context/bundle", json={
+            "vault": vault,
+            "allow_partial": True,
+        })
+        assert resp.status_code == 200, (
+            f"/context/bundle status {resp.status_code}: {resp.text[:300]}"
+        )
+        body = resp.json()
+        assert body["status"] == "ok", f"Expected ok: {body}"
+        for key in ("bundle_id", "vault", "filters", "created_at",
+                    "validation_status", "notes", "graph", "budget",
+                    "warnings", "manifest"):
+            assert key in body, f"Missing key: {key!r}"
+        print(f"  POST /context/bundle (minimal): 200 OK, notes={len(body['notes'])} ✓")
+
+        # --- Unknown vault returns 404 ---
+        resp = client.post("/context/bundle", json={"vault": "__unknown__"})
+        assert resp.status_code == 404, (
+            f"Unknown vault: expected 404, got {resp.status_code}"
+        )
+        body = resp.json()
+        assert body["status"] == "error"
+        assert body["error"]["code"] == "INVALID_VAULT"
+        print(f"  Unknown vault: 404 INVALID_VAULT ✓")
+
+        # --- Unknown filter field returns 400 ---
+        resp = client.post("/context/bundle", json={
+            "vault": vault,
+            "filters": {"nonexistent_field_xyz": "value"},
+        })
+        assert resp.status_code == 400, (
+            f"Unknown filter: expected 400, got {resp.status_code}"
+        )
+        body = resp.json()
+        assert body["status"] == "error"
+        assert body["error"]["code"] == "INVALID_FILTER"
+        print(f"  Unknown filter: 400 INVALID_FILTER ✓")
+
+        # --- max_notes respected ---
+        resp = client.post("/context/bundle", json={
+            "vault": vault,
+            "max_notes": 2,
+            "allow_partial": True,
+        })
+        assert resp.status_code == 200
+        body = resp.json()
+        assert len(body["notes"]) <= 2, (
+            f"max_notes=2 not respected: got {len(body['notes'])} notes"
+        )
+        print(f"  max_notes=2: {len(body['notes'])} notes ✓")
+
+        # --- max_chars respected ---
+        resp = client.post("/context/bundle", json={
+            "vault": vault,
+            "max_chars": 100,
+            "include_body": True,
+            "allow_partial": True,
+            "max_notes": 50,
+        })
+        assert resp.status_code == 200
+        body = resp.json()
+        # Either truncated or very few notes
+        assert body["budget"]["used_chars"] <= 100 or body["budget"]["truncated"] is True, (
+            f"max_chars=100 not enforced: {body['budget']}"
+        )
+        print(f"  max_chars=100: truncated={body['budget']['truncated']}, "
+              f"used={body['budget']['used_chars']} ✓")
+
+        # --- allow_partial=False excludes partial notes ---
+        resp = client.post("/context/bundle", json={
+            "vault": vault,
+            "allow_partial": False,
+            "max_notes": 50,
+        })
+        assert resp.status_code == 200
+        body = resp.json()
+        for note in body["notes"]:
+            assert note["fields"].get("status") != "partial", (
+                f"Partial note {note['path']!r} found with allow_partial=False"
+            )
+        print(f"  allow_partial=False: {len(body['notes'])} notes, none partial ✓")
+
+        # --- allow_partial=True can include partial notes ---
+        resp_strict = client.post("/context/bundle", json={
+            "vault": vault, "allow_partial": False, "max_notes": 50,
+        })
+        resp_lenient = client.post("/context/bundle", json={
+            "vault": vault, "allow_partial": True, "max_notes": 50,
+        })
+        assert resp_strict.status_code == 200 and resp_lenient.status_code == 200
+        strict_count = len(resp_strict.json()["notes"])
+        lenient_count = len(resp_lenient.json()["notes"])
+        partial_in_vault = sum(
+            1 for n in idx if n["fields"].get("status") == "partial"
+        )
+        if partial_in_vault > 0:
+            assert lenient_count >= strict_count, (
+                "allow_partial=True should include at least as many notes"
+            )
+        print(f"  allow_partial: strict={strict_count}, lenient={lenient_count} ✓")
+
+        # --- include_sections returns requested sections ---
+        resp = client.post("/context/bundle", json={
+            "vault": vault,
+            "include_sections": ["Key Principles", "How It Works"],
+            "allow_partial": True,
+            "max_notes": 3,
+        })
+        assert resp.status_code == 200
+        body = resp.json()
+        for note in body["notes"]:
+            assert "Key Principles" in note["sections"]
+            assert "How It Works" in note["sections"]
+        print(f"  include_sections: all notes have requested section keys ✓")
+
+        # --- include_body=False returns empty body ---
+        resp = client.post("/context/bundle", json={
+            "vault": vault,
+            "include_body": False,
+            "allow_partial": True,
+            "max_notes": 3,
+        })
+        assert resp.status_code == 200
+        body = resp.json()
+        for note in body["notes"]:
+            assert note["body"] == "", (
+                f"Expected empty body with include_body=False: {note['path']!r}"
+            )
+        print(f"  include_body=False: all bodies are '' ✓")
+
+        # --- include_related=True returns graph relationships ---
+        resp = client.post("/context/bundle", json={
+            "vault": vault,
+            "include_related": True,
+            "allow_partial": True,
+            "max_notes": 3,
+        })
+        assert resp.status_code == 200
+        body = resp.json()
+        related = body["graph"]["related"]
+        assert isinstance(related, dict)
+        for note in body["notes"]:
+            assert note["path"] in related
+        print(f"  include_related=True: {len(related)} entries in graph.related ✓")
+
+        # --- validation_status included ---
+        resp = client.post("/context/bundle", json={
+            "vault": vault, "allow_partial": True, "max_notes": 5,
+        })
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["validation_status"] in ("pass", "fail")
+        print(f"  validation_status={body['validation_status']!r} ✓")
+
+        # --- Deterministic ordering across two identical calls ---
+        req_body = {
+            "vault": vault,
+            "filters": {},
+            "include_sections": ["Key Principles"],
+            "include_related": False,
+            "include_body": True,
+            "max_notes": 5,
+            "max_chars": 50000,
+            "allow_partial": True,
+        }
+        resp1 = client.post("/context/bundle", json=req_body)
+        resp2 = client.post("/context/bundle", json=req_body)
+        assert resp1.status_code == 200 and resp2.status_code == 200
+        b1, b2 = resp1.json(), resp2.json()
+        # bundle_id must be same (deterministic, not timestamp-derived)
+        assert b1["bundle_id"] == b2["bundle_id"], (
+            f"bundle_id not deterministic: {b1['bundle_id']!r} vs {b2['bundle_id']!r}"
+        )
+        paths1 = [n["path"] for n in b1["notes"]]
+        paths2 = [n["path"] for n in b2["notes"]]
+        assert paths1 == paths2, f"Note order not deterministic: {paths1} vs {paths2}"
+        assert paths1 == sorted(paths1, key=str.lower), "Notes must be sorted"
+        print(f"  Deterministic: bundle_id={b1['bundle_id']!r}, paths identical ✓")
+
+        # --- Pydantic validation: max_notes out of range ---
+        resp = client.post("/context/bundle", json={
+            "vault": vault, "max_notes": 0,
+        })
+        assert resp.status_code == 422, (
+            f"max_notes=0 should fail validation, got {resp.status_code}"
+        )
+        body = resp.json()
+        assert body["status"] == "error"
+        print(f"  max_notes=0: 422 VALIDATION_ERROR ✓")
+
+    print(f"  All /context/bundle HTTP tests passed ✓")
+
+
+def test_p2_budget_high_max_chars():
+    """P2-B15: With very high max_chars, min(max_notes, complete_count) notes returned."""
+    print("\n=== Test P2-B15: High max_chars returns min(max_notes, complete_count) ===")
+    from core.shared.context_bundle import generate_bundle
+
+    vault = list_vaults()[0]
+    build_index(vault)
+    idx = get_index(vault)
+
+    complete_count = sum(1 for n in idx if n["fields"].get("status") == "complete")
+
+    # Very high budget, include_body=False and no sections → note_chars=0 → no budget
+    # enforcement → max_notes is the only cap. 11 complete notes, max_notes=10 → 10.
+    bundle = generate_bundle(
+        vault_name=vault,
+        filters={"status": "complete"},
+        include_sections=[],
+        include_body=False,
+        max_notes=10,
+        max_chars=999999,
+        allow_partial=False,
+    )
+    assert bundle["status"] == "ok"
+    expected = min(10, complete_count)
+    assert len(bundle["notes"]) == expected, (
+        f"Expected {expected} notes (min(10,{complete_count})), got {len(bundle['notes'])}"
+    )
+    # budget.truncated must be False — budget was never exhausted
+    assert bundle["budget"]["truncated"] is False, (
+        f"truncated should be False when all selected notes fit budget: {bundle['budget']}"
+    )
+    # budget.note_count must equal len(notes)
+    assert bundle["budget"]["note_count"] == len(bundle["notes"]), (
+        f"budget.note_count={bundle['budget']['note_count']} != len(notes)={len(bundle['notes'])}"
+    )
+    # used_chars must not exceed max_chars
+    assert bundle["budget"]["used_chars"] <= bundle["budget"]["max_chars"], (
+        f"used_chars {bundle['budget']['used_chars']} exceeds max_chars "
+        f"{bundle['budget']['max_chars']}"
+    )
+    print(f"  complete={complete_count}, max_notes=10 → {len(bundle['notes'])} notes, "
+          f"truncated={bundle['budget']['truncated']} ✓")
+
+
+def test_p2_budget_truncation_warning():
+    """P2-B16: Low max_chars sets truncated=True with a budget warning; used_chars <= max_chars."""
+    print("\n=== Test P2-B16: Low max_chars triggers truncation warning ===")
+    from core.shared.context_bundle import generate_bundle
+
+    vault = list_vaults()[0]
+
+    # 5000 chars is enough for ~2 notes (each ≈2000–2500 chars when body+sections counted)
+    # but not all 19, so truncation is guaranteed.
+    bundle = generate_bundle(
+        vault_name=vault,
+        include_sections=["Key Principles"],
+        include_body=True,
+        max_notes=50,
+        max_chars=5000,
+        allow_partial=True,
+    )
+    assert bundle["status"] == "ok"
+    assert bundle["budget"]["truncated"] is True, (
+        f"Expected truncated=True with max_chars=5000, got: {bundle['budget']}"
+    )
+    # At least one warning must mention the budget
+    budget_warnings = [w for w in bundle["warnings"] if "Budget limit" in w]
+    assert budget_warnings, (
+        f"Expected a budget warning but got: {bundle['warnings']}"
+    )
+    # used_chars must never exceed max_chars
+    assert bundle["budget"]["used_chars"] <= bundle["budget"]["max_chars"], (
+        f"used_chars {bundle['budget']['used_chars']} exceeds max_chars "
+        f"{bundle['budget']['max_chars']}"
+    )
+    # note_count must equal len(notes)
+    assert bundle["budget"]["note_count"] == len(bundle["notes"])
+    print(f"  max_chars=5000: {len(bundle['notes'])} notes, truncated=True, "
+          f"used={bundle['budget']['used_chars']}, warning={budget_warnings[0]!r} ✓")
+
+
+def test_p2_budget_max_notes_vs_max_chars():
+    """P2-B17: max_notes and max_chars effects are distinguishable via budget.truncated."""
+    print("\n=== Test P2-B17: max_notes vs max_chars distinguishable ===")
+    from core.shared.context_bundle import generate_bundle
+
+    vault = list_vaults()[0]
+    build_index(vault)
+    idx = get_index(vault)
+
+    # --- max_notes effect: high budget, max_notes=2, include_body=False ---
+    # note_chars=0 for every note → budget never enforced → truncated=False
+    bundle_notes_cap = generate_bundle(
+        vault_name=vault,
+        include_sections=[],
+        include_body=False,
+        max_notes=2,
+        max_chars=999999,
+        allow_partial=True,
+    )
+    assert bundle_notes_cap["status"] == "ok"
+    assert len(bundle_notes_cap["notes"]) == 2
+    # truncated must be False — only max_notes limited the result
+    assert bundle_notes_cap["budget"]["truncated"] is False, (
+        "truncated must be False when max_notes (not budget) limits the result"
+    )
+
+    # --- max_chars effect: very high max_notes, small budget, include_body=True ---
+    # Many notes would match but budget stops them; truncated=True.
+    total_notes = len(idx)
+    bundle_chars_cap = generate_bundle(
+        vault_name=vault,
+        include_sections=[],
+        include_body=True,
+        max_notes=total_notes + 10,
+        max_chars=3000,
+        allow_partial=True,
+    )
+    assert bundle_chars_cap["status"] == "ok"
+    assert bundle_chars_cap["budget"]["truncated"] is True, (
+        "truncated must be True when max_chars limits the result"
+    )
+    # used_chars must not exceed max_chars
+    assert bundle_chars_cap["budget"]["used_chars"] <= bundle_chars_cap["budget"]["max_chars"]
+
+    print(f"  max_notes cap: {len(bundle_notes_cap['notes'])} notes, "
+          f"truncated={bundle_notes_cap['budget']['truncated']} (False) ✓")
+    print(f"  max_chars cap: {len(bundle_chars_cap['notes'])} notes, "
+          f"truncated={bundle_chars_cap['budget']['truncated']} (True) ✓")
+
+
+# ============================================================
 # Main
 # ============================================================
 
@@ -1532,6 +2286,29 @@ def main():
     test_p1_notes_vault_param()
     test_p1_quality_vault_param()
     test_p1_missing_vault_param()
+
+    # Phase 2 — Context Bundle
+    test_p2_generate_bundle_basic()
+    test_p2_generate_bundle_posix_paths()
+    test_p2_generate_bundle_max_notes()
+    test_p2_generate_bundle_max_chars()
+    test_p2_generate_bundle_allow_partial_false()
+    test_p2_generate_bundle_allow_partial_true()
+    test_p2_generate_bundle_sections()
+    test_p2_generate_bundle_include_body_false()
+    test_p2_generate_bundle_include_body_true()
+    test_p2_generate_bundle_include_related()
+    test_p2_generate_bundle_validation_status()
+    test_p2_bundle_deterministic()
+    test_p2_bundle_unknown_vault()
+    test_p2_bundle_empty_filter()
+    test_p2_cli_bundle()
+    test_p2_http_bundle()
+
+    # Phase 2 — Budget behaviour (strengthened)
+    test_p2_budget_high_max_chars()
+    test_p2_budget_truncation_warning()
+    test_p2_budget_max_notes_vs_max_chars()
 
     print()
     print("=" * 60)

@@ -134,8 +134,73 @@ All adapter endpoints accept an optional `vault` query parameter. If omitted, th
 | `POST /query` | Filtered note query |
 | `GET /note?vault=&path=` | Single note by path |
 | `GET /stats?vault=&field=` | Field-value frequency aggregation |
+| `POST /context/bundle` | Generate a deterministic context bundle |
 | `GET /health` | Server health and metrics |
 | `GET /contract` | System contract check |
+
+### Context Bundles (Phase 2)
+
+`POST /context/bundle` generates a deterministic package of selected notes for use in external workflows and LLM pipelines.
+
+**Minimal request:**
+```json
+POST /context/bundle
+{
+  "vault": "demo-vault"
+}
+```
+
+**Full request:**
+```json
+POST /context/bundle
+{
+  "vault": "demo-vault",
+  "filters": {"domain": "fundamentals", "status": "complete"},
+  "include_sections": ["Key Principles", "How It Works", "Trade-offs"],
+  "include_related": true,
+  "include_body": true,
+  "max_notes": 10,
+  "max_chars": 20000,
+  "allow_partial": false
+}
+```
+
+**Response shape:**
+```json
+{
+  "status": "ok",
+  "bundle_id": "a1b2c3d4e5f6a7b8",
+  "vault": "demo-vault",
+  "filters": {},
+  "created_at": "2026-05-04T12:00:00+00:00",
+  "validation_status": "pass",
+  "notes": [
+    {
+      "path": "Fundamentals/Algorithms.md",
+      "fields": {},
+      "sections": {"Key Principles": "..."},
+      "body": "..."
+    }
+  ],
+  "graph": {"related": {}},
+  "budget": {"max_chars": 20000, "used_chars": 8500, "note_count": 5, "truncated": false},
+  "warnings": [],
+  "manifest": {"source_paths": ["Fundamentals/Algorithms.md"], "schema_version": null}
+}
+```
+
+**Defaults:** `include_sections=["Key Principles","How It Works","Trade-offs"]`, `include_body=true`, `max_notes=10`, `max_chars=20000`, `allow_partial=false`.
+
+`max_notes` caps the candidate pool first; `max_chars` then stops adding notes once the character budget is exhausted. `budget.truncated` is `true` only when notes were excluded by the character budget (not by `max_notes`). A `warnings` entry names the first note excluded by budget.
+
+**Current limitation:** bundle files are not written to disk in Phase 2. Export/packaging belongs to Phase 4.
+
+**CLI equivalent:**
+```bash
+py run.py bundle
+```
+
+Prints a default bundle as JSON to stdout. Uses `status=complete` notes if any exist; falls back to partial notes with a warning.
 
 ### Task Output
 

@@ -51,6 +51,7 @@ from mcp.core.adapters.missing_adapter import get_missing
 from mcp.core.adapters.compare_adapter import get_compare
 from mcp.core.graph_builder import build_graph
 from mcp.core.graph_query import get_neighbors, get_related_nodes, get_missing_neighbors
+from core.shared.context_bundle import generate_bundle as _generate_bundle
 
 
 # ---------- Structured Logging (Phase 7) ----------
@@ -383,6 +384,44 @@ class CompareRequest(BaseModel):
     before: str = Field(..., min_length=1, description="Path to BEFORE report (relative to vault root or absolute)")
     after: str | None = Field(None, description="Path to AFTER report (omit for live vault analysis)")
     vault: str | None = Field(None, description="Vault name (defaults to first registered vault)")
+
+
+class BundleRequest(BaseModel):
+    """Request body for POST /context/bundle."""
+
+    vault: str = Field(..., description="Vault name")
+    filters: dict = Field(
+        default_factory=dict,
+        description="Equality filters on frontmatter fields (e.g. {\"domain\": \"fundamentals\"})",
+    )
+    include_sections: list[str] = Field(
+        default_factory=lambda: ["Key Principles", "How It Works", "Trade-offs"],
+        description="Section names to extract (without '## ' prefix)",
+    )
+    include_related: bool = Field(
+        default=False,
+        description="Include graph relationship IDs for each note",
+    )
+    include_body: bool = Field(
+        default=True,
+        description="Include full note body text",
+    )
+    max_notes: int = Field(
+        default=10,
+        ge=1,
+        le=100,
+        description="Maximum notes to include (1–100)",
+    )
+    max_chars: int = Field(
+        default=20000,
+        ge=100,
+        le=500000,
+        description="Character budget (100–500000)",
+    )
+    allow_partial: bool = Field(
+        default=False,
+        description="Include notes with status=partial",
+    )
 
 
 # ---------- Error helpers ----------
@@ -1179,6 +1218,86 @@ def endpoint_graph_vault_missing(
         return {"status": "ok", "data": result}
     except Exception as exc:
         return _error("GRAPH_QUERY_FAILED", f"Missing neighbors query failed: {exc}", 500)
+
+
+# ---------- Phase 2: Context Bundle ----------
+
+
+@app.post("/context/bundle")
+def endpoint_context_bundle(req: BundleRequest):
+    """Generate a deterministic context bundle of selected vault notes.
+
+    A bundle packages selected notes with frontmatter, optional section
+    extracts, optional full bodies, optional graph relationships, validation
+    state, and budget information.
+
+    Request body:
+        vault (str, required): Vault name.
+        filters (dict): Equality filters on frontmatter fields.
+        include_sections (list[str]): Section names to extract (without '## ').
+            Defaults to ['Key Principles', 'How It Works', 'Trade-offs'].
+        include_related (bool): Include graph relationship IDs per note.
+        include_body (bool): Include full note body text. Default True.
+        max_notes (int): Maximum notes (1–100). Default 10.
+        max_chars (int): Character budget (100–500000). Default 20000.
+        allow_partial (bool): Include status=partial notes. Default False.
+
+    Response:
+        status (str): ``"ok"`` on success.
+        bundle_id (str): Deterministic 16-char hex ID (excludes timestamp).
+        vault (str): Vault name used.
+        filters (dict): Filters applied.
+        created_at (str): ISO-8601 UTC timestamp.
+        validation_status (str): ``"pass"`` or ``"fail"`` for selected notes.
+        notes (list): Selected note objects (path, fields, sections, body).
+        graph (dict): ``{"related": {path: [related_ids]}}`` if include_related.
+        budget (dict): max_chars, used_chars, note_count, truncated.
+        warnings (list[str]): Non-fatal issues (missing sections, budget, etc.).
+        manifest (dict): source_paths list and schema_version.
+
+    Error codes:
+        INVALID_VAULT: Vault name is not registered.
+        INVALID_FILTER: Filter key is not a known schema field.
+        BUNDLE_FAILED: Unexpected error during bundle generation.
+
+    Note:
+        Bundle files are not written to disk in this phase.
+        Export / packaging belongs to Phase 4.
+    """
+    err = _validate_vault(req.vault)
+    if err:
+        return err
+
+    # Validate filter field names against the vault's known schema fields.
+    if req.filters:
+        schema = get_schema(req.vault)
+        known_fields = schema.ALL_KNOWN_FIELDS
+        invalid_filters = [k for k in req.filters if k not in known_fields]
+        if invalid_filters:
+            return _error(
+                "INVALID_FILTER",
+                f"Unknown filter field(s): {sorted(invalid_filters)}. "
+                f"Known fields: {sorted(known_fields)}",
+            )
+
+    try:
+        result = _generate_bundle(
+            vault_name=req.vault,
+            filters=req.filters,
+            include_sections=req.include_sections,
+            include_related=req.include_related,
+            include_body=req.include_body,
+            max_notes=req.max_notes,
+            max_chars=req.max_chars,
+            allow_partial=req.allow_partial,
+        )
+        if result.get("status") == "error":
+            code = result.get("error", {}).get("code", "BUNDLE_FAILED")
+            msg = result.get("error", {}).get("message", "Bundle generation failed")
+            return _error(code, msg, 500)
+        return result
+    except Exception as exc:
+        return _error("BUNDLE_FAILED", f"Bundle generation failed: {exc}", 500)
 
 
 # ---------- Run ----------

@@ -38,6 +38,7 @@ Commands:
   analyse        Run seven structured analyses on vault metadata
   improve        Generate prioritised upgrade tasks
   report         Generate a markdown report
+  bundle         Generate a context bundle and print JSON to stdout
   templates      Generate canonical templates from vault schema
                  Use --dry-run to preview without writing"""
 
@@ -129,6 +130,55 @@ def main():
     if command == "bootstrap":
         from core.bootstrap_vault import main as bootstrap_main
         raise SystemExit(bootstrap_main(repo_root))
+
+    if command == "bundle":
+        import json
+        sys.path.insert(0, str(repo_root))
+        try:
+            from mcp.core.vault_registry import list_vaults
+            from mcp.core.note_index import build_index, get_index
+            from core.shared.context_bundle import generate_bundle
+
+            vault_name = list_vaults()[0]
+            build_index(vault_name)
+            index = get_index(vault_name)
+
+            # Use status=complete filter when complete notes exist;
+            # fall back to allow_partial with a warning when none exist.
+            has_complete = any(
+                n["fields"].get("status") == "complete" for n in index
+            )
+            bundle_filters: dict = {"status": "complete"} if has_complete else {}
+            allow_partial = not has_complete
+
+            bundle = generate_bundle(
+                vault_name=vault_name,
+                filters=bundle_filters,
+                include_sections=["Key Principles", "How It Works", "Trade-offs"],
+                include_related=False,
+                include_body=True,
+                max_notes=10,
+                max_chars=20000,
+                allow_partial=allow_partial,
+            )
+
+            if not has_complete:
+                bundle["warnings"].insert(
+                    0,
+                    "No complete notes found in vault; including partial notes",
+                )
+
+            print(json.dumps(bundle, indent=2, ensure_ascii=False))
+            raise SystemExit(0)
+        except SystemExit:
+            raise
+        except Exception as exc:
+            error_output = {
+                "status": "error",
+                "error": {"code": "BUNDLE_FAILED", "message": str(exc)},
+            }
+            print(json.dumps(error_output, indent=2, ensure_ascii=False))
+            raise SystemExit(1)
 
     if command not in COMMANDS:
         print(f"Error: unknown command '{command}'")

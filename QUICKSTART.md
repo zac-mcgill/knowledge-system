@@ -71,6 +71,39 @@ py run.py report
 
 ---
 
+## 5b. Generate a Context Bundle (Phase 2)
+
+```bash
+py run.py bundle
+```
+
+Prints a JSON context bundle to stdout. The bundle packages selected notes with metadata, section extracts, validation state, and budget information.
+
+**Output shape:**
+```json
+{
+  "status": "ok",
+  "bundle_id": "a1b2c3d4e5f6a7b8",
+  "vault": "demo-vault",
+  "filters": {"status": "complete"},
+  "created_at": "2026-05-04T12:00:00+00:00",
+  "validation_status": "pass",
+  "notes": [...],
+  "graph": {"related": {}},
+  "budget": {"max_chars": 20000, "used_chars": 8500, "note_count": 5, "truncated": false},
+  "warnings": [],
+  "manifest": {"source_paths": [...], "schema_version": null}
+}
+```
+
+**Defaults:** selects `status=complete` notes (falls back to all notes with a warning if none exist), extracts `Key Principles`, `How It Works`, `Trade-offs` sections, max 10 notes, 20 000-char budget.
+
+`max_notes` caps the candidate pool first; `max_chars` then stops adding notes once the character budget is exhausted. `budget.truncated` is `true` only when notes were excluded by the character budget (not by `max_notes`). A `warnings` entry names the first note that was excluded by budget.
+
+**Note:** bundle files are not written to disk in this phase. Export belongs to Phase 4.
+
+---
+
 ## 6. Start API Server (Optional)
 
 Requires the MCP dependencies (fastapi + uvicorn):
@@ -99,6 +132,22 @@ py mcp/server/mcp_server.py
 * http://127.0.0.1:8000/quality
 * http://127.0.0.1:8000/missing
 * http://127.0.0.1:8000/gaps
+
+**Context bundle** (POST with JSON body):
+```json
+POST /context/bundle
+{
+  "vault": "demo-vault",
+  "filters": {"domain": "fundamentals", "status": "complete"},
+  "include_sections": ["Key Principles", "How It Works", "Trade-offs"],
+  "include_related": false,
+  "include_body": true,
+  "max_notes": 10,
+  "max_chars": 20000,
+  "allow_partial": false
+}
+```
+All fields except `vault` are optional — the defaults above apply.
 
 **Compare** (POST with JSON body):
 ```json
