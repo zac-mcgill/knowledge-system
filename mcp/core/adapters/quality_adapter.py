@@ -60,7 +60,7 @@ def get_quality(vault_name: str | None = None) -> dict:
             raw = score_note(filepath, sections)
 
             results.append({
-                "file": str(filepath.relative_to(vault_path)),
+                "file": filepath.relative_to(vault_path).as_posix(),
                 "score": raw["score"],
                 "severity": raw["severity"],
                 "issues": [

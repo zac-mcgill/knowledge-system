@@ -60,19 +60,24 @@ def get_tasks(vault_name: str | None = None, limit: int = 10) -> dict:
         for task in all_tasks:
             missing: list[str] = []
             actions: list[str] = []
+            all_constraints: list[str] = []
             for issue in task["issues"]:
                 missing.extend(issue["required_sections"])
                 actions.append(issue["issue_type"])
+                all_constraints.extend(issue.get("constraints", []))
 
             note_path = task["path"]
+            posix_path = Path(note_path).as_posix()
             note_name = Path(note_path).stem
 
             result_tasks.append({
                 "note": note_name,
+                "path": posix_path,
                 "priority": task["score"],
                 "difficulty": task["difficulty"],
                 "missing": missing,
                 "action": ", ".join(actions),
+                "constraints": all_constraints,
             })
 
         # Cache the complete result before applying limit

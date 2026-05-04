@@ -901,6 +901,560 @@ def test_inject_frontmatter_domain_validation():
 
 
 # ============================================================
+# Phase 1 — HTTP Smoke Tests (TestClient)
+# ============================================================
+
+def test_p1_http_smoke():
+    """P1-HTTP: HTTP-level smoke tests for all Phase 1 routes via TestClient.
+
+    Uses a single TestClient instance (one lifespan startup) and exercises
+    every target route at the HTTP layer, verifying response codes and
+    response shape.
+    """
+    print("\n=== Test P1-HTTP: HTTP Smoke Tests (TestClient) ===")
+    try:
+        from fastapi.testclient import TestClient
+    except RuntimeError as exc:
+        print(f"  SKIP: TestClient unavailable — {exc}")
+        return
+
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    from mcp.server.mcp_server import app
+
+    vault = list_vaults()[0]
+    # Find a real note path for graph query tests
+    build_index(vault)
+    idx = get_index(vault)
+    note_path = idx[0]["path"]  # e.g. "Fundamentals/Algorithms.md"
+
+    with TestClient(app, raise_server_exceptions=True) as client:
+
+        # --- GET /validation?vault= ---
+        resp = client.get(f"/validation?vault={vault}")
+        assert resp.status_code == 200, f"/validation status {resp.status_code}: {resp.text}"
+        body = resp.json()
+        assert body["status"] == "ok"
+        assert "status" in body["data"]
+        assert "invalid_count" in body["data"]
+        assert "invalid_notes" in body["data"]
+        print(f"  GET /validation?vault={vault}: 200 OK, validation_status={body['data']['status']}")
+
+        # --- GET /tasks?vault= ---
+        resp = client.get(f"/tasks?vault={vault}&limit=5")
+        assert resp.status_code == 200, f"/tasks status {resp.status_code}: {resp.text}"
+        body = resp.json()
+        assert body["status"] == "ok"
+        assert "tasks" in body["data"]
+        assert "total" in body["data"]
+        # Verify each task has full path and constraints
+        for task in body["data"]["tasks"]:
+            assert "path" in task, f"task missing path: {task}"
+            assert task["path"].endswith(".md"), f"task path not .md: {task['path']}"
+            assert "\\" not in task["path"], f"task path uses backslash: {task['path']}"
+        print(f"  GET /tasks?vault={vault}: 200 OK, {len(body['data']['tasks'])} tasks returned")
+
+        # --- GET /notes?vault= ---
+        resp = client.get(f"/notes?vault={vault}")
+        assert resp.status_code == 200, f"/notes status {resp.status_code}: {resp.text}"
+        body = resp.json()
+        assert body["status"] == "ok"
+        assert "notes" in body["data"]
+        assert len(body["data"]["notes"]) > 0
+        for note in body["data"]["notes"]:
+            assert "path" in note
+            assert "\\" not in note["path"], f"note path backslash: {note['path']}"
+        print(f"  GET /notes?vault={vault}: 200 OK, {len(body['data']['notes'])} notes")
+
+        # --- GET /quality?vault= ---
+        resp = client.get(f"/quality?vault={vault}")
+        assert resp.status_code == 200, f"/quality status {resp.status_code}: {resp.text}"
+        body = resp.json()
+        assert body["status"] == "ok"
+        for key in ("total", "flagged", "highest_score", "average_score", "notes"):
+            assert key in body["data"], f"quality missing key: {key}"
+        for n in body["data"]["notes"]:
+            assert "\\" not in n["file"], f"quality file path backslash: {n['file']}"
+        print(f"  GET /quality?vault={vault}: 200 OK, total={body['data']['total']}")
+
+        # --- GET /missing?vault= ---
+        resp = client.get(f"/missing?vault={vault}")
+        # 422 = MISSING_CONCEPTS_EMPTY (expected for demo-vault), 200 = data present
+        assert resp.status_code in (200, 422), f"/missing unexpected status {resp.status_code}: {resp.text}"
+        body = resp.json()
+        if resp.status_code == 422:
+            assert body["status"] == "error"
+            assert body["error"]["code"] == "MISSING_CONCEPTS_EMPTY"
+            print(f"  GET /missing?vault={vault}: 422 MISSING_CONCEPTS_EMPTY (expected — EXPECTED_CONCEPTS not defined)")
+        else:
+            assert body["status"] == "ok"
+            assert "total_expected" in body["data"]
+            print(f"  GET /missing?vault={vault}: 200 OK, total_missing={body['data']['total_missing']}")
+
+        # --- POST /compare with missing before file ---
+        resp = client.post("/compare", json={"before": "Vault Files/__nonexistent__.md"})
+        assert resp.status_code in (400, 500), f"/compare unexpected status {resp.status_code}: {resp.text}"
+        body = resp.json()
+        assert body["status"] == "error"
+        assert "code" in body["error"]
+        print(f"  POST /compare (missing file): {resp.status_code} structured error, code={body['error']['code']}")
+
+        # --- POST /compare with blank before ---
+        resp = client.post("/compare", json={"before": "   "})
+        assert resp.status_code == 400, f"/compare blank before unexpected status {resp.status_code}"
+        body = resp.json()
+        assert body["status"] == "error"
+        assert body["error"]["code"] == "INVALID_INPUT"
+        print(f"  POST /compare (blank before): 400 INVALID_INPUT ✓")
+
+        # --- POST /compare with missing required field ---
+        resp = client.post("/compare", json={"after": "something"})
+        assert resp.status_code == 422, f"/compare missing required field status {resp.status_code}"
+        body = resp.json()
+        assert body["status"] == "error"
+        print(f"  POST /compare (missing 'before'): 422 VALIDATION_ERROR ✓")
+
+        # --- GET /graph/{vault} ---
+        resp = client.get(f"/graph/{vault}")
+        assert resp.status_code == 200, f"/graph/{{vault}} status {resp.status_code}: {resp.text}"
+        body = resp.json()
+        assert body["status"] == "ok"
+        assert "nodes" in body["data"]
+        assert "edges" in body["data"]
+        assert len(body["data"]["nodes"]) > 0
+        node_ids = [n["id"] for n in body["data"]["nodes"]]
+        assert node_ids == sorted(node_ids), "Graph nodes must be sorted ascending by id"
+        print(f"  GET /graph/{vault}: 200 OK, {len(body['data']['nodes'])} nodes, {len(body['data']['edges'])} edges")
+
+        # --- GET /graph/{vault}/related?node_id= ---
+        # node_id for path-param routes is the vault-relative path (note index key)
+        resp = client.get(f"/graph/{vault}/related", params={"node_id": note_path})
+        assert resp.status_code == 200, f"/graph/{{vault}}/related status {resp.status_code}: {resp.text}"
+        body = resp.json()
+        assert body["status"] == "ok"
+        assert "related" in body["data"]
+        assert "found" in body["data"]
+        print(f"  GET /graph/{vault}/related?node_id={note_path}: 200 OK, "
+              f"found={body['data']['found']}, related={len(body['data']['related'])}")
+
+        # --- GET /graph/{vault}/missing?node_id= ---
+        resp = client.get(f"/graph/{vault}/missing", params={"node_id": note_path})
+        assert resp.status_code == 200, f"/graph/{{vault}}/missing status {resp.status_code}: {resp.text}"
+        body = resp.json()
+        assert body["status"] == "ok"
+        assert "missing" in body["data"]
+        assert "found" in body["data"]
+        print(f"  GET /graph/{vault}/missing?node_id={note_path}: 200 OK, "
+              f"found={body['data']['found']}, missing_neighbors={len(body['data']['missing'])}")
+
+        # --- Unknown vault returns structured error ---
+        resp = client.get("/validation?vault=__nonexistent__")
+        assert resp.status_code == 404, f"Unknown vault status {resp.status_code}: {resp.text}"
+        body = resp.json()
+        assert body["status"] == "error"
+        assert body["error"]["code"] == "INVALID_VAULT"
+        print(f"  GET /validation?vault=__nonexistent__: 404 INVALID_VAULT ✓")
+
+        # --- /graph/{vault} for unknown vault ---
+        resp = client.get("/graph/__nonexistent__")
+        assert resp.status_code == 404, f"/graph/unknown vault status {resp.status_code}"
+        body = resp.json()
+        assert body["status"] == "error"
+        print(f"  GET /graph/__nonexistent__: 404 INVALID_VAULT ✓")
+
+    print(f"  All HTTP smoke tests passed ✓")
+
+
+# ============================================================
+# Phase 1 — Expose Existing Capabilities
+# ============================================================
+
+def test_p1_validation_adapter():
+    """P1-A1: Validation adapter returns structured pass/fail result."""
+    print("\n=== Test P1-A1: Validation Adapter ===")
+    from mcp.core.adapters.validation_adapter import get_validation
+
+    vault = list_vaults()[0]
+    result = get_validation(vault_name=vault)
+
+    assert "error" not in result, f"Unexpected error: {result.get('error')}"
+    assert "status" in result, "Result must have 'status'"
+    assert result["status"] in ("pass", "fail"), f"Unexpected status: {result['status']}"
+    assert "invalid_count" in result, "Result must have 'invalid_count'"
+    assert isinstance(result["invalid_count"], int)
+    assert "invalid_notes" in result, "Result must have 'invalid_notes'"
+    assert isinstance(result["invalid_notes"], list)
+    print(f"  Vault: {vault}, status={result['status']}, invalid_count={result['invalid_count']}")
+
+
+def test_p1_tasks_full_path():
+    """P1-A2: Tasks adapter returns full vault-relative POSIX path, not stem only."""
+    print("\n=== Test P1-A2: Tasks Adapter Full Path ===")
+    from mcp.core.adapters.tasks_adapter import get_tasks
+    from pathlib import PurePosixPath
+
+    vault = list_vaults()[0]
+    result = get_tasks(vault_name=vault, limit=50)
+
+    assert "error" not in result, f"Unexpected error: {result.get('error')}"
+    assert "tasks" in result
+    tasks = result["tasks"]
+
+    if not tasks:
+        print("  No partial notes found — skipping path-format check (vault is complete)")
+        return
+
+    for task in tasks:
+        assert "path" in task, f"Task missing 'path' field: {task}"
+        path = task["path"]
+        # Full path must contain at least one '/' (e.g. "Fundamentals/Algorithms.md")
+        # A stem-only value like "Algorithms" would have no '/' and no extension
+        assert "/" in path or path.endswith(".md"), (
+            f"Task 'path' looks like a stem, not a full path: {path!r}"
+        )
+        # Must be a POSIX path (forward slashes only)
+        assert "\\" not in path, f"Task 'path' uses backslashes: {path!r}"
+        assert path.endswith(".md"), f"Task 'path' must end with .md: {path!r}"
+    print(f"  {len(tasks)} tasks checked — all have full POSIX paths")
+    print(f"  Example: {tasks[0]['path']!r}")
+
+
+def test_p1_tasks_constraints():
+    """P1-A3: Tasks adapter includes writing constraints from issue engine."""
+    print("\n=== Test P1-A3: Tasks Adapter Constraints ===")
+    from mcp.core.adapters.tasks_adapter import get_tasks
+
+    vault = list_vaults()[0]
+    result = get_tasks(vault_name=vault, limit=50)
+
+    assert "error" not in result
+    tasks = result["tasks"]
+
+    if not tasks:
+        print("  No partial notes found — skipping constraints check")
+        return
+
+    tasks_with_constraints = [t for t in tasks if t.get("constraints")]
+    # At least some tasks should have constraints (they come from WRITING_CONSTRAINTS)
+    assert len(tasks_with_constraints) > 0, (
+        "Expected at least one task to have writing constraints"
+    )
+    assert isinstance(tasks_with_constraints[0]["constraints"], list)
+    assert all(isinstance(c, str) for c in tasks_with_constraints[0]["constraints"])
+    print(f"  {len(tasks_with_constraints)}/{len(tasks)} tasks have constraints")
+    print(f"  Example constraints: {tasks_with_constraints[0]['constraints'][:2]}")
+
+
+def test_p1_notes_full_paths():
+    """P1-A4: Notes adapter returns full vault-relative POSIX paths."""
+    print("\n=== Test P1-A4: Notes Adapter Full Paths ===")
+    from mcp.core.adapters.notes_adapter import get_notes
+
+    vault = list_vaults()[0]
+    result = get_notes(vault_name=vault)
+
+    assert "error" not in result, f"Unexpected error: {result.get('error')}"
+    assert "notes" in result
+    notes = result["notes"]
+    assert len(notes) > 0, "Expected at least one note"
+
+    for note in notes:
+        assert "path" in note, f"Note missing 'path': {note}"
+        path = note["path"]
+        assert "/" in path, f"Note path looks like a stem, not a full path: {path!r}"
+        assert "\\" not in path, f"Note path uses backslashes: {path!r}"
+        assert path.endswith(".md"), f"Note path must end with .md: {path!r}"
+    print(f"  {len(notes)} notes checked — all have full POSIX paths")
+    print(f"  Example: {notes[0]['path']!r}")
+
+
+def test_p1_quality_adapter():
+    """P1-A5: Quality adapter returns structured audit result."""
+    print("\n=== Test P1-A5: Quality Adapter ===")
+    from mcp.core.adapters.quality_adapter import get_quality
+
+    vault = list_vaults()[0]
+    result = get_quality(vault_name=vault)
+
+    assert "error" not in result, f"Unexpected error: {result.get('error')}"
+    for key in ("total", "flagged", "highest_score", "average_score", "notes"):
+        assert key in result, f"Result missing key: {key!r}"
+    assert isinstance(result["total"], int) and result["total"] >= 0
+    assert isinstance(result["notes"], list)
+    if result["notes"]:
+        note = result["notes"][0]
+        assert "file" in note
+        assert "score" in note
+        assert "severity" in note
+        assert "issues" in note
+        # file must be a vault-relative path
+        assert "\\" not in note["file"], f"file path uses backslashes: {note['file']!r}"
+    print(f"  total={result['total']}, flagged={result['flagged']}, "
+          f"highest_score={result['highest_score']}")
+
+
+def test_p1_missing_adapter():
+    """P1-A6: Missing adapter returns structured gap result or explicit empty error."""
+    print("\n=== Test P1-A6: Missing Adapter ===")
+    from mcp.core.adapters.missing_adapter import get_missing
+
+    vault = list_vaults()[0]
+    result = get_missing(vault_name=vault)
+
+    if "error" in result:
+        # EXPECTED_CONCEPTS empty is an acceptable structured error (not a silent success)
+        assert "EXPECTED_CONCEPTS" in result["error"] or result["error"], (
+            f"Error must be non-empty: {result}"
+        )
+        print(f"  EXPECTED_CONCEPTS not defined — structured error returned: {result['error']}")
+        return
+
+    for key in ("total_expected", "total_actual", "total_missing", "gaps", "ranked"):
+        assert key in result, f"Result missing key: {key!r}"
+    assert isinstance(result["gaps"], dict)
+    assert isinstance(result["ranked"], list)
+    print(f"  total_expected={result['total_expected']}, "
+          f"total_missing={result['total_missing']}, "
+          f"subdomains assessed={result.get('subdomains', '?')}")
+
+
+def test_p1_compare_missing_file():
+    """P1-A7: Compare adapter returns structured error for missing BEFORE file."""
+    print("\n=== Test P1-A7: Compare Adapter Missing File ===")
+    from mcp.core.adapters.compare_adapter import get_compare
+
+    vault = list_vaults()[0]
+    result = get_compare(
+        before="Vault Files/nonexistent_report_xyz.md",
+        after=None,
+        vault_name=vault,
+    )
+
+    assert "error" in result, "Expected structured error for missing file"
+    assert "not found" in result["error"].lower() or "report" in result["error"].lower(), (
+        f"Error message should mention missing file: {result['error']}"
+    )
+    print(f"  Structured error returned: {result['error']!r}")
+
+
+def test_p1_graph_build():
+    """P1-G1: Graph builder returns deterministic nodes and edges."""
+    print("\n=== Test P1-G1: Graph Build ===")
+    from mcp.core.graph_builder import build_graph
+
+    vault = list_vaults()[0]
+    graph1 = build_graph(vault_name=vault)
+    graph2 = build_graph(vault_name=vault)
+
+    assert "nodes" in graph1, "Graph must have 'nodes'"
+    assert "edges" in graph1, "Graph must have 'edges'"
+    assert isinstance(graph1["nodes"], list)
+    assert isinstance(graph1["edges"], list)
+    assert len(graph1["nodes"]) > 0, "Graph must have at least one node"
+
+    # Deterministic: same vault → same output
+    assert [n["id"] for n in graph1["nodes"]] == [n["id"] for n in graph2["nodes"]], (
+        "Graph node order must be deterministic"
+    )
+    assert [(e["from"], e["to"]) for e in graph1["edges"]] == (
+        [(e["from"], e["to"]) for e in graph2["edges"]]
+    ), "Graph edge order must be deterministic"
+
+    # Nodes must be sorted ascending by id
+    node_ids = [n["id"] for n in graph1["nodes"]]
+    assert node_ids == sorted(node_ids), "Graph nodes must be sorted ascending by id"
+
+    # Every node must have id, type, label
+    for node in graph1["nodes"]:
+        assert "id" in node and "type" in node and "label" in node
+
+    print(f"  {len(graph1['nodes'])} nodes, {len(graph1['edges'])} edges — deterministic ✓")
+
+
+def test_p1_graph_related():
+    """P1-G2: get_related_nodes returns deterministic result for a known node."""
+    print("\n=== Test P1-G2: Graph Related Nodes ===")
+    from mcp.core.graph_builder import build_graph
+    from mcp.core.graph_query import get_related_nodes
+
+    vault = list_vaults()[0]
+    graph = build_graph(vault_name=vault)
+
+    # Find a note node
+    note_nodes = [n for n in graph["nodes"] if n["type"] == "note"]
+    if not note_nodes:
+        print("  No note nodes in graph — skipping")
+        return
+
+    node_id = note_nodes[0]["id"]
+    result1 = get_related_nodes(graph, node_id)
+    result2 = get_related_nodes(graph, node_id)
+
+    assert "node_id" in result1
+    assert "found" in result1
+    assert "related" in result1
+    assert result1["found"] is True, f"Note node {node_id!r} should be found"
+    assert isinstance(result1["related"], list)
+
+    # Deterministic
+    assert result1 == result2, "get_related_nodes must be deterministic"
+
+    # sorted: primary strength desc, secondary id asc
+    if len(result1["related"]) > 1:
+        strengths = [r["strength"] for r in result1["related"]]
+        from mcp.core.graph_query import _STRENGTH_RANK
+        ranks = [_STRENGTH_RANK[s] for s in strengths]
+        assert ranks == sorted(ranks, reverse=True), (
+            "Related nodes must be sorted by strength descending"
+        )
+
+    print(f"  Node: {node_id!r}, related={len(result1['related'])} nodes — deterministic ✓")
+
+
+def test_p1_graph_missing_neighbors():
+    """P1-G3: get_missing_neighbors returns deterministic result; unknown node is handled."""
+    print("\n=== Test P1-G3: Graph Missing Neighbors ===")
+    from mcp.core.graph_builder import build_graph
+    from mcp.core.graph_query import get_missing_neighbors
+
+    vault = list_vaults()[0]
+    graph = build_graph(vault_name=vault)
+
+    # Unknown node must return found=False, not crash
+    unknown_result = get_missing_neighbors(graph, "note::__nonexistent__")
+    assert unknown_result["found"] is False, "Unknown node must return found=False"
+    assert unknown_result["missing"] == [], "Unknown node must return empty missing list"
+    print(f"  Unknown node: found=False, missing=[] ✓")
+
+    # Known note node
+    note_nodes = [n for n in graph["nodes"] if n["type"] == "note"]
+    if not note_nodes:
+        print("  No note nodes — skipping known-node check")
+        return
+
+    node_id = note_nodes[0]["id"]
+    result1 = get_missing_neighbors(graph, node_id)
+    result2 = get_missing_neighbors(graph, node_id)
+
+    assert "found" in result1 and "missing" in result1
+    assert isinstance(result1["missing"], list)
+    # Deterministic
+    assert result1 == result2, "get_missing_neighbors must be deterministic"
+    # Sorted ascending by id
+    ids = [m["id"] for m in result1["missing"]]
+    assert ids == sorted(ids), "Missing neighbors must be sorted ascending by id"
+
+    print(f"  Node: {node_id!r}, missing_neighbors={len(result1['missing'])} — deterministic ✓")
+
+
+def test_p1_unknown_vault_structured_error():
+    """P1-E1: Unknown vault returns a structured error from adapters."""
+    print("\n=== Test P1-E1: Unknown Vault Structured Error ===")
+    from mcp.core.adapters.validation_adapter import get_validation
+    from mcp.core.adapters.tasks_adapter import get_tasks
+    from mcp.core.adapters.notes_adapter import get_notes
+    from mcp.core.adapters.quality_adapter import get_quality
+    from mcp.core.adapters.missing_adapter import get_missing
+
+    bad_vault = "__nonexistent_vault_xyz__"
+
+    # Each adapter must return {"error": ...} not raise an exception
+    for name, fn in [
+        ("validation", lambda: get_validation(vault_name=bad_vault)),
+        ("tasks",      lambda: get_tasks(vault_name=bad_vault)),
+        ("notes",      lambda: get_notes(vault_name=bad_vault)),
+        ("quality",    lambda: get_quality(vault_name=bad_vault)),
+        ("missing",    lambda: get_missing(vault_name=bad_vault)),
+    ]:
+        result = fn()
+        assert "error" in result, (
+            f"{name} adapter should return {{'error': ...}} for unknown vault, got: {result}"
+        )
+        print(f"  {name}: structured error returned — {result['error']!r}")
+
+
+def test_p1_validation_vault_param():
+    """P1-V1: /validation route with explicit vault param matches default result."""
+    print("\n=== Test P1-V1: /validation vault param ===")
+    from mcp.core.adapters.validation_adapter import get_validation
+
+    vault = list_vaults()[0]
+    result_explicit = get_validation(vault_name=vault)
+    result_default = get_validation(vault_name=None)
+
+    assert result_explicit.get("status") == result_default.get("status"), (
+        "Explicit vault must produce same status as default vault"
+    )
+    assert result_explicit.get("invalid_count") == result_default.get("invalid_count")
+    print(f"  Explicit vault={vault!r} matches default result: status={result_explicit['status']}")
+
+
+def test_p1_tasks_vault_param():
+    """P1-V2: /tasks route with explicit vault param matches default result."""
+    print("\n=== Test P1-V2: /tasks vault param ===")
+    from mcp.core.adapters.tasks_adapter import get_tasks
+
+    vault = list_vaults()[0]
+    result_explicit = get_tasks(vault_name=vault, limit=9999)
+    result_default = get_tasks(vault_name=None, limit=9999)
+
+    assert result_explicit.get("total") == result_default.get("total"), (
+        "Explicit vault must produce same total as default vault"
+    )
+    print(f"  Explicit vault={vault!r} total={result_explicit['total']} matches default")
+
+
+def test_p1_notes_vault_param():
+    """P1-V3: /notes route with explicit vault param matches default result."""
+    print("\n=== Test P1-V3: /notes vault param ===")
+    from mcp.core.adapters.notes_adapter import get_notes
+
+    vault = list_vaults()[0]
+    result_explicit = get_notes(vault_name=vault)
+    result_default = get_notes(vault_name=None)
+
+    assert len(result_explicit.get("notes", [])) == len(result_default.get("notes", [])), (
+        "Explicit vault must return same note count as default vault"
+    )
+    print(f"  Explicit vault={vault!r} note_count={len(result_explicit['notes'])} matches default")
+
+
+def test_p1_quality_vault_param():
+    """P1-V4: /quality route with explicit vault param matches default result."""
+    print("\n=== Test P1-V4: /quality vault param ===")
+    from mcp.core.adapters.quality_adapter import get_quality
+
+    vault = list_vaults()[0]
+    result_explicit = get_quality(vault_name=vault)
+    result_default = get_quality(vault_name=None)
+
+    assert result_explicit.get("total") == result_default.get("total"), (
+        "Explicit vault must produce same total as default vault"
+    )
+    print(f"  Explicit vault={vault!r} total={result_explicit['total']} matches default")
+
+
+def test_p1_missing_vault_param():
+    """P1-V5: /missing route with explicit vault param matches default result."""
+    print("\n=== Test P1-V5: /missing vault param ===")
+    from mcp.core.adapters.missing_adapter import get_missing
+
+    vault = list_vaults()[0]
+    result_explicit = get_missing(vault_name=vault)
+    result_default = get_missing(vault_name=None)
+
+    # Both should either error identically or return the same total_expected
+    if "error" in result_explicit:
+        assert "error" in result_default, "Both should error when EXPECTED_CONCEPTS missing"
+        print(f"  Both return structured error: {result_explicit['error']!r}")
+    else:
+        assert result_explicit.get("total_expected") == result_default.get("total_expected"), (
+            "Explicit vault must produce same total_expected as default vault"
+        )
+        print(f"  Explicit vault={vault!r} total_expected={result_explicit['total_expected']} matches default")
+
+
+# ============================================================
 # Main
 # ============================================================
 
@@ -957,6 +1511,27 @@ def main():
 
     # Phase 0 — inject_frontmatter fix test
     test_inject_frontmatter_domain_validation()
+
+    # Phase 1 — HTTP smoke tests (TestClient)
+    test_p1_http_smoke()
+
+    # Phase 1 — Expose existing capabilities
+    test_p1_validation_adapter()
+    test_p1_tasks_full_path()
+    test_p1_tasks_constraints()
+    test_p1_notes_full_paths()
+    test_p1_quality_adapter()
+    test_p1_missing_adapter()
+    test_p1_compare_missing_file()
+    test_p1_graph_build()
+    test_p1_graph_related()
+    test_p1_graph_missing_neighbors()
+    test_p1_unknown_vault_structured_error()
+    test_p1_validation_vault_param()
+    test_p1_tasks_vault_param()
+    test_p1_notes_vault_param()
+    test_p1_quality_vault_param()
+    test_p1_missing_vault_param()
 
     print()
     print("=" * 60)

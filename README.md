@@ -105,36 +105,69 @@ The system includes an HTTP API (MCP-based) that exposes structured, determinist
 This is not raw note access — it provides:
 
 - validation status
-- prioritised improvement tasks
+- prioritised improvement tasks with writing constraints
 - gaps and coverage signals
-- structured note metadata
+- structured note metadata with full vault-relative paths
+- relationship graph (deterministic, schema-driven)
 
 ### Endpoints
 
+All adapter endpoints accept an optional `vault` query parameter. If omitted, the first registered vault is used.
+
 | Endpoint | Description |
 |--------|--------|
-| `/summary` | Overall vault state |
-| `/validation` | Schema validation result |
-| `/tasks` | Prioritised improvement tasks |
-| `/tasks?limit=5` | Top N tasks |
-| `/tasks?limit=5&min_priority=2` | Filtered tasks |
-| `/gaps` | High-impact incomplete notes |
-| `/notes` | Structured note metadata |
+| `GET /vaults` | List registered vault names |
+| `GET /summary` | Overall vault state |
+| `GET /validation[?vault=]` | Schema validation result |
+| `GET /tasks[?vault=&limit=&min_priority=]` | Prioritised improvement tasks with constraints |
+| `GET /gaps` | High-impact incomplete notes |
+| `GET /notes[?vault=]` | Structured note metadata with full paths |
+| `GET /quality[?vault=]` | Content quality audit |
+| `GET /missing[?vault=]` | Missing concept coverage gaps |
+| `POST /compare` | Delta comparison between two vault snapshots |
+| `GET /graph[?vault=]` | Full vault relationship graph |
+| `GET /graph/{vault}` | Vault relationship graph (path-param form) |
+| `GET /graph/{vault}/related?node_id=` | Notes related to a given node via shared group hub |
+| `GET /graph/{vault}/missing?node_id=` | Expected concepts missing near a given node |
+| `GET /graph/related?node=&vault=` | Related nodes (query-param form) |
+| `GET /graph/missing?node=&vault=` | Missing neighbors (query-param form) |
+| `POST /query` | Filtered note query |
+| `GET /note?vault=&path=` | Single note by path |
+| `GET /stats?vault=&field=` | Field-value frequency aggregation |
+| `GET /health` | Server health and metrics |
+| `GET /contract` | System contract check |
+
+### Task Output
+
+`GET /tasks` returns normalised task objects. Each task includes:
+
+- `note` — stem name of the note
+- `path` — full vault-relative POSIX path (e.g. `Fundamentals/Algorithms.md`)
+- `priority` — computed priority score
+- `missing` — list of missing section names
+- `instruction` — human-readable action string
+- `constraints` — writing constraints for the primary issue (from the task engine)
 
 ### Example
 
 ```text
-GET /tasks
+GET /tasks?vault=demo-vault&limit=5
 ```
 
-Returns prioritised upgrade tasks suitable for automated workflows.
+Returns the top 5 prioritised upgrade tasks with full paths and writing constraints.
+
+```text
+GET /graph/demo-vault/related?node_id=note::Fundamentals/Algorithms.md
+```
+
+Returns notes related to Algorithms via shared domain/subdomain/topic hubs.
 
 ### Agent Loop
 
 This enables closed-loop automation:
 
 1. GET `/tasks`
-2. Select highest priority
+2. Select highest priority task — use `path` for the full file location, `constraints` for writing rules
 3. Generate or update content
 4. GET `/validation`
 5. Repeat

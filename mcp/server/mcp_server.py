@@ -602,7 +602,9 @@ def endpoint_contract(
 
 
 @app.get("/validation")
-def endpoint_validation():
+def endpoint_validation(
+    vault: str = Query(None, description="Vault name (defaults to first registered vault)"),
+):
     """Run vault validation and return structured results.
 
     Response data:
@@ -610,8 +612,12 @@ def endpoint_validation():
         invalid_count (int): Number of notes that failed validation.
         invalid_notes (list[str]): Sorted vault-relative paths of invalid notes.
     """
+    if vault is not None:
+        err = _validate_vault(vault)
+        if err:
+            return err
     try:
-        result = get_validation()
+        result = get_validation(vault_name=vault)
         if "error" in result:
             return _error("VALIDATION_FAILED", result["error"], 500)
         result["invalid_notes"] = sorted(result.get("invalid_notes", []))
@@ -660,16 +666,19 @@ def _normalise_task(task: dict) -> dict:
     target = missing[0] if missing else ""
     return {
         "note": task["note"],
+        "path": task.get("path", ""),
         "priority": task["priority"],
         "type": "missing_section",
         "target": target,
         "missing": missing,
         "instruction": f"Add missing section: {target}" if target else "Review note",
+        "constraints": task.get("constraints", []),
     }
 
 
 @app.get("/tasks")
 def endpoint_tasks(
+    vault: str = Query(None, description="Vault name (defaults to first registered vault)"),
     limit: int = Query(10, ge=1, description="Maximum number of tasks to return"),
     min_priority: float = Query(None, description="Minimum priority threshold"),
 ):
@@ -681,15 +690,21 @@ def endpoint_tasks(
 
     Each task object:
         note (str): Note stem name.
+        path (str): Vault-relative POSIX path to the note.
         priority (float): Computed priority score.
         type (str): Always ``"missing_section"``.
         target (str): Primary missing section.
         missing (list[str]): All missing sections.
         instruction (str): Human-readable action.
+        constraints (list[str]): Writing constraints for the primary issue.
     """
+    if vault is not None:
+        err = _validate_vault(vault)
+        if err:
+            return err
     try:
         # Fetch all tasks (no limit at adapter level when filtering)
-        result = get_tasks(limit=9999)
+        result = get_tasks(vault_name=vault, limit=9999)
         if "error" in result:
             return _error("TASKS_FAILED", result["error"], 500)
 
@@ -762,7 +777,9 @@ def endpoint_gaps():
 
 
 @app.get("/notes")
-def endpoint_notes():
+def endpoint_notes(
+    vault: str = Query(None, description="Vault name (defaults to first registered vault)"),
+):
     """List all notes with metadata, sorted alphabetically by name.
 
     Response data:
@@ -773,10 +790,14 @@ def endpoint_notes():
         status (str): Frontmatter status field (e.g. ``"complete"``, ``"partial"``).
         difficulty (str): Frontmatter difficulty field.
         missing (list[str]): Missing required section slugs.
-        path (str): Vault-relative path.
+        path (str): Vault-relative POSIX path.
     """
+    if vault is not None:
+        err = _validate_vault(vault)
+        if err:
+            return err
     try:
-        result = get_all_notes()
+        result = get_all_notes(vault_name=vault)
         if "error" in result:
             return _error("NOTES_FAILED", result["error"], 500)
         result["notes"].sort(key=lambda n: n["name"].lower())
@@ -789,7 +810,9 @@ def endpoint_notes():
 
 
 @app.get("/quality")
-def endpoint_quality():
+def endpoint_quality(
+    vault: str = Query(None, description="Vault name (defaults to first registered vault)"),
+):
     """Run content quality audit and return structured results.
 
     Response data:
@@ -805,8 +828,12 @@ def endpoint_quality():
         severity (str): Severity band (e.g. ``"low"``, ``"high"``).
         issues (list): Per-rule violations with ``rule``, ``weight``, ``explanation``.
     """
+    if vault is not None:
+        err = _validate_vault(vault)
+        if err:
+            return err
     try:
-        result = get_quality()
+        result = get_quality(vault_name=vault)
         if "error" in result:
             return _error("QUALITY_FAILED", result["error"], 500)
         return {"status": "ok", "data": result}
@@ -815,7 +842,9 @@ def endpoint_quality():
 
 
 @app.get("/missing")
-def endpoint_missing():
+def endpoint_missing(
+    vault: str = Query(None, description="Vault name (defaults to first registered vault)"),
+):
     """Detect missing concepts across all expected subdomains.
 
     Response data:
@@ -832,11 +861,24 @@ def endpoint_missing():
         score (float): Importance score.
         subdomain (str): Subdomain name.
         concept (str): Missing concept name.
+
+    Note:
+        Returns a structured MISSING_CONCEPTS_EMPTY error if
+        EXPECTED_CONCEPTS is not defined or empty in vault_schema.py.
     """
+    if vault is not None:
+        err = _validate_vault(vault)
+        if err:
+            return err
     try:
-        result = get_missing()
+        result = get_missing(vault_name=vault)
         if "error" in result:
-            return _error("MISSING_FAILED", result["error"], 500)
+            code = (
+                "MISSING_CONCEPTS_EMPTY"
+                if "EXPECTED_CONCEPTS" in result["error"]
+                else "MISSING_FAILED"
+            )
+            return _error(code, result["error"], 422 if code == "MISSING_CONCEPTS_EMPTY" else 500)
         return {"status": "ok", "data": result}
     except Exception as exc:
         return _error("MISSING_FAILED", f"Missing concepts detection failed: {exc}", 500)
@@ -1029,6 +1071,111 @@ def endpoint_graph_missing(
     try:
         graph = build_graph(vault_name=vault)
         result = get_missing_neighbors(graph, node)
+        return {"status": "ok", "data": result}
+    except Exception as exc:
+        return _error("GRAPH_QUERY_FAILED", f"Missing neighbors query failed: {exc}", 500)
+
+
+# ---------- Phase 1: Vault-Parameterised Graph Routes ----------
+#
+# These routes mirror the existing /graph, /graph/related, and /graph/missing
+# endpoints but accept the vault name as a URL path segment rather than a
+# query parameter.  The literal-path routes above are registered first, so
+# FastAPI resolves /graph/related → endpoint_graph_related (not this group).
+
+
+@app.get("/graph/{vault}")
+def endpoint_graph_by_vault(vault: str):
+    """Return a deterministic relationship graph of the specified vault.
+
+    Identical to GET /graph?vault=<vault> but with the vault name in the path.
+
+    Response data:
+        nodes (list): All graph nodes, sorted ascending by id.
+        edges (list): All graph edges, sorted ascending by (from, to, type).
+    """
+    err = _validate_vault(vault)
+    if err:
+        return err
+    try:
+        graph = build_graph(vault_name=vault)
+        return {"status": "ok", "data": graph}
+    except Exception as exc:
+        return _error("GRAPH_FAILED", f"Graph build failed: {exc}", 500)
+
+
+@app.get("/graph/{vault}/related")
+def endpoint_graph_vault_related(
+    vault: str,
+    node_id: str = Query(..., description="Node id to query"),
+    min_strength: str = Query(
+        "domain",
+        description="Minimum relationship strength: topic | subdomain | domain",
+    ),
+):
+    """Return notes that share a group hub with the given node in the specified vault.
+
+    Traversal: note → group node → all other notes in that group.
+    Strength is derived from the type of the strongest shared hub:
+      topic (strongest) > subdomain > domain (weakest).
+
+    Response data:
+        node_id (str): The queried node id.
+        found (bool): Whether the node exists in the graph.
+        related (list): Related notes, sorted by strength desc then id asc.
+
+    Each related entry:
+        id (str): Note id (vault-relative POSIX path).
+        type (str): Node type.
+        label (str): Human-readable name.
+        via (str): The strongest group node id through which the relationship was found.
+        strength (str): "topic" | "subdomain" | "domain".
+    """
+    from mcp.core.graph_query import VALID_STRENGTHS
+    err = _validate_vault(vault)
+    if err:
+        return err
+    if min_strength not in VALID_STRENGTHS:
+        return _error(
+            "INVALID_PARAM",
+            f"min_strength must be one of: {sorted(VALID_STRENGTHS)}",
+            400,
+        )
+    try:
+        graph = build_graph(vault_name=vault)
+        result = get_related_nodes(graph, node_id, min_strength=min_strength)
+        return {"status": "ok", "data": result}
+    except Exception as exc:
+        return _error("GRAPH_QUERY_FAILED", f"Related query failed: {exc}", 500)
+
+
+@app.get("/graph/{vault}/missing")
+def endpoint_graph_vault_missing(
+    vault: str,
+    node_id: str = Query(..., description="Node id to query"),
+):
+    """Return expected concepts missing from this note's group hubs in the specified vault.
+
+    These are concepts the schema declares as expected (EXPECTED_CONCEPTS)
+    near this note's domain/subdomain/topic cluster that are not yet present
+    in the vault.
+
+    Response data:
+        node_id (str): The queried node id.
+        found (bool): Whether the node exists in the graph.
+        missing (list): Missing expected concepts, sorted ascending by id.
+
+    Each missing entry:
+        id (str): expected_concept node id.
+        label (str): Concept name.
+        via (str): The group node that declared this expected concept.
+    """
+    err = _validate_vault(vault)
+    if err:
+        return err
+    try:
+        graph = build_graph(vault_name=vault)
+        result = get_missing_neighbors(graph, node_id)
         return {"status": "ok", "data": result}
     except Exception as exc:
         return _error("GRAPH_QUERY_FAILED", f"Missing neighbors query failed: {exc}", 500)

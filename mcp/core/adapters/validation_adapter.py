@@ -46,7 +46,7 @@ def get_validation(vault_name: str | None = None) -> dict:
         for filepath in files:
             errors = _validate_mod.validate_file(filepath, vault_path, _schema)
             if errors:
-                rel = str(filepath.relative_to(vault_path))
+                rel = filepath.relative_to(vault_path).as_posix()
                 invalid_notes.append(rel)
 
         result = {
