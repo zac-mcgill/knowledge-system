@@ -1,8 +1,8 @@
 ---
 type: core-concept
 domain: fundamentals
-status: partial
-has_key_principles: false
+status: complete
+has_key_principles: true
 has_how_it_works: true
 has_tradeoffs: true
 difficulty: intermediate
@@ -17,6 +17,12 @@ Networking fundamentals cover the principles, protocols, and architectures that 
 All modern software depends on network communication. Understanding networking is essential for building distributed systems, web applications, and secure infrastructure.
 
 ## Key Principles
+
+- **Layered model** separates network concerns into distinct layers (e.g., OSI or TCP/IP), allowing each layer to evolve independently.
+- **Addressing** uniquely identifies every endpoint using IP addresses at the network layer and port numbers at the transport layer.
+- **TCP vs UDP trade-off** balances reliable ordered delivery (TCP) against low-latency best-effort delivery (UDP) depending on application needs.
+- **Stateless vs stateful protocols** determines whether a server retains session context between requests, affecting scalability and failure recovery.
+- **Encapsulation** wraps data with headers at each layer as it descends the stack, with each header stripped off at the corresponding layer on the receiving side.
 
 ## How It Works
 

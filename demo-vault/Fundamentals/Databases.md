@@ -1,8 +1,8 @@
 ---
 type: core-concept
 domain: fundamentals
-status: partial
-has_key_principles: false
+status: complete
+has_key_principles: true
 has_how_it_works: true
 has_tradeoffs: true
 difficulty: intermediate
@@ -17,6 +17,12 @@ A database is an organised collection of structured data managed by a database m
 Databases are the persistence layer for virtually all applications. Choosing the right database model and understanding query optimisation are essential skills.
 
 ## Key Principles
+
+- **ACID** (Atomicity, Consistency, Isolation, Durability) guarantees that transactions are processed reliably even in the presence of errors or concurrent access.
+- **Normalisation** organises tables to reduce redundancy by ensuring each piece of information is stored in exactly one place.
+- **Indexing** creates auxiliary data structures that accelerate lookups at the cost of additional write overhead and storage.
+- **Query optimisation** uses the query planner to choose efficient execution plans, leveraging statistics, indexes, and join strategies.
+- **Transactions** group multiple operations into an atomic unit so partial failures cannot leave data in an inconsistent state.
 
 ## How It Works
 

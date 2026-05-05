@@ -1,8 +1,8 @@
 ---
 type: core-concept
 domain: fundamentals
-status: partial
-has_key_principles: false
+status: complete
+has_key_principles: true
 has_how_it_works: true
 has_tradeoffs: true
 difficulty: intermediate
@@ -17,6 +17,12 @@ Dynamic programming is an algorithmic technique that solves complex problems by 
 Dynamic programming transforms exponential-time brute-force solutions into polynomial-time algorithms for problems with optimal substructure.
 
 ## Key Principles
+
+- **Optimal substructure** means the optimal solution to a problem can be constructed from optimal solutions to its subproblems.
+- **Overlapping subproblems** means the same smaller instances are solved repeatedly, making caching worthwhile.
+- **Memoisation** stores results of recursive calls in a lookup table so each subproblem is computed at most once (top-down approach).
+- **Tabulation** fills a result table iteratively from the smallest subproblems upward, avoiding recursion entirely (bottom-up approach).
+- **State transition** defines how to move from one subproblem to the next via a recurrence relation that encodes the problem's structure.
 
 ## How It Works
 

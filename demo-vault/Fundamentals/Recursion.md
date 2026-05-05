@@ -1,8 +1,8 @@
 ---
 type: core-concept
 domain: fundamentals
-status: partial
-has_key_principles: false
+status: complete
+has_key_principles: true
 has_how_it_works: true
 has_tradeoffs: true
 difficulty: intermediate
@@ -17,6 +17,12 @@ Recursion is a technique where a function calls itself to solve smaller instance
 Recursion simplifies solutions to problems with self-similar structure such as tree traversal, divide-and-conquer algorithms, and mathematical sequences.
 
 ## Key Principles
+
+- **Base case** is the condition that stops recursion and returns a result directly without making further calls.
+- **Recursive step** breaks the problem into a smaller instance of the same problem and delegates to a recursive call.
+- **Call stack** tracks each active function invocation; deep recursion grows the stack and risks overflow if depth is unbounded.
+- **Progress toward termination** requires that every recursive call moves strictly closer to the base case, guaranteeing eventual termination.
+- **Tail recursion** places the recursive call as the final operation, enabling compilers and runtimes to reuse the current stack frame and avoid stack growth.
 
 ## How It Works
 

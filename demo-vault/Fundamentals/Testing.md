@@ -1,8 +1,8 @@
 ---
 type: core-concept
 domain: fundamentals
-status: partial
-has_key_principles: false
+status: complete
+has_key_principles: true
 has_how_it_works: true
 has_tradeoffs: true
 difficulty: intermediate
@@ -17,6 +17,12 @@ Testing is the systematic process of verifying that software behaves as intended
 Testing catches bugs early, provides confidence in refactoring, documents expected behaviour, and prevents regressions from reaching production.
 
 ## Key Principles
+
+- **Unit isolation** tests a single unit of behaviour in isolation from its dependencies, making failures fast to locate and fix.
+- **Regression prevention** re-runs the full test suite on every change to catch newly introduced breakage before it reaches production.
+- **Test as documentation** writes test names and assertions as precise specifications so the test suite communicates intended behaviour to future readers.
+- **Red-green-refactor** drives development by writing a failing test first, making it pass with minimal code, then improving structure without changing behaviour.
+- **Boundary cases** explicitly test inputs at the edges of valid ranges, empty inputs, and off-by-one conditions where bugs are most likely to hide.
 
 ## How It Works
 
