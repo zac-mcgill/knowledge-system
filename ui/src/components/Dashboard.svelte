@@ -67,6 +67,20 @@
   let securityData: SecurityData | null = null;
   let securityError = '';
 
+  // Issue Review section
+  type IssueTab = 'validation' | 'tasks' | 'security' | 'missing' | 'feedback';
+  let activeIssueTab: IssueTab = 'validation';
+  let expandedTaskIds: Set<number> = new Set();
+
+  function toggleTask(idx: number) {
+    if (expandedTaskIds.has(idx)) {
+      expandedTaskIds.delete(idx);
+    } else {
+      expandedTaskIds.add(idx);
+    }
+    expandedTaskIds = expandedTaskIds; // trigger Svelte reactivity
+  }
+
   $: isLoading =
     healthState === 'loading' ||
     summaryState === 'loading' ||
@@ -143,6 +157,7 @@
     missingState    = 'loading'; missingData    = null; missingError    = '';
     feedbackState   = 'loading'; feedbackData   = null; feedbackError   = '';
     securityState   = 'loading'; securityData   = null; securityError   = '';
+    expandedTaskIds = new Set();
 
     const [sResult, vResult, tResult, mResult, fbResult, secResult] = await Promise.all([
       fetchSummary(vault),
@@ -908,6 +923,553 @@
     </div>
 
   </div><!-- end card grid -->
+
+  <!-- ══════════════════════════════════════════════════════════
+       Issue Review Section
+       ══════════════════════════════════════════════════════════ -->
+  <div class="border border-zinc-800 rounded-lg overflow-hidden">
+
+    <!-- Section header -->
+    <div class="bg-zinc-900 border-b border-zinc-800 px-4 py-3">
+      <h2 class="text-sm font-semibold text-zinc-200">Issue Review</h2>
+      <p class="text-xs text-zinc-500 mt-0.5">Inspect findings across all analysis categories.</p>
+    </div>
+
+    {#if !selectedVault}
+      <div class="p-4">
+        <p class="text-sm text-zinc-600">Select a vault to review issues.</p>
+      </div>
+    {:else}
+
+      <!-- Cross-panel summary row -->
+      <div class="bg-zinc-950 border-b border-zinc-800 px-4 py-2 flex flex-wrap gap-x-6 gap-y-1 items-center">
+        <span class="text-xs text-zinc-600 uppercase tracking-wide">Summary:</span>
+
+        <div class="flex items-center gap-1.5 text-xs">
+          <span class="text-zinc-500">Validation</span>
+          {#if validationState === 'ok' && validationData}
+            <span class="font-mono font-medium {validationData.invalid_count > 0 ? 'text-red-400' : 'text-emerald-400'}">
+              {validationData.invalid_count} issue{validationData.invalid_count !== 1 ? 's' : ''}
+            </span>
+          {:else if validationState === 'loading'}
+            <span class="text-zinc-700">…</span>
+          {:else}
+            <span class="text-zinc-700">—</span>
+          {/if}
+        </div>
+
+        <div class="flex items-center gap-1.5 text-xs">
+          <span class="text-zinc-500">Tasks</span>
+          {#if tasksState === 'ok' && tasksData}
+            <span class="font-mono font-medium {tasksData.total > 0 ? 'text-amber-400' : 'text-emerald-400'}">
+              {tasksData.total}
+            </span>
+          {:else if tasksState === 'loading'}
+            <span class="text-zinc-700">…</span>
+          {:else}
+            <span class="text-zinc-700">—</span>
+          {/if}
+        </div>
+
+        <div class="flex items-center gap-1.5 text-xs">
+          <span class="text-zinc-500">Security</span>
+          {#if securityState === 'ok' && securityData}
+            <span class="font-mono font-medium {securityData.findings.length > 0 ? 'text-red-400' : 'text-emerald-400'}">
+              {securityData.findings.length} finding{securityData.findings.length !== 1 ? 's' : ''}
+            </span>
+          {:else if securityState === 'loading'}
+            <span class="text-zinc-700">…</span>
+          {:else}
+            <span class="text-zinc-700">—</span>
+          {/if}
+        </div>
+
+        <div class="flex items-center gap-1.5 text-xs">
+          <span class="text-zinc-500">Missing</span>
+          {#if missingState === 'ok' && missingData}
+            <span class="font-mono font-medium {missingData.total_missing > 0 ? 'text-amber-400' : 'text-emerald-400'}">
+              {missingData.total_missing}
+            </span>
+          {:else if missingState === 'warning'}
+            <span class="text-zinc-600">not configured</span>
+          {:else if missingState === 'loading'}
+            <span class="text-zinc-700">…</span>
+          {:else}
+            <span class="text-zinc-700">—</span>
+          {/if}
+        </div>
+
+        <div class="flex items-center gap-1.5 text-xs">
+          <span class="text-zinc-500">Feedback</span>
+          {#if feedbackState === 'ok' && feedbackData}
+            <span class="font-mono font-medium text-zinc-300">
+              {feedbackData.entries.length} entr{feedbackData.entries.length !== 1 ? 'ies' : 'y'}
+            </span>
+          {:else if feedbackState === 'loading'}
+            <span class="text-zinc-700">…</span>
+          {:else}
+            <span class="text-zinc-700">—</span>
+          {/if}
+        </div>
+      </div><!-- end summary row -->
+
+      <!-- Tab bar -->
+      <div class="bg-zinc-900 border-b border-zinc-800 flex overflow-x-auto">
+        <button
+          on:click={() => activeIssueTab = 'validation'}
+          class="px-4 py-2.5 text-xs font-medium whitespace-nowrap border-b-2 transition-colors
+            {activeIssueTab === 'validation' ? 'border-sky-500 text-zinc-100' : 'border-transparent text-zinc-500 hover:text-zinc-300'}"
+        >Validation</button>
+        <button
+          on:click={() => activeIssueTab = 'tasks'}
+          class="px-4 py-2.5 text-xs font-medium whitespace-nowrap border-b-2 transition-colors
+            {activeIssueTab === 'tasks' ? 'border-sky-500 text-zinc-100' : 'border-transparent text-zinc-500 hover:text-zinc-300'}"
+        >Tasks</button>
+        <button
+          on:click={() => activeIssueTab = 'security'}
+          class="px-4 py-2.5 text-xs font-medium whitespace-nowrap border-b-2 transition-colors
+            {activeIssueTab === 'security' ? 'border-sky-500 text-zinc-100' : 'border-transparent text-zinc-500 hover:text-zinc-300'}"
+        >Security</button>
+        <button
+          on:click={() => activeIssueTab = 'missing'}
+          class="px-4 py-2.5 text-xs font-medium whitespace-nowrap border-b-2 transition-colors
+            {activeIssueTab === 'missing' ? 'border-sky-500 text-zinc-100' : 'border-transparent text-zinc-500 hover:text-zinc-300'}"
+        >Missing Concepts</button>
+        <button
+          on:click={() => activeIssueTab = 'feedback'}
+          class="px-4 py-2.5 text-xs font-medium whitespace-nowrap border-b-2 transition-colors
+            {activeIssueTab === 'feedback' ? 'border-sky-500 text-zinc-100' : 'border-transparent text-zinc-500 hover:text-zinc-300'}"
+        >Feedback</button>
+      </div><!-- end tab bar -->
+
+      <!-- Tab content -->
+      <div class="p-4">
+
+        <!-- ═══════════ Validation tab ═══════════ -->
+        {#if activeIssueTab === 'validation'}
+          {#if validationState === 'loading'}
+            <div class="space-y-2">
+              <div class="h-4 bg-zinc-800 rounded animate-pulse w-1/3"></div>
+              <div class="h-3 bg-zinc-800 rounded animate-pulse w-1/2"></div>
+            </div>
+          {:else if validationState === 'ok' && validationData}
+            <div class="flex items-center gap-3 mb-4">
+              {#if validationData.status === 'pass'}
+                <span class="inline-flex items-center gap-1 text-xs bg-emerald-950 text-emerald-400 border border-emerald-800 px-2 py-0.5 rounded-full">
+                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>Pass
+                </span>
+                <span class="text-sm text-zinc-400">All notes pass schema validation.</span>
+              {:else}
+                <span class="inline-flex items-center gap-1 text-xs bg-red-950 text-red-400 border border-red-800 px-2 py-0.5 rounded-full">
+                  <span class="w-1.5 h-1.5 rounded-full bg-red-400"></span>Fail
+                </span>
+                <span class="text-sm text-zinc-300">
+                  {validationData.invalid_count} note{validationData.invalid_count !== 1 ? 's' : ''} failed validation.
+                </span>
+              {/if}
+            </div>
+            {#if validationData.invalid_notes.length > 0}
+              <p class="text-xs font-medium text-zinc-400 uppercase tracking-wide mb-2">
+                Invalid notes — {validationData.invalid_notes.length}
+              </p>
+              <div class="space-y-1 max-h-72 overflow-y-auto mb-3">
+                {#each validationData.invalid_notes as notePath}
+                  <div class="flex items-center text-xs bg-zinc-950 border border-red-900/30 rounded px-3 py-1.5">
+                    <span class="font-mono text-red-300 truncate" title={notePath}>{notePath}</span>
+                  </div>
+                {/each}
+              </div>
+              <p class="text-xs text-zinc-600">
+                Detailed per-field validation messages are available via
+                <code class="bg-zinc-800 px-1 rounded">py run.py validate</code>.
+              </p>
+            {:else}
+              <div class="bg-emerald-950/20 border border-emerald-900/30 rounded p-3">
+                <p class="text-sm text-emerald-400">No invalid notes. Vault passes all schema checks.</p>
+              </div>
+            {/if}
+            <details class="mt-4">
+              <summary class="text-xs text-zinc-600 hover:text-zinc-400 cursor-pointer select-none">Raw JSON</summary>
+              <pre class="mt-2 text-xs text-zinc-400 bg-zinc-950 border border-zinc-800 rounded p-2 overflow-x-auto whitespace-pre-wrap">{JSON.stringify(validationData, null, 2)}</pre>
+            </details>
+          {:else if validationState === 'idle'}
+            <p class="text-sm text-zinc-600">Select a vault to run validation.</p>
+          {:else}
+            <p class="text-sm text-red-400">{validationError}</p>
+          {/if}
+
+        <!-- ═══════════ Tasks tab ═══════════ -->
+        {:else if activeIssueTab === 'tasks'}
+          {#if tasksState === 'loading'}
+            <div class="space-y-2">
+              {#each [1, 2, 3] as _}
+                <div class="h-12 bg-zinc-800 rounded animate-pulse"></div>
+              {/each}
+            </div>
+          {:else if tasksState === 'ok' && tasksData}
+            {#if tasksData.tasks.length === 0}
+              <div class="bg-emerald-950/20 border border-emerald-900/30 rounded p-3">
+                <p class="text-sm text-emerald-400">No improvement tasks found. Vault is in good shape.</p>
+              </div>
+            {:else}
+              <div class="flex items-center justify-between mb-3 gap-3 flex-wrap">
+                <p class="text-xs text-zinc-500">
+                  {tasksData.total > tasksData.tasks.length
+                    ? `Showing top ${tasksData.tasks.length} of ${tasksData.total} tasks — click a row to expand details.`
+                    : `${tasksData.tasks.length} task${tasksData.tasks.length !== 1 ? 's' : ''} — click a row to expand details.`}
+                </p>
+                {#if tasksData.feedback_status === 'error'}
+                  <span class="text-xs text-amber-400 bg-amber-950/40 border border-amber-900/40 rounded px-2 py-0.5">
+                    Feedback scoring unavailable — tasks are unweighted
+                  </span>
+                {/if}
+              </div>
+              <div class="space-y-1.5">
+                {#each tasksData.tasks as task, idx}
+                  {@const isExpanded = expandedTaskIds.has(idx)}
+                  <div class="bg-zinc-950 border {isExpanded ? 'border-zinc-600' : 'border-zinc-800'} rounded overflow-hidden">
+                    <!-- Row header — clickable -->
+                    <button
+                      on:click={() => toggleTask(idx)}
+                      class="w-full text-left flex items-center gap-3 px-3 py-2.5 hover:bg-zinc-900/80 transition-colors"
+                    >
+                      <span class="shrink-0 text-xs font-mono px-1.5 py-0.5 rounded {priorityColor(task.priority)}">
+                        P{task.priority.toFixed(1)}
+                      </span>
+                      <div class="flex-1 min-w-0">
+                        <div class="flex flex-wrap items-baseline gap-x-2">
+                          <span class="text-sm font-medium text-zinc-200">{task.note}</span>
+                          <span class="text-xs text-zinc-600 font-mono truncate" title={task.path}>{task.path}</span>
+                        </div>
+                      </div>
+                      <svg
+                        class="shrink-0 w-3.5 h-3.5 text-zinc-500 transition-transform {isExpanded ? 'rotate-180' : ''}"
+                        fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                      >
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+                    <!-- Expanded body -->
+                    {#if isExpanded}
+                      <div class="px-3 pb-3 border-t border-zinc-800 pt-3 space-y-3">
+                        <div>
+                          <p class="text-xs font-medium text-zinc-500 uppercase tracking-wide mb-1">Instruction</p>
+                          <p class="text-sm text-zinc-300">{task.instruction}</p>
+                        </div>
+                        {#if task.missing && task.missing.length > 0}
+                          <div>
+                            <p class="text-xs font-medium text-zinc-500 uppercase tracking-wide mb-1.5">Missing sections</p>
+                            <div class="flex flex-wrap gap-1">
+                              {#each task.missing as section}
+                                <span class="text-xs bg-zinc-800 text-zinc-300 border border-zinc-700 rounded px-1.5 py-0.5">{section}</span>
+                              {/each}
+                            </div>
+                          </div>
+                        {/if}
+                        {#if task.constraints && task.constraints.length > 0}
+                          <div>
+                            <p class="text-xs font-medium text-zinc-500 uppercase tracking-wide mb-1.5">Constraints</p>
+                            <ul class="space-y-0.5">
+                              {#each task.constraints as c}
+                                <li class="text-xs text-zinc-400 flex gap-1.5">
+                                  <span class="text-zinc-600 shrink-0">–</span><span>{c}</span>
+                                </li>
+                              {/each}
+                            </ul>
+                          </div>
+                        {/if}
+                        {#if task.feedback_weight}
+                          <div>
+                            <p class="text-xs font-medium text-zinc-500 uppercase tracking-wide mb-1.5">Feedback weighting</p>
+                            <div class="bg-zinc-900 border border-zinc-800 rounded px-3 py-2 text-xs space-y-1">
+                              <div class="flex items-center gap-2">
+                                <span class="text-zinc-500">Score delta:</span>
+                                <span class="font-mono {task.feedback_weight.score_delta >= 0 ? 'text-amber-400' : 'text-emerald-400'}">
+                                  {task.feedback_weight.score_delta >= 0 ? '+' : ''}{task.feedback_weight.score_delta.toFixed(3)}
+                                </span>
+                              </div>
+                              <p class="text-zinc-400">{task.feedback_weight.entry_summary}</p>
+                            </div>
+                          </div>
+                        {/if}
+                        <details>
+                          <summary class="text-xs text-zinc-600 hover:text-zinc-400 cursor-pointer select-none">Raw task JSON</summary>
+                          <pre class="mt-1.5 text-xs text-zinc-400 bg-zinc-950 border border-zinc-800 rounded p-2 overflow-x-auto whitespace-pre-wrap">{JSON.stringify(task, null, 2)}</pre>
+                        </details>
+                      </div>
+                    {/if}
+                  </div>
+                {/each}
+              </div>
+            {/if}
+            <details class="mt-4">
+              <summary class="text-xs text-zinc-600 hover:text-zinc-400 cursor-pointer select-none">Raw JSON (tasks list)</summary>
+              <pre class="mt-2 text-xs text-zinc-400 bg-zinc-950 border border-zinc-800 rounded p-2 overflow-x-auto whitespace-pre-wrap">{JSON.stringify(tasksData, null, 2)}</pre>
+            </details>
+          {:else if tasksState === 'idle'}
+            <p class="text-sm text-zinc-600">Select a vault to load tasks.</p>
+          {:else}
+            <p class="text-sm text-red-400">{tasksError}</p>
+          {/if}
+
+        <!-- ═══════════ Security tab ═══════════ -->
+        {:else if activeIssueTab === 'security'}
+          {#if securityState === 'loading'}
+            <div class="flex items-center gap-2 text-sm text-zinc-500">
+              <span class="w-4 h-4 border-2 border-zinc-600 border-t-sky-500 rounded-full animate-spin"></span>
+              Running security scan…
+            </div>
+          {:else if securityState === 'ok' && securityData}
+            <div class="flex items-center gap-3 mb-4">
+              {#if securityData.status === 'pass'}
+                <span class="inline-flex items-center gap-1 text-xs bg-emerald-950 text-emerald-400 border border-emerald-800 px-2 py-0.5 rounded-full">
+                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>Pass
+                </span>
+              {:else if securityData.status === 'warning'}
+                <span class="inline-flex items-center gap-1 text-xs bg-amber-950 text-amber-400 border border-amber-800 px-2 py-0.5 rounded-full">
+                  <span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>Warning
+                </span>
+              {:else}
+                <span class="inline-flex items-center gap-1 text-xs bg-red-950 text-red-400 border border-red-800 px-2 py-0.5 rounded-full">
+                  <span class="w-1.5 h-1.5 rounded-full bg-red-400"></span>Fail
+                </span>
+              {/if}
+              <span class="text-xs text-zinc-500">
+                {securityData.scanned.note_count} note{securityData.scanned.note_count !== 1 ? 's' : ''} scanned
+              </span>
+            </div>
+            {#if securityData.scanned.note_count === 0}
+              <div class="bg-amber-950/30 border border-amber-900/40 rounded p-3 mb-4">
+                <p class="text-sm text-amber-400">No complete notes were scanned.</p>
+                <p class="text-xs text-zinc-500 mt-0.5">
+                  The security scan requires notes with
+                  <code class="bg-zinc-800 px-1 rounded">status: complete</code>.
+                  Mark notes as complete to enable scanning.
+                </p>
+              </div>
+            {/if}
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
+              <div class="bg-zinc-950 rounded p-2 text-center">
+                <div class="text-base font-mono font-semibold text-zinc-200">{securityData.scanned.note_count}</div>
+                <div class="text-xs text-zinc-500">Scanned</div>
+              </div>
+              <div class="bg-zinc-950 rounded p-2 text-center">
+                <div class="text-base font-mono font-semibold {securityData.summary.fail > 0 ? 'text-red-400' : 'text-zinc-200'}">{securityData.summary.fail}</div>
+                <div class="text-xs text-zinc-500">Failures</div>
+              </div>
+              <div class="bg-zinc-950 rounded p-2 text-center">
+                <div class="text-base font-mono font-semibold {securityData.summary.warning > 0 ? 'text-amber-400' : 'text-zinc-200'}">{securityData.summary.warning}</div>
+                <div class="text-xs text-zinc-500">Warnings</div>
+              </div>
+              <div class="bg-zinc-950 rounded p-2 text-center">
+                <div class="text-base font-mono font-semibold text-zinc-200">{securityData.summary.info}</div>
+                <div class="text-xs text-zinc-500">Info</div>
+              </div>
+            </div>
+            {#if securityData.findings.length > 0}
+              <p class="text-xs font-medium text-zinc-400 uppercase tracking-wide mb-2">
+                Findings — {securityData.findings.length}
+              </p>
+              <div class="space-y-1.5">
+                {#each securityData.findings as finding}
+                  <div class="bg-zinc-950 border border-zinc-800 rounded p-3">
+                    <div class="flex items-start gap-2 flex-wrap mb-1.5">
+                      <span class="shrink-0 text-xs font-mono px-1.5 py-0.5 rounded {severityClass(finding.severity)}">
+                        {finding.severity}
+                      </span>
+                      <span class="text-xs font-mono text-zinc-300 truncate min-w-0" title={finding.path}>{finding.path}</span>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-x-4 gap-y-1 text-xs">
+                      <div class="flex gap-1.5">
+                        <span class="text-zinc-600 shrink-0">Rule:</span>
+                        <span class="text-zinc-300 font-mono">{finding.rule}</span>
+                      </div>
+                      <div class="flex gap-1.5">
+                        <span class="text-zinc-600 shrink-0">Field:</span>
+                        <span class="text-zinc-300 font-mono">{finding.field}</span>
+                      </div>
+                      <div class="flex gap-1.5 sm:col-span-3">
+                        <span class="text-zinc-600 shrink-0">Detail:</span>
+                        <span class="text-zinc-400">{finding.detail}</span>
+                      </div>
+                    </div>
+                  </div>
+                {/each}
+              </div>
+            {:else if securityData.scanned.note_count > 0}
+              <div class="bg-emerald-950/20 border border-emerald-900/30 rounded p-3">
+                <p class="text-sm text-emerald-400">No security findings. Vault is clean.</p>
+              </div>
+            {/if}
+            <details class="mt-4">
+              <summary class="text-xs text-zinc-600 hover:text-zinc-400 cursor-pointer select-none">Raw JSON</summary>
+              <pre class="mt-2 text-xs text-zinc-400 bg-zinc-950 border border-zinc-800 rounded p-2 overflow-x-auto whitespace-pre-wrap">{JSON.stringify(securityData, null, 2)}</pre>
+            </details>
+          {:else if securityState === 'idle'}
+            <p class="text-sm text-zinc-600">Select a vault to run a security scan.</p>
+          {:else}
+            <p class="text-sm text-red-400">{securityError}</p>
+          {/if}
+
+        <!-- ═══════════ Missing Concepts tab ═══════════ -->
+        {:else if activeIssueTab === 'missing'}
+          {#if missingState === 'loading'}
+            <div class="space-y-2">
+              <div class="h-4 bg-zinc-800 rounded animate-pulse w-1/3"></div>
+              <div class="h-3 bg-zinc-800 rounded animate-pulse w-1/2"></div>
+              <div class="h-3 bg-zinc-800 rounded animate-pulse w-2/3"></div>
+            </div>
+          {:else if missingState === 'warning'}
+            <div class="bg-zinc-800/50 border border-zinc-700 rounded p-3">
+              <p class="text-sm text-zinc-400">{missingError}</p>
+              <p class="text-xs text-zinc-600 mt-1.5">
+                Define <code class="bg-zinc-800 px-1 rounded">EXPECTED_CONCEPTS</code> in
+                <code class="bg-zinc-800 px-1 rounded">vault_schema.py</code> to enable gap detection.
+              </p>
+            </div>
+          {:else if missingState === 'ok' && missingData}
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
+              <div class="bg-zinc-950 rounded p-2 text-center">
+                <div class="text-base font-mono font-semibold text-zinc-200">{missingData.total_expected}</div>
+                <div class="text-xs text-zinc-500">Expected</div>
+              </div>
+              <div class="bg-zinc-950 rounded p-2 text-center">
+                <div class="text-base font-mono font-semibold text-zinc-200">{missingData.total_actual}</div>
+                <div class="text-xs text-zinc-500">Present</div>
+              </div>
+              <div class="bg-zinc-950 rounded p-2 text-center">
+                <div class="text-base font-mono font-semibold {missingData.total_missing > 0 ? 'text-amber-400' : 'text-emerald-400'}">{missingData.total_missing}</div>
+                <div class="text-xs text-zinc-500">Missing</div>
+              </div>
+              <div class="bg-zinc-950 rounded p-2 text-center">
+                <div class="text-base font-mono font-semibold text-zinc-200">{missingData.domains_assessed}</div>
+                <div class="text-xs text-zinc-500">Domains</div>
+              </div>
+            </div>
+            {#if missingData.ranked.length > 0}
+              <p class="text-xs font-medium text-zinc-400 uppercase tracking-wide mb-2">
+                Ranked missing concepts — {missingData.ranked.length}
+              </p>
+              <div class="space-y-1">
+                {#each missingData.ranked as concept, i}
+                  <div class="flex items-center gap-2 text-xs bg-zinc-950 border border-zinc-800 rounded px-3 py-1.5">
+                    <span class="shrink-0 font-mono text-zinc-600 w-5 text-right">{i + 1}.</span>
+                    <div class="flex-1 min-w-0 flex flex-wrap items-baseline gap-x-2">
+                      <span class="text-zinc-200 font-medium">{concept.concept}</span>
+                      <span class="text-zinc-600">{concept.subdomain}</span>
+                    </div>
+                    <span class="shrink-0 font-mono text-zinc-500">{concept.score.toFixed(2)}</span>
+                  </div>
+                {/each}
+              </div>
+            {:else}
+              <div class="bg-emerald-950/20 border border-emerald-900/30 rounded p-3">
+                <p class="text-sm text-emerald-400">All expected concepts are present.</p>
+              </div>
+            {/if}
+            <details class="mt-4">
+              <summary class="text-xs text-zinc-600 hover:text-zinc-400 cursor-pointer select-none">Raw JSON</summary>
+              <pre class="mt-2 text-xs text-zinc-400 bg-zinc-950 border border-zinc-800 rounded p-2 overflow-x-auto whitespace-pre-wrap">{JSON.stringify(missingData, null, 2)}</pre>
+            </details>
+          {:else if missingState === 'idle'}
+            <p class="text-sm text-zinc-600">Select a vault to check concept coverage.</p>
+          {:else}
+            <p class="text-sm text-red-400">{missingError}</p>
+          {/if}
+
+        <!-- ═══════════ Feedback tab ═══════════ -->
+        {:else if activeIssueTab === 'feedback'}
+          {#if feedbackState === 'loading'}
+            <div class="space-y-2">
+              <div class="h-4 bg-zinc-800 rounded animate-pulse w-1/3"></div>
+              <div class="h-3 bg-zinc-800 rounded animate-pulse w-1/2"></div>
+              <div class="h-3 bg-zinc-800 rounded animate-pulse w-2/3"></div>
+            </div>
+          {:else if feedbackState === 'ok' && feedbackData}
+            {#if feedbackData.entries.length === 0}
+              <div class="bg-zinc-900 border border-zinc-800 rounded p-3">
+                <p class="text-sm text-zinc-400">No feedback entries found.</p>
+                <p class="text-xs text-zinc-600 mt-1">
+                  Add entries to <code class="bg-zinc-800 px-1 rounded">Vault Files/feedback.md</code>.
+                </p>
+              </div>
+            {:else}
+              <div class="grid grid-cols-3 gap-2 mb-4">
+                <div class="bg-zinc-950 rounded p-2 text-center">
+                  <div class="text-base font-mono font-semibold text-zinc-200">{feedbackData.entries.length}</div>
+                  <div class="text-xs text-zinc-500">Entries</div>
+                </div>
+                <div class="bg-zinc-950 rounded p-2 text-center">
+                  <div class="text-base font-mono font-semibold {feedbackData.warnings.length > 0 ? 'text-amber-400' : 'text-zinc-200'}">{feedbackData.warnings.length}</div>
+                  <div class="text-xs text-zinc-500">Warnings</div>
+                </div>
+                <div class="bg-zinc-950 rounded p-2 text-center">
+                  <div class="text-base font-mono font-semibold {(feedbackData.errors as unknown[]).length > 0 ? 'text-red-400' : 'text-zinc-200'}">{(feedbackData.errors as unknown[]).length}</div>
+                  <div class="text-xs text-zinc-500">Errors</div>
+                </div>
+              </div>
+              <p class="text-xs font-medium text-zinc-400 uppercase tracking-wide mb-2">
+                Feedback entries — {feedbackData.entries.length}
+              </p>
+              <div class="space-y-1.5">
+                {#each feedbackData.entries as entry}
+                  <div class="bg-zinc-950 border border-zinc-800 rounded p-3">
+                    <div class="flex items-center gap-2 flex-wrap mb-1.5">
+                      <span class="font-mono text-xs text-zinc-300 truncate max-w-[14rem]" title={entry.path}>{entry.path}</span>
+                      <span class="shrink-0 text-xs px-1.5 py-0.5 rounded {severityClass(entry.severity)}">{entry.severity}</span>
+                      <span class="shrink-0 text-xs text-zinc-500">{entry.signal}</span>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-0.5 text-xs">
+                      <div class="flex gap-1.5">
+                        <span class="text-zinc-600 shrink-0">Source:</span>
+                        <span class="text-zinc-400">{entry.source}</span>
+                      </div>
+                      <div class="flex gap-1.5">
+                        <span class="text-zinc-600 shrink-0">Created:</span>
+                        <span class="text-zinc-400 font-mono">{entry.created_at}</span>
+                      </div>
+                      {#if entry.comment}
+                        <div class="flex gap-1.5 sm:col-span-2 mt-0.5">
+                          <span class="text-zinc-600 shrink-0">Comment:</span>
+                          <span class="text-zinc-400">{entry.comment}</span>
+                        </div>
+                      {/if}
+                    </div>
+                  </div>
+                {/each}
+              </div>
+              {#if feedbackData.warnings.length > 0}
+                <div class="mt-3 bg-amber-950/30 border border-amber-900/40 rounded p-2 space-y-0.5">
+                  <p class="text-xs font-medium text-amber-400 mb-1">Warnings:</p>
+                  {#each feedbackData.warnings as w}
+                    <p class="text-xs text-amber-300">{w}</p>
+                  {/each}
+                </div>
+              {/if}
+              {#if (feedbackData.errors as unknown[]).length > 0}
+                <div class="mt-2 bg-red-950/30 border border-red-900/40 rounded p-2 space-y-0.5">
+                  <p class="text-xs font-medium text-red-400 mb-1">Errors:</p>
+                  {#each feedbackData.errors as e}
+                    <p class="text-xs text-red-300">{JSON.stringify(e)}</p>
+                  {/each}
+                </div>
+              {/if}
+            {/if}
+            <details class="mt-4">
+              <summary class="text-xs text-zinc-600 hover:text-zinc-400 cursor-pointer select-none">Raw JSON</summary>
+              <pre class="mt-2 text-xs text-zinc-400 bg-zinc-950 border border-zinc-800 rounded p-2 overflow-x-auto whitespace-pre-wrap">{JSON.stringify(feedbackData, null, 2)}</pre>
+            </details>
+          {:else if feedbackState === 'error'}
+            <p class="text-sm text-red-400">{feedbackError}</p>
+          {:else if feedbackState === 'idle'}
+            <p class="text-sm text-zinc-600">Select a vault to load feedback.</p>
+          {/if}
+
+        {/if}<!-- end tab content -->
+      </div><!-- end p-4 -->
+
+    {/if}<!-- end selectedVault guard -->
+  </div><!-- end Issue Review -->
 
 </div>
 

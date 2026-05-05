@@ -563,7 +563,7 @@ Purpose
 
 Upgrade the Dashboard to show full vault health using all available API endpoints.
 
-Phase 12B - Issue Review Workflow (pending)
+Phase 12B - Issue Review Workflow ✓ Complete
 
 ---
 
@@ -948,6 +948,12 @@ Phase 12A (Dashboard Data Completeness and API Coverage) is complete:
 - ui/src/lib/api.ts — added fetchTasks, fetchMissing, fetchFeedback; updated fetchSecurity with include_body/allow_partial; new types Task, MissingConcept, FeedbackEntry etc.
 - ui/src/components/Dashboard.svelte — full rewrite: parallel data loading via Promise.all, 8 data cards (health, summary, validation, tasks, missing concepts, feedback, index info, security), top health row mini-cards, loading skeletons, raw JSON expanders
 - ui/src/layouts/AppLayout.astro — footer updated to Phase 12A
+- npm run build passes with no TypeScript errors; 202 backend tests passing
+
+Phase 12B (Issue Review Workflow) is complete:
+
+- ui/src/components/Dashboard.svelte — added Issue Review section below dashboard overview. Tabbed drill-down (Validation, Tasks, Security, Missing Concepts, Feedback). Cross-panel summary row. Expandable task rows with instruction, missing sections, constraints, feedback weighting, raw task JSON. Full findings table for security. Full ranked missing concepts list. All feedback entries with source/signal/comment/created_at. Raw JSON hidden by default on all tabs.
+- ui/src/layouts/AppLayout.astro — footer updated to Phase 12B
 - npm run build passes with no TypeScript errors; 202 backend tests passing
 
 Phase 11B (Guided Vault Bootstrap UI Form) is complete:

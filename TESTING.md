@@ -308,6 +308,42 @@ Regression tests for correctness fixes:
 - `test_p11a_api_bootstrap_success_envelope` — `POST /vault/bootstrap` with valid inputs returns HTTP 200 with standard `status/data` envelope, and `data` contains `vault`, `created`, and `warnings`.
 - `test_p11a_api_bootstrap_invalid_input_errors` — Various invalid inputs return structured `status/error/code/message` responses with 400 or 422 status.
 
+### Phase 12B — Dashboard Issue Review Drill-Down
+
+Phase 12B is a frontend-only phase. No new backend tests were added (all 202 backend tests still pass).
+
+**Verification steps for Phase 12B:**
+
+```bash
+# Frontend build verification
+cd ui
+npm run build      # must produce no TypeScript errors
+
+# Backend suite (unchanged — 202 tests)
+py mcp/test_verify.py
+
+# Vault validation and security scan
+py run.py validate
+py run.py security
+```
+
+**What was added:**
+- `ui/src/components/Dashboard.svelte` — Issue Review section below overview: cross-panel summary row, five tabs (Validation, Tasks, Security, Missing Concepts, Feedback), expandable task rows, full findings/entries lists, raw JSON blocks hidden by default; `expandedTaskIds` Set + `toggleTask` helper; `activeIssueTab` state
+- `ui/src/layouts/AppLayout.astro` — footer updated to Phase 12B
+
+**Manual acceptance checks:**
+- Issue Review section appears below the dashboard card grid
+- All five tabs render without errors (even when vault has no data)
+- Cross-panel summary row shows correct counts
+- Validation tab: shows invalid note paths or pass state
+- Tasks tab: task rows are clickable; expansion shows instruction, missing sections, constraints, feedback weight, raw task JSON
+- Security tab: shows findings table or clean pass state
+- Missing Concepts tab: shows ranked list or MISSING_CONCEPTS_EMPTY warning
+- Feedback tab: shows all entries or empty state
+- Raw JSON is collapsed by default on all tabs
+
+---
+
 ### Phase 12A — Dashboard Data Completeness and API Coverage
 
 Phase 12A is a frontend-only phase. No new backend tests were added (all 202 Phase 11A tests still pass).

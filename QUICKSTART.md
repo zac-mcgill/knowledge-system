@@ -345,7 +345,7 @@ py mcp/server/mcp_server.py
 
 ### Dashboard panels (Phase 12A)
 
-The Dashboard now shows a complete vault health overview loaded in parallel from all relevant API endpoints:
+The Dashboard shows a complete vault health overview loaded in parallel from all relevant API endpoints:
 
 | Panel | Source |
 |---|---|
@@ -356,7 +356,21 @@ The Dashboard now shows a complete vault health overview loaded in parallel from
 | Missing expected concepts | `GET /missing` |
 | Feedback entries (errors, warnings, info) | `GET /feedback` |
 | Vault index info (notes indexed, schema hash) | `GET /health` vaults map |
-| Security scan findings | `GET /security` |
+| Security scan findings | `POST /context/security` |
+
+### Dashboard Issue Review (Phase 12B)
+
+An **Issue Review** section below the overview cards provides tabbed drill-down inspection of all issue categories without leaving the Dashboard:
+
+| Tab | Shows |
+|---|---|
+| Validation | Status badge, invalid note paths, pass state, raw JSON |
+| Tasks | Expandable rows — instruction, missing sections, constraints, feedback weighting, raw task JSON |
+| Security | Status, severity counts, full findings table (path/severity/rule/field/detail), pass state, raw JSON |
+| Missing Concepts | Expected/present/missing/domains counts, full ranked list with scores, raw JSON |
+| Feedback | Entry count, all entries (path/source/signal/severity/comment/created\_at), warnings/errors, raw JSON |
+
+A compact **cross-panel summary row** above the tabs shows issue counts from all categories at a glance. All raw JSON blocks are collapsed by default.
 
 Select a vault from the dropdown to load all panels simultaneously. Click **Refresh** to reload.
 
