@@ -24,6 +24,7 @@ export const API_BASE: string =
 export interface ApiError {
   code: string;
   message: string;
+  details?: unknown;
 }
 
 export interface ApiOk<T> {
@@ -671,4 +672,38 @@ export function fetchNote(vault: string, path: string): Promise<ApiResult<NoteDe
 /** POST /query — query notes with optional filters and free-text search. */
 export function queryNotes(request: NoteQueryRequest): Promise<ApiResult<NoteQueryResponse>> {
   return post<NoteQueryResponse>('/query', request);
+}
+
+// ---------------------------------------------------------------------------
+// Note Update — PUT /note
+// ---------------------------------------------------------------------------
+
+/** Request body for PUT /note. */
+export interface NoteUpdateRequest {
+  vault: string;
+  path: string;
+  fields: Record<string, unknown>;
+  body: string;
+}
+
+/** Validation result returned inside a successful PUT /note response. */
+export interface NoteUpdateValidation {
+  status: string;
+  errors: string[];
+}
+
+/** Data returned by PUT /note on success. */
+export interface NoteUpdateResponse {
+  path: string;
+  fields: Record<string, unknown>;
+  body: string;
+  validation: NoteUpdateValidation;
+  warnings: string[];
+}
+
+/** PUT /note — atomically update an existing note's fields and body. */
+export function updateNote(
+  request: NoteUpdateRequest,
+): Promise<ApiResult<NoteUpdateResponse>> {
+  return put<NoteUpdateResponse>('/note', request);
 }

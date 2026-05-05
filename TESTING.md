@@ -400,7 +400,54 @@ py run.py feedback         # exits 0, valid JSON
 - `TESTING.md` — added Phase 15B section (this entry).
 - `ROADMAP.md` — marked Phase 15B Complete.
 
-### Phase 14B — Feedback Workflow UI
+### Phase 15C — Safe Note Editing UI
+
+Phase 15C is a frontend-only phase. The `PUT /note` backend API (Phase 15B) is unchanged. All 242 backend tests still pass.
+
+**Verification steps for Phase 15C:**
+
+```bash
+cd ui && npm run build     # must complete with 0 errors; NoteBrowser.svelte ~40 kB
+py mcp/test_verify.py      # 242 tests — all must pass
+py run.py validate         # 19/19 valid
+py run.py security         # status: pass
+py run.py feedback         # exits 0, valid JSON
+```
+
+**Manual checks for Phase 15C:**
+
+1. Start the backend: `py mcp/server/mcp_server.py`
+2. Serve the built UI: `cd ui && npx serve dist`
+3. Navigate to `http://localhost:3000/app/notes`
+4. Confirm the existing inspect mode still works (all Phase 15A manual checks still apply).
+5. Select a note — confirm the **Edit note** button appears in the note header.
+6. Click **Edit note** — confirm the header border turns blue, an EDIT MODE badge appears, and Save / Reset / Cancel buttons replace the Edit button.
+7. Confirm the **Frontmatter Fields** panel switches to an editable form with checkboxes for booleans and text inputs for strings.
+8. Change a string field (e.g. `status`); confirm the **Unsaved changes** badge appears.
+9. Click **Reset to loaded** — confirm the form resets to original values and the Unsaved badge disappears.
+10. Confirm the **Section Outline** panel shows the live section outline from the editable body, updating as you type.
+11. Add a section heading to the body; confirm the outline updates in real time.
+12. Remove all text from the body textarea and click **Save changes** — confirm client-side validation blocks the save with "Body must not be empty."
+13. Click **Cancel** — confirm edit mode exits and inspect mode is restored without any changes.
+14. Enter edit mode again, make a valid change to a note, and click **Save changes** — confirm:
+    - A spinner appears on the button during save.
+    - On success: a green confirmation panel appears, the note detail updates, edit mode exits, and the note list / validation / task panels refresh.
+15. Enter edit mode, set `status` to an invalid value (e.g. `invalid-status`), and click **Save changes** — confirm:
+    - The page stays in edit mode.
+    - A red error panel with `VALIDATION_FAILED` and the details list appears.
+    - Local edits are preserved.
+16. Confirm the **Raw JSON** section now includes an expander for "Last update response (PUT /note)" and "Current edit payload preview" (visible only in edit mode).
+17. Confirm no note creation or deletion controls exist anywhere on the page.
+18. Confirm switching to a different note while in edit mode exits edit mode cleanly.
+
+**What was added:**
+
+- `ui/src/components/NoteBrowser.svelte` — extended with inspect/edit mode: `enterEditMode`, `cancelEdit`, `resetToLoaded`, `saveNote` functions; structured frontmatter field editor (checkbox for booleans, text input for strings, read-only display for complex values); body textarea with character count; live section outline in edit mode with advisory missing-section warnings; save/cancel/reset action bar in note header; `EDIT MODE` badge and `Unsaved changes` badge; save success and error panels; additional raw JSON expanders for PUT /note response and edit payload preview; refresh of notes list, validation, and tasks after successful save; search results refresh if query was active.
+- `ui/src/lib/api.ts` — added `NoteUpdateRequest`, `NoteUpdateValidation`, `NoteUpdateResponse` types; added `details?: unknown` to `ApiError`; added `updateNote(request: NoteUpdateRequest)` function using existing `put()` helper.
+- `ui/src/layouts/AppLayout.astro` — updated footer from "Phase 15A — Note Browser" to "Phase 15C — Note Editing".
+- `QUICKSTART.md` — added §6j Safe Note Editing UI section.
+- `TESTING.md` — added Phase 15C section (this entry).
+- `ROADMAP.md` — marked Phase 15C Complete and Phase 15 Complete.
 
 Phase 14B is a frontend-only phase. No new backend tests were added (all 222 backend tests still pass).
 

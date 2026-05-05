@@ -650,6 +650,61 @@ The Note Browser at `/app/notes` lets you browse, filter, search, and inspect va
 
 ---
 
+## 6j. Safe Note Editing UI (Phase 15C)
+
+The Note Browser at `/app/notes` includes a safe in-place editor for existing notes. Edit mode is backed by the `PUT /note` backend API (Phase 15B) which validates all changes before writing.
+
+**Entering edit mode:**
+1. Navigate to **Notes** in the sidebar.
+2. Select a vault and then click any note in the list to load its detail.
+3. Click **Edit note** in the note header action bar.
+4. The page switches to edit mode — the header border turns blue and an **EDIT MODE** badge appears.
+
+**Editing frontmatter fields:**
+- All existing frontmatter fields are displayed in an editable form.
+- Boolean fields use a checkbox. String and numeric fields use a text input.
+- Complex values (arrays, nested objects) are shown as read-only JSON — backend validation remains authoritative for these.
+- No new arbitrary fields can be added; the backend will reject unknown fields with `VALIDATION_FAILED`.
+
+**Editing the Markdown body:**
+- A resizable textarea replaces the read-only body view.
+- Character count is shown in the panel header.
+- The **Section Outline** panel updates live to reflect the edited body.
+- Advisory warnings appear if the expected sections (Key Principles, How It Works, Trade-offs) are absent from the edited body. These are client-side hints only — backend validation is authoritative.
+
+**Saving changes:**
+1. Click **Save changes** to call `PUT /note` with the current edits.
+2. A spinner and disabled buttons show while the request is in flight.
+3. On success: a green confirmation panel appears, the note detail updates with the server's canonical round-trip values, and edit mode exits. The notes list, validation context, and task context all refresh automatically.
+
+**Handling validation failures:**
+- If the server returns `VALIDATION_FAILED` (HTTP 400), the page stays in edit mode and shows a structured error panel listing each validation detail.
+- Local edits are not discarded — you can fix the issue and retry.
+- Click **Cancel** at any time to discard all local edits and return to inspect mode.
+
+**Unsaved changes badge:**
+- An **Unsaved changes** badge appears in the header when edited data differs from the loaded values. No navigation guard blocks page navigation.
+
+**Reset to loaded version:**
+- While in edit mode, click **Reset to loaded** to restore the form to the last successfully loaded note values without exiting edit mode.
+
+**Cancel:**
+- Click **Cancel** to discard all local edits and return to inspect mode.
+
+**Raw JSON expanders** (all hidden by default):
+- **Note detail response (GET /note)** — the current loaded note response.
+- **Last update response (PUT /note)** — the most recent save response (success or error), available after a save attempt.
+- **Current edit payload preview** — the exact JSON that will be submitted to `PUT /note` when you click Save (visible only in edit mode).
+
+**Safety guarantees:**
+- `PUT /note` only updates existing notes — it cannot create new notes or delete notes.
+- Path traversal is blocked server-side.
+- `Vault Files/` is protected from writes.
+- The original file is unchanged if validation or write fails.
+- Client-side: null bytes and empty body are blocked before the request is sent.
+
+---
+
 ## 7. Query the System
 
 **Vault overview**

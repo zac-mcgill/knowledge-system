@@ -230,7 +230,8 @@ Future
 Phase	Name	Priority
 Phase 15A	Note Browser Read-Only Inspector UI	Complete
 Phase 15B	Safe Note Edit Backend API	Complete
-Phase 15	Note Browser and Safe Editing UI	In Progress
+Phase 15C	Safe Note Editing UI	Complete
+Phase 15	Note Browser and Safe Editing UI	Complete
 Phase 16	Visual Graph and Missing Concepts UI	Medium
 Phase 17	Distribution and Packaging	Medium
 Phase 18	CI and Release Hardening	Medium
@@ -768,6 +769,43 @@ py run.py security: pass
 py run.py feedback: exits 0
 
 Suggested Commit: feat(api): add PUT /note safe note edit backend API (Phase 15B)
+Phase 15C - Safe Note Editing UI
+
+Status: Complete
+
+Delivered:
+In-place edit mode in the Note Browser (/app/notes)
+Structured frontmatter field editor (checkbox for booleans, text input for strings, read-only for complex values)
+Markdown body textarea with character count
+Live section outline in edit mode with advisory missing-section warnings
+Save / Cancel / Reset action bar
+EDIT MODE badge and Unsaved changes badge
+Save success panel and structured error panel (VALIDATION_FAILED with details list)
+Context refresh (notes list, validation, tasks) after successful save
+Raw JSON expanders for PUT /note response and edit payload preview
+Client-side guard: null bytes and empty body blocked before save
+NoteUpdateRequest, NoteUpdateValidation, NoteUpdateResponse types in api.ts
+updateNote() function in api.ts
+AppLayout.astro footer updated to Phase 15C — Note Editing
+npm run build: PASS (NoteBrowser.svelte ~40.69 kB)
+All 242 backend tests pass; no backend changes
+
+Verification:
+cd ui && npm run build: PASS
+py mcp/test_verify.py: ALL VERIFICATION TESTS PASSED (242 tests)
+py run.py validate: PASSED (19/19)
+py run.py security: pass
+py run.py feedback: exits 0
+
+Suggested Commit: feat(ui): add safe note editing UI (Phase 15C)
+Phase 15 - Note Browser and Safe Editing UI
+
+Status: Complete
+
+All three sub-phases delivered:
+Phase 15A: Read-only Note Browser UI
+Phase 15B: Safe PUT /note backend API
+Phase 15C: Safe Note Editing UI (in-place edit mode backed by PUT /note)
 Phase 16 - Visual Graph and Missing Concepts UI
 Purpose
 

@@ -7,8 +7,10 @@
     queryNotes,
     fetchValidation,
     fetchTasks,
+    updateNote,
     isOk,
     type NoteListItem,
+    type NoteFields,
     type NoteDetail,
     type NoteQueryRequest,
     type NoteQueryResponse,
@@ -16,6 +18,7 @@
     type ValidationData,
     type TasksData,
     type Task,
+    type NoteUpdateResponse,
   } from '../lib/api.ts';
 
   // ---------------------------------------------------------------------------
@@ -111,6 +114,20 @@
   let tasksError = '';
 
   // ---------------------------------------------------------------------------
+  // Edit mode state
+  // ---------------------------------------------------------------------------
+
+  let editMode = false;
+  let editedFields: Record<string, unknown> = {};
+  let editedBody = '';
+  let saveState: LoadState = 'idle';
+  let saveError = '';
+  let saveErrorCode = '';
+  let saveValidationDetails: string[] = [];
+  let saveResponse: NoteUpdateResponse | null = null;
+  let saveRaw: unknown = null;
+
+  // ---------------------------------------------------------------------------
   // Derived: filtered base note list
   // ---------------------------------------------------------------------------
 
@@ -162,6 +179,21 @@
   $: noteFields = noteDetail ? Object.entries(noteDetail.fields ?? {}) : [];
   $: noteBody = noteDetail?.body ?? '';
   $: sectionOutline = parseHeadings(noteBody);
+
+  // ---------------------------------------------------------------------------
+  // Derived: edit mode helpers
+  // ---------------------------------------------------------------------------
+
+  const ADVISORY_SECTIONS = ['Key Principles', 'How It Works', 'Trade-offs'];
+
+  $: editSectionOutline = editMode ? parseHeadings(editedBody) : [];
+  $: missingSectionsAdvisory = editMode
+    ? ADVISORY_SECTIONS.filter((s) => !editSectionOutline.some((h) => h.text === s))
+    : [];
+  $: hasUnsavedChanges =
+    editMode &&
+    (editedBody !== (noteDetail?.body ?? '') ||
+      JSON.stringify(editedFields) !== JSON.stringify(noteDetail?.fields ?? {}));
 
   // ---------------------------------------------------------------------------
   // Derived: validation context
@@ -250,6 +282,109 @@
   }
 
   // ---------------------------------------------------------------------------
+  // Edit mode helpers
+  // ---------------------------------------------------------------------------
+
+  function enterEditMode() {
+    if (!noteDetail) return;
+    editedFields = { ...(noteDetail.fields as Record<string, unknown>) };
+    editedBody = noteDetail.body ?? '';
+    editMode = true;
+    saveState = 'idle';
+    saveError = '';
+    saveErrorCode = '';
+    saveValidationDetails = [];
+    saveResponse = null;
+    saveRaw = null;
+  }
+
+  function cancelEdit() {
+    editMode = false;
+    editedFields = {};
+    editedBody = '';
+    saveState = 'idle';
+    saveError = '';
+    saveErrorCode = '';
+    saveValidationDetails = [];
+    saveResponse = null;
+    saveRaw = null;
+  }
+
+  function resetToLoaded() {
+    if (!noteDetail) return;
+    editedFields = { ...(noteDetail.fields as Record<string, unknown>) };
+    editedBody = noteDetail.body ?? '';
+    saveState = 'idle';
+    saveError = '';
+    saveErrorCode = '';
+    saveValidationDetails = [];
+  }
+
+  async function saveNote() {
+    if (!selectedVault || !noteDetail) return;
+    if (saveState === 'loading') return;
+
+    // Client-side validation
+    if (editedBody.includes('\x00')) {
+      saveError = 'Body must not contain null bytes.';
+      saveErrorCode = 'CLIENT_VALIDATION';
+      return;
+    }
+    if (!editedBody.trim()) {
+      saveError = 'Body must not be empty.';
+      saveErrorCode = 'CLIENT_VALIDATION';
+      return;
+    }
+
+    saveState = 'loading';
+    saveError = '';
+    saveErrorCode = '';
+    saveValidationDetails = [];
+    saveResponse = null;
+
+    const result = await updateNote({
+      vault: selectedVault,
+      path: noteDetail.path,
+      fields: editedFields,
+      body: editedBody,
+    });
+
+    saveRaw = result;
+
+    if (isOk(result)) {
+      saveState = 'ok';
+      saveResponse = result.data;
+      // Update note detail with response data (canonical round-trip values)
+      noteDetail = {
+        path: result.data.path,
+        fields: result.data.fields as NoteFields,
+        body: result.data.body,
+      };
+      noteDetailRaw = result;
+      editMode = false;
+      // Refresh list, validation, and tasks context
+      await loadNotes();
+      await loadValidation();
+      await loadTasks();
+      // Refresh search results if active
+      if (searchActive) {
+        await runSearch();
+      }
+    } else {
+      saveState = 'error';
+      const errCode = (result.error?.code as string) ?? '';
+      saveErrorCode = errCode;
+      saveError = result.error?.message ?? 'Save failed';
+      if (errCode === 'VALIDATION_FAILED') {
+        const details = result.error?.details;
+        if (Array.isArray(details)) {
+          saveValidationDetails = details.map((d) => String(d));
+        }
+      }
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // Load functions
   // ---------------------------------------------------------------------------
 
@@ -315,7 +450,14 @@
   }
 
   async function selectNote(path: string) {
-    if (selectedPath === path && noteDetailState === 'ok') return;
+    if (editMode) {
+      cancelEdit();
+      if (selectedPath === path) return; // same note — just exit edit mode
+    } else if (selectedPath === path && noteDetailState === 'ok') {
+      return;
+    }
+    saveState = 'idle';
+    saveResponse = null;
     selectedPath = path;
     noteDetail = null;
     noteDetailState = 'loading';
@@ -368,11 +510,14 @@
   }
 
   function onVaultChange() {
+    cancelEdit();
     selectedPath = '';
     noteDetail = null;
     noteDetailState = 'idle';
     noteDetailRaw = null;
     notesRaw = null;
+    saveState = 'idle';
+    saveResponse = null;
     clearSearch();
     clearFilters();
     if (selectedVault) loadAll();
@@ -394,7 +539,7 @@
   <div class="flex flex-col sm:flex-row sm:items-center gap-3">
     <div>
       <h1 class="text-lg font-semibold text-zinc-100">Note Browser</h1>
-      <p class="text-xs text-zinc-500 mt-0.5">Read-only inspector — select a note to view frontmatter, body, and context.</p>
+      <p class="text-xs text-zinc-500 mt-0.5">Select a note to inspect or edit frontmatter, body, and context.</p>
     </div>
     <div class="flex items-center gap-2 sm:ml-auto">
       {#if vaultsLoading}
@@ -719,87 +864,252 @@
         {:else if noteDetail}
 
           <!-- Note header -->
-          <div class="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
-            <div class="flex flex-wrap items-start gap-3">
-              <div class="flex-1 min-w-0">
-                <h2 class="text-base font-semibold text-zinc-100 break-all leading-snug">
-                  {noteDetail.fields?.title
-                    ? String(noteDetail.fields.title)
-                    : (noteDetail.path.split('/').pop()?.replace(/\.md$/i, '') ?? noteDetail.path)}
-                </h2>
-                <p class="text-[11px] text-zinc-600 mt-0.5 font-mono break-all">{noteDetail.path}</p>
-              </div>
-              <div class="flex flex-wrap gap-1.5 shrink-0">
-                {#if noteDetail.fields?.status}
-                  <span class="text-xs px-2 py-0.5 rounded font-mono {statusBadgeClass(String(noteDetail.fields.status))}">{noteDetail.fields.status}</span>
-                {/if}
-                {#if noteDetail.fields?.difficulty}
-                  <span class="text-xs px-2 py-0.5 rounded font-mono {difficultyBadgeClass(String(noteDetail.fields.difficulty))}">{noteDetail.fields.difficulty}</span>
-                {/if}
-                {#if noteDetail.fields?.domain}
-                  <span class="text-xs px-2 py-0.5 rounded font-mono text-sky-400 bg-sky-950 border border-sky-800">{noteDetail.fields.domain}</span>
-                {/if}
-                {#if noteDetail.fields?.type}
-                  <span class="text-xs px-2 py-0.5 rounded font-mono text-violet-400 bg-violet-950 border border-violet-800">{noteDetail.fields.type}</span>
-                {/if}
-              </div>
-            </div>
-          </div>
-
-          <!-- Frontmatter fields table -->
-          <div class="bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden">
-            <div class="px-4 py-2.5 border-b border-zinc-800 flex items-center justify-between">
-              <span class="text-xs font-medium text-zinc-400 uppercase tracking-wide">Frontmatter Fields</span>
-              <span class="text-xs text-zinc-600 font-mono">{noteFields.length} fields</span>
-            </div>
-            {#if noteFields.length === 0}
-              <p class="px-4 py-3 text-sm text-zinc-500">No frontmatter fields found.</p>
-            {:else}
-              <div class="divide-y divide-zinc-800/60">
-                {#each noteFields as [key, value]}
-                  <div class="flex items-baseline gap-4 px-4 py-2">
-                    <span class="text-xs text-zinc-500 font-mono w-32 shrink-0 truncate">{key}</span>
-                    <span class="text-sm text-zinc-300 font-mono break-all flex-1">{formatFieldValue(value)}</span>
+          <div class="bg-zinc-900 border {editMode ? 'border-sky-800/60' : 'border-zinc-800'} rounded-lg p-4">
+            <div class="flex flex-col gap-3">
+              <div class="flex flex-wrap items-start gap-3">
+                <div class="flex-1 min-w-0">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <h2 class="text-base font-semibold text-zinc-100 break-all leading-snug">
+                      {noteDetail.fields?.title
+                        ? String(noteDetail.fields.title)
+                        : (noteDetail.path.split('/').pop()?.replace(/\.md$/i, '') ?? noteDetail.path)}
+                    </h2>
+                    {#if editMode}
+                      <span class="text-[10px] px-1.5 py-0.5 rounded font-mono text-sky-400 bg-sky-950 border border-sky-800 shrink-0">EDIT MODE</span>
+                    {/if}
+                    {#if hasUnsavedChanges}
+                      <span class="text-[10px] px-1.5 py-0.5 rounded font-mono text-amber-400 bg-amber-950 border border-amber-800 shrink-0">Unsaved changes</span>
+                    {/if}
                   </div>
-                {/each}
+                  <p class="text-[11px] text-zinc-600 mt-0.5 font-mono break-all">{noteDetail.path}</p>
+                </div>
+                <div class="flex flex-wrap gap-1.5 shrink-0">
+                  {#if noteDetail.fields?.status}
+                    <span class="text-xs px-2 py-0.5 rounded font-mono {statusBadgeClass(String(noteDetail.fields.status))}">{noteDetail.fields.status}</span>
+                  {/if}
+                  {#if noteDetail.fields?.difficulty}
+                    <span class="text-xs px-2 py-0.5 rounded font-mono {difficultyBadgeClass(String(noteDetail.fields.difficulty))}">{noteDetail.fields.difficulty}</span>
+                  {/if}
+                  {#if noteDetail.fields?.domain}
+                    <span class="text-xs px-2 py-0.5 rounded font-mono text-sky-400 bg-sky-950 border border-sky-800">{noteDetail.fields.domain}</span>
+                  {/if}
+                  {#if noteDetail.fields?.type}
+                    <span class="text-xs px-2 py-0.5 rounded font-mono text-violet-400 bg-violet-950 border border-violet-800">{noteDetail.fields.type}</span>
+                  {/if}
+                </div>
               </div>
-            {/if}
+
+              <!-- Action bar -->
+              <div class="flex flex-wrap gap-2 pt-0.5 border-t border-zinc-800/60">
+                {#if !editMode}
+                  <button
+                    on:click={enterEditMode}
+                    class="px-3 py-1.5 text-xs font-medium rounded border border-zinc-700 text-zinc-300 hover:text-zinc-100 hover:border-zinc-500 transition-colors"
+                  >
+                    Edit note
+                  </button>
+                {:else}
+                  <button
+                    on:click={saveNote}
+                    disabled={saveState === 'loading'}
+                    class="px-3 py-1.5 text-xs font-medium rounded bg-sky-600 hover:bg-sky-500 text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {saveState === 'loading' ? 'Saving...' : 'Save changes'}
+                  </button>
+                  <button
+                    on:click={resetToLoaded}
+                    disabled={saveState === 'loading'}
+                    class="px-3 py-1.5 text-xs font-medium rounded border border-zinc-700 text-zinc-400 hover:text-zinc-200 hover:border-zinc-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    Reset to loaded
+                  </button>
+                  <button
+                    on:click={cancelEdit}
+                    disabled={saveState === 'loading'}
+                    class="px-3 py-1.5 text-xs font-medium rounded border border-zinc-700 text-zinc-400 hover:text-zinc-200 hover:border-zinc-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    Cancel
+                  </button>
+                {/if}
+              </div>
+            </div>
           </div>
 
-          <!-- Section outline (derived from Markdown headings) -->
-          {#if sectionOutline.length > 0}
-            <div class="bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden">
-              <div class="px-4 py-2.5 border-b border-zinc-800 flex items-center justify-between">
-                <span class="text-xs font-medium text-zinc-400 uppercase tracking-wide">Section Outline</span>
-                <span class="text-xs text-zinc-600 font-mono">{sectionOutline.length} headings</span>
-              </div>
-              <ul class="px-4 py-3 space-y-1">
-                {#each sectionOutline as heading}
-                  <li
-                    class="text-sm text-zinc-300 flex items-baseline gap-2"
-                    style="padding-left: {(heading.level - 1) * 14}px"
-                  >
-                    <span class="text-zinc-700 font-mono text-[11px] shrink-0">{'#'.repeat(heading.level)}</span>
-                    <span class="flex-1 truncate">{heading.text}</span>
-                    <span class="text-[11px] text-zinc-700 font-mono shrink-0">L{heading.lineNumber}</span>
-                  </li>
-                {/each}
-              </ul>
+          <!-- Save success panel -->
+          {#if saveState === 'ok' && saveResponse}
+            <div class="bg-emerald-950 border border-emerald-800 rounded-lg p-3">
+              <p class="text-xs font-semibold text-emerald-400">Note saved successfully.</p>
+              {#if saveResponse.warnings.length > 0}
+                <ul class="mt-1 space-y-0.5">
+                  {#each saveResponse.warnings as w}
+                    <li class="text-xs text-zinc-400">{w}</li>
+                  {/each}
+                </ul>
+              {/if}
             </div>
           {/if}
 
-          <!-- Markdown body (read-only) -->
-          <div class="bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden">
-            <div class="px-4 py-2.5 border-b border-zinc-800 flex items-center gap-2">
-              <span class="text-xs font-medium text-zinc-400 uppercase tracking-wide">Markdown Body</span>
-              <span class="text-[11px] text-zinc-700 ml-1">(read-only)</span>
+          <!-- Save error panel (shown while in edit mode) -->
+          {#if editMode && saveState === 'error' && saveError}
+            <div class="bg-red-950 border border-red-800 rounded-lg p-3">
+              <div class="flex items-start gap-2">
+                <span class="text-[11px] font-bold text-red-400 border border-red-700 px-1.5 py-0.5 rounded font-mono shrink-0 mt-0.5">{saveErrorCode || 'ERROR'}</span>
+                <div class="flex-1 min-w-0">
+                  <p class="text-sm text-red-300">{saveError}</p>
+                  {#if saveValidationDetails.length > 0}
+                    <ul class="mt-2 space-y-1">
+                      {#each saveValidationDetails as detail}
+                        <li class="text-xs text-zinc-400 pl-2 border-l border-red-800">{detail}</li>
+                      {/each}
+                    </ul>
+                  {/if}
+                </div>
+              </div>
             </div>
-            {#if noteBody}
-              <pre class="px-4 py-3 text-xs text-zinc-300 font-mono whitespace-pre-wrap break-words overflow-auto max-h-[480px] leading-relaxed">{noteBody}</pre>
-            {:else}
-              <p class="px-4 py-3 text-sm text-zinc-500">No body content.</p>
-            {/if}
-          </div>
+          {/if}
+
+          <!-- Frontmatter fields: inspect or edit -->
+          {#if !editMode}
+            <!-- Inspect mode: read-only table -->
+            <div class="bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden">
+              <div class="px-4 py-2.5 border-b border-zinc-800 flex items-center justify-between">
+                <span class="text-xs font-medium text-zinc-400 uppercase tracking-wide">Frontmatter Fields</span>
+                <span class="text-xs text-zinc-600 font-mono">{noteFields.length} fields</span>
+              </div>
+              {#if noteFields.length === 0}
+                <p class="px-4 py-3 text-sm text-zinc-500">No frontmatter fields found.</p>
+              {:else}
+                <div class="divide-y divide-zinc-800/60">
+                  {#each noteFields as [key, value]}
+                    <div class="flex items-baseline gap-4 px-4 py-2">
+                      <span class="text-xs text-zinc-500 font-mono w-32 shrink-0 truncate">{key}</span>
+                      <span class="text-sm text-zinc-300 font-mono break-all flex-1">{formatFieldValue(value)}</span>
+                    </div>
+                  {/each}
+                </div>
+              {/if}
+            </div>
+          {:else}
+            <!-- Edit mode: structured field editor -->
+            <div class="bg-zinc-900 border border-sky-800/50 rounded-lg overflow-hidden">
+              <div class="px-4 py-2.5 border-b border-sky-800/50 bg-sky-950/20 flex items-center justify-between">
+                <span class="text-xs font-medium text-sky-400 uppercase tracking-wide">Edit Frontmatter Fields</span>
+                <span class="text-xs text-zinc-600 font-mono">{Object.keys(editedFields).length} fields</span>
+              </div>
+              {#if Object.keys(editedFields).length === 0}
+                <p class="px-4 py-3 text-sm text-zinc-500">No frontmatter fields to edit.</p>
+              {:else}
+                <div class="divide-y divide-zinc-800/60">
+                  {#each Object.entries(editedFields) as [key, value]}
+                    <div class="flex items-start gap-3 px-4 py-2.5">
+                      <label
+                        for="field-{key}"
+                        class="text-xs text-zinc-500 font-mono w-32 shrink-0 pt-1.5 truncate"
+                        title={key}
+                      >{key}</label>
+                      {#if typeof value === 'boolean'}
+                        <input
+                          id="field-{key}"
+                          type="checkbox"
+                          checked={value}
+                          on:change={(e) => {
+                            const checked = (e.target as HTMLInputElement).checked;
+                            editedFields = { ...editedFields, [key]: checked };
+                          }}
+                          class="mt-1.5 rounded border-zinc-600 bg-zinc-800 text-sky-500 focus:ring-sky-500"
+                        />
+                      {:else if typeof value === 'object' && value !== null}
+                        <div class="flex-1 min-w-0">
+                          <pre class="text-xs text-zinc-400 font-mono bg-zinc-800/60 border border-zinc-700 rounded px-2.5 py-1.5 overflow-auto max-h-24 whitespace-pre-wrap break-words">{JSON.stringify(value, null, 2)}</pre>
+                          <p class="text-[10px] text-zinc-600 mt-0.5">Complex value — not editable in this view.</p>
+                        </div>
+                      {:else}
+                        <input
+                          id="field-{key}"
+                          type="text"
+                          value={String(value ?? '')}
+                          on:input={(e) => {
+                            editedFields = { ...editedFields, [key]: (e.target as HTMLInputElement).value };
+                          }}
+                          class="bg-zinc-800 border border-zinc-700 text-zinc-200 text-sm rounded px-2.5 py-1.5 flex-1 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                        />
+                      {/if}
+                    </div>
+                  {/each}
+                </div>
+              {/if}
+            </div>
+          {/if}
+
+          <!-- Section outline (derived from Markdown headings) -->
+          {#if (editMode ? editSectionOutline : sectionOutline).length > 0 || (editMode && missingSectionsAdvisory.length > 0)}
+            <div class="bg-zinc-900 border {editMode ? 'border-sky-800/50' : 'border-zinc-800'} rounded-lg overflow-hidden">
+              <div class="px-4 py-2.5 border-b {editMode ? 'border-sky-800/50 bg-sky-950/20' : 'border-zinc-800'} flex items-center justify-between">
+                <span class="text-xs font-medium {editMode ? 'text-sky-400' : 'text-zinc-400'} uppercase tracking-wide">
+                  {editMode ? 'Section Outline (edit preview)' : 'Section Outline'}
+                </span>
+                <span class="text-xs text-zinc-600 font-mono">{(editMode ? editSectionOutline : sectionOutline).length} headings</span>
+              </div>
+              {#if (editMode ? editSectionOutline : sectionOutline).length > 0}
+                <ul class="px-4 py-3 space-y-1">
+                  {#each (editMode ? editSectionOutline : sectionOutline) as heading}
+                    <li
+                      class="text-sm text-zinc-300 flex items-baseline gap-2"
+                      style="padding-left: {(heading.level - 1) * 14}px"
+                    >
+                      <span class="text-zinc-700 font-mono text-[11px] shrink-0">{'#'.repeat(heading.level)}</span>
+                      <span class="flex-1 truncate">{heading.text}</span>
+                      <span class="text-[11px] text-zinc-700 font-mono shrink-0">L{heading.lineNumber}</span>
+                    </li>
+                  {/each}
+                </ul>
+              {/if}
+              {#if editMode && missingSectionsAdvisory.length > 0}
+                <div class="px-4 pb-3 border-t border-sky-900/40 pt-2.5">
+                  <p class="text-xs text-zinc-500 mb-1.5">Advisory — expected sections not found:</p>
+                  <div class="flex flex-wrap gap-1">
+                    {#each missingSectionsAdvisory as s}
+                      <span class="text-[11px] px-1.5 py-0.5 rounded font-mono text-amber-400 bg-amber-950 border border-amber-800">{s}</span>
+                    {/each}
+                  </div>
+                  <p class="text-[10px] text-zinc-600 mt-1.5">These are advisory only. Backend validation is authoritative.</p>
+                </div>
+              {/if}
+            </div>
+          {/if}
+
+          <!-- Markdown body: inspect or edit -->
+          {#if !editMode}
+            <!-- Inspect mode: read-only body -->
+            <div class="bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden">
+              <div class="px-4 py-2.5 border-b border-zinc-800 flex items-center gap-2">
+                <span class="text-xs font-medium text-zinc-400 uppercase tracking-wide">Markdown Body</span>
+                <span class="text-[11px] text-zinc-700 ml-1">(read-only)</span>
+              </div>
+              {#if noteBody}
+                <pre class="px-4 py-3 text-xs text-zinc-300 font-mono whitespace-pre-wrap break-words overflow-auto max-h-[480px] leading-relaxed">{noteBody}</pre>
+              {:else}
+                <p class="px-4 py-3 text-sm text-zinc-500">No body content.</p>
+              {/if}
+            </div>
+          {:else}
+            <!-- Edit mode: body textarea -->
+            <div class="bg-zinc-900 border border-sky-800/50 rounded-lg overflow-hidden">
+              <div class="px-4 py-2.5 border-b border-sky-800/50 bg-sky-950/20 flex items-center justify-between">
+                <span class="text-xs font-medium text-sky-400 uppercase tracking-wide">Edit Markdown Body</span>
+                <span class="text-xs text-zinc-600 font-mono">{editedBody.length} chars</span>
+              </div>
+              <div class="p-3">
+                <textarea
+                  bind:value={editedBody}
+                  rows={20}
+                  spellcheck={false}
+                  class="w-full bg-zinc-800 border border-zinc-700 text-zinc-200 text-xs font-mono rounded px-3 py-2.5 resize-y focus:outline-none focus:ring-1 focus:ring-sky-500 leading-relaxed"
+                  placeholder="Markdown body content..."
+                ></textarea>
+              </div>
+            </div>
+          {/if}
 
           <!-- Validation context -->
           <div class="bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden">
@@ -911,6 +1221,34 @@
                 </summary>
                 <pre class="px-4 pb-3 text-[11px] text-zinc-400 font-mono whitespace-pre-wrap break-words overflow-auto max-h-72 bg-zinc-950">{JSON.stringify(noteDetailRaw, null, 2)}</pre>
               </details>
+
+              <!-- Update response (shown after save attempt) -->
+              {#if saveRaw !== null}
+                <details class="group">
+                  <summary class="px-4 py-2.5 text-xs text-zinc-500 cursor-pointer hover:text-zinc-300 list-none flex items-center justify-between select-none">
+                    <span>Last update response (PUT /note)</span>
+                    <span class="text-zinc-700 font-mono text-[10px]">
+                      <span class="group-open:hidden">Show</span>
+                      <span class="hidden group-open:inline">Hide</span>
+                    </span>
+                  </summary>
+                  <pre class="px-4 pb-3 text-[11px] text-zinc-400 font-mono whitespace-pre-wrap break-words overflow-auto max-h-72 bg-zinc-950">{JSON.stringify(saveRaw, null, 2)}</pre>
+                </details>
+              {/if}
+
+              <!-- Edit payload preview (shown only in edit mode) -->
+              {#if editMode}
+                <details class="group">
+                  <summary class="px-4 py-2.5 text-xs text-zinc-500 cursor-pointer hover:text-zinc-300 list-none flex items-center justify-between select-none">
+                    <span>Current edit payload preview</span>
+                    <span class="text-zinc-700 font-mono text-[10px]">
+                      <span class="group-open:hidden">Show</span>
+                      <span class="hidden group-open:inline">Hide</span>
+                    </span>
+                  </summary>
+                  <pre class="px-4 pb-3 text-[11px] text-zinc-400 font-mono whitespace-pre-wrap break-words overflow-auto max-h-72 bg-zinc-950">{JSON.stringify({ vault: selectedVault, path: noteDetail?.path, fields: editedFields, body: editedBody }, null, 2)}</pre>
+                </details>
+              {/if}
 
               <!-- Query response (only when search was run) -->
               {#if searchResponseData}
