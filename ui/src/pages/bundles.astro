@@ -1,11 +1,7 @@
 ---
 import AppLayout from '../layouts/AppLayout.astro';
-import PlaceholderPage from '../components/PlaceholderPage.astro';
+import BundleBuilder from '../components/BundleBuilder.svelte';
 ---
 <AppLayout title="Bundles">
-  <PlaceholderPage
-    pageTitle="Bundles"
-    description="Generate and inspect context bundles: note selection, section extracts, character budget tracking."
-    phase="13"
-  />
+  <BundleBuilder client:load />
 </AppLayout>

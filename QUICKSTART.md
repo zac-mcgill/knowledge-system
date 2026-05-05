@@ -426,6 +426,31 @@ The CLI flow `py run.py bootstrap` remains unchanged and is still the recommende
 
 ---
 
+## 6e. Bundle Builder UI (Phase 13A)
+
+A browser-based Bundle Builder is available for interactively generating and previewing context bundles.
+
+1. Start the backend server and build the UI (see section 6b above).
+2. Open [http://127.0.0.1:8000/app/bundles](http://127.0.0.1:8000/app/bundles).
+3. Configure the bundle:
+   - **Vault** — select from registered vaults
+   - **Filters** — status (complete / partial / all), domain, type, difficulty
+   - **Sections** — default: Key Principles, How It Works, Trade-offs. Add or remove custom sections.
+   - **Content Options** — include body, include related, allow partial
+   - **Budget** — max notes (1–100), max chars (100–500,000)
+4. Click **Generate Preview** to call `POST /context/bundle`.
+5. The result panel shows:
+   - **Bundle Overview** — bundle ID, vault, validation status, schema version, created_at, note count, warning count, feedback count, source path count
+   - **Character Budget** — used/max bar, truncation badge, warnings
+   - **Notes** — expandable list per note: fields, included sections (collapsible), body preview (collapsible), related IDs
+   - **Feedback** — feedback entries linked to selected notes
+   - **Graph Relationships** — related node counts (visible only when include_related=true)
+   - **Raw JSON** — full bundle JSON, hidden by default
+
+The Bundle Builder does not write packages to disk. To export a bundle as a portable package, use `py run.py export` or `POST /context/export` (Phase 13B).
+
+---
+
 ## 7. Query the System
 
 **Vault overview**

@@ -308,6 +308,55 @@ Regression tests for correctness fixes:
 - `test_p11a_api_bootstrap_success_envelope` — `POST /vault/bootstrap` with valid inputs returns HTTP 200 with standard `status/data` envelope, and `data` contains `vault`, `created`, and `warnings`.
 - `test_p11a_api_bootstrap_invalid_input_errors` — Various invalid inputs return structured `status/error/code/message` responses with 400 or 422 status.
 
+### Phase 13A — Bundle Builder UI
+
+Phase 13A is a frontend-only phase. No new backend tests were added (all 202 backend tests still pass).
+
+**Verification steps for Phase 13A:**
+
+```bash
+# Frontend build verification
+cd ui
+npm run build      # must produce no TypeScript errors (BundleBuilder.svelte ~32 kB)
+
+# Backend suite (unchanged — 202 tests)
+py mcp/test_verify.py
+
+# Vault validation and security scan
+py run.py validate
+py run.py security
+```
+
+**What was added:**
+- `ui/src/lib/api.ts` — bundle types (`ContextBundleRequest`, `ContextBundleResponse`, `BundleNote`, `BundleBudget`, `BundleManifest`, `BundleFeedback`, `BundleGraph`) and `generateContextBundle()` function calling `POST /context/bundle`
+- `ui/src/components/BundleBuilder.svelte` — full Bundle Builder island: vault selector, filter controls (status/domain/type/difficulty), section tag editor with duplicate/empty validation, content option checkboxes (include_body/include_related/allow_partial), budget number inputs, Generate Preview button; result panel with Overview, Budget bar, Notes list (expandable per note with sections/body/related/raw JSON), Feedback block, Graph Relationships summary, Raw JSON toggle
+- `ui/src/pages/bundles.astro` — replaced PlaceholderPage with BundleBuilder island
+- `ui/src/layouts/AppLayout.astro` — removed "soon" badge from Bundles nav item; footer updated to Phase 13A
+
+**Manual acceptance checks:**
+- `/app/bundles` loads the Bundle Builder form
+- Vault dropdown populates from `GET /vaults`
+- Status buttons toggle between complete / partial / all
+- Domain, type, difficulty inputs accept optional values
+- Default sections (Key Principles, How It Works, Trade-offs) pre-filled as tags
+- Adding a duplicate section shows an error
+- Adding an empty section shows an error
+- Sections can be removed with the X button
+- include_body, include_related, allow_partial checkboxes work
+- Partial-status conflict warning appears when status=partial + allow_partial=false
+- max_notes and max_chars number inputs accept values in range
+- Generate Preview button POSTs `POST /context/bundle` with correct request shape
+- Loading spinner shown while request is in flight
+- Success: overview panel, budget bar, notes list, feedback panel, graph panel, raw JSON toggle all render
+- Budget truncation shows amber bar and warning callout
+- Each note row expands to show fields, sections (collapsible), body (collapsible), raw note JSON toggle
+- Graph panel shows disabled message when include_related=false
+- Raw JSON is hidden by default; Show button reveals it
+- Error panel shown on network failure or structured backend error
+- Navigation sidebar: Bundles no longer shows "soon" badge
+
+---
+
 ### Phase 12B — Dashboard Issue Review Drill-Down
 
 Phase 12B is a frontend-only phase. No new backend tests were added (all 202 backend tests still pass).

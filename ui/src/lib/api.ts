@@ -292,6 +292,93 @@ export function fetchFeedback(vault?: string): Promise<ApiResult<FeedbackData>> 
 }
 
 // ---------------------------------------------------------------------------
+// Context Bundle — POST /context/bundle
+// ---------------------------------------------------------------------------
+
+export interface ContextBundleRequest {
+  vault: string;
+  filters?: Record<string, string | string[]>;
+  include_sections?: string[];
+  include_related?: boolean;
+  include_body?: boolean;
+  max_notes?: number;
+  max_chars?: number;
+  allow_partial?: boolean;
+}
+
+export interface BundleNoteFields {
+  title?: string;
+  status?: string;
+  domain?: string;
+  difficulty?: string;
+  [key: string]: string | undefined;
+}
+
+export interface BundleNote {
+  path: string;
+  fields: BundleNoteFields;
+  sections: Record<string, string>;
+  body?: string;
+  related?: string[];
+}
+
+export interface BundleBudget {
+  max_chars: number;
+  used_chars: number;
+  note_count: number;
+  truncated: boolean;
+}
+
+export interface BundleManifest {
+  source_paths: string[];
+  schema_version: string | null;
+}
+
+export interface BundleFeedbackEntry {
+  path: string;
+  source: string;
+  signal: string;
+  severity: string;
+  comment: string;
+  created_at: string;
+}
+
+export interface BundleFeedback {
+  entries: BundleFeedbackEntry[];
+  warnings: string[];
+}
+
+export interface BundleGraph {
+  related: Record<string, string[]>;
+}
+
+export interface ContextBundleResponse {
+  status: string;
+  bundle_id: string;
+  vault: string;
+  filters: Record<string, string | string[]>;
+  created_at: string;
+  validation_status: 'pass' | 'fail';
+  schema_version: string | null;
+  notes: BundleNote[];
+  graph: BundleGraph;
+  budget: BundleBudget;
+  warnings: string[];
+  manifest: BundleManifest;
+  feedback: BundleFeedback;
+}
+
+/**
+ * POST /context/bundle — generate a deterministic context bundle.
+ * Returns a full bundle JSON including notes, budget, graph, feedback, and manifest.
+ */
+export function generateContextBundle(
+  request: ContextBundleRequest,
+): Promise<ApiResult<ContextBundleResponse>> {
+  return post<ContextBundleResponse>('/context/bundle', request);
+}
+
+// ---------------------------------------------------------------------------
 // Utility
 // ---------------------------------------------------------------------------
 

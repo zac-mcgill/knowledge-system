@@ -214,10 +214,14 @@ Phase 10	Local Web UI Foundation	Complete
 Phase 11A	Guided Vault Bootstrap Backend API	Complete
 Phase 11B	Guided Vault Bootstrap UI Form	Complete
 Phase 11	Guided Vault Bootstrap (full)	Complete
+Phase 12A	Vault Dashboard	Complete
+Phase 12B	Dashboard Issue Review	Complete
+Phase 12	Vault Dashboard and Issue Review	Complete
+Phase 13A	Bundle Builder UI	Complete
 Future
 Phase	Name	Priority
-Phase 12	Vault Dashboard and Issue Review	Highest
-Phase 13	Bundle, Export, and Security UI	High
+Phase 13B	Export Package UI	High
+Phase 13	Bundle, Export, and Security UI	In Progress
 Phase 14	Feedback and Task Workflow UI	Medium
 Phase 15	Note Browser and Safe Editing UI	Medium
 Phase 16	Visual Graph and Missing Concepts UI	Medium
