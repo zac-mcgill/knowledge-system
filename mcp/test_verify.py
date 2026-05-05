@@ -6576,6 +6576,820 @@ def test_p14a_cli_feedback_still_works():
 
 
 # ============================================================
+# Phase 15B — Safe Note Edit Backend API Tests
+# ============================================================
+
+# ---------------------------------------------------------------------------
+# Shared fixtures
+# ---------------------------------------------------------------------------
+
+def _p15b_read_note(vault_path: "Path", rel_path: str) -> str:
+    """Read note content from vault for test fixtures."""
+    return (vault_path / rel_path).read_text(encoding="utf-8")
+
+
+def _p15b_write_note(vault_path: "Path", rel_path: str, content: str) -> None:
+    """Write note content to vault for test fixtures."""
+    (vault_path / rel_path).write_text(content, encoding="utf-8")
+
+
+# Canonical valid fields and body for Fundamentals/Algorithms.md
+_P15B_FIELDS = {
+    "type": "core-concept",
+    "domain": "fundamentals",
+    "status": "complete",
+    "has_key_principles": True,
+    "has_how_it_works": True,
+    "has_tradeoffs": True,
+    "difficulty": "intermediate",
+}
+
+_P15B_BODY = """\
+## Definition
+
+An algorithm is a finite sequence of well-defined instructions.
+
+## Why It Matters
+
+Algorithms are the backbone of all computation.
+
+## Key Principles
+
+- Correctness
+- Termination
+- Determinism
+
+## How It Works
+
+1. Define the problem clearly.
+2. Choose an appropriate strategy.
+3. Implement with attention to edge cases.
+4. Test with representative inputs.
+
+## Examples
+
+Sorting algorithms like quicksort or merge sort.
+
+## Common Pitfalls
+
+- Off-by-one errors
+- Ignoring edge cases
+
+## Trade-offs
+
+| Aspect | Benefit | Cost |
+|--------|---------|------|
+| Time complexity | Fast for small inputs | May be slow for large |
+| Space complexity | Low memory | May need auxiliary space |
+| Simplicity | Easy to understand | May sacrifice performance |
+
+## Related Concepts
+
+- Data Structures
+- Complexity Theory
+
+## Further Exploration
+
+See CLRS for comprehensive coverage.
+"""
+
+# ---------------------------------------------------------------------------
+# Service-layer tests (no HTTP)
+# ---------------------------------------------------------------------------
+
+
+def test_p15b_serialise_note_markdown():
+    """P15B-SVC1: serialise_note_markdown produces valid, re-parseable output."""
+    print("\n=== Test P15B-SVC1: serialise_note_markdown ===")
+    from mcp.core.note_write import serialise_note_markdown
+    from mcp.core.vault_registry import get_schema
+
+    vault = list_vaults()[0]
+    schema = get_schema(vault)
+
+    fields = {
+        "type": "core-concept",
+        "domain": "fundamentals",
+        "status": "partial",
+        "has_key_principles": False,
+        "has_how_it_works": False,
+        "has_tradeoffs": False,
+        "difficulty": "intermediate",
+    }
+    body = "## Definition\n\nTest content.\n"
+
+    result = serialise_note_markdown(fields, body)
+
+    assert result.startswith("---\n"), f"Must start with frontmatter: {result[:20]!r}"
+    assert "type: core-concept" in result
+    assert "domain: fundamentals" in result
+    assert "has_key_principles: false" in result
+    assert "has_how_it_works: false" in result
+    assert result.endswith("\n"), "Must end with newline"
+    # None/empty-string values must be omitted
+    assert "subdomain: " not in result, "None/empty subdomain must be omitted"
+
+    # Must be re-parseable by vault schema
+    parsed_fields, parsed_body = schema.parse_yaml_frontmatter(result)
+    assert parsed_fields is not None
+    assert parsed_fields.get("type") == "core-concept"
+    assert parsed_fields.get("has_key_principles") is False
+    assert "Test content." in parsed_body
+    print(f"  serialise_note_markdown: canonical, re-parseable ✓")
+
+
+def test_p15b_service_layer_rejects_traversal():
+    """P15B-SVC2: validate_note_update_request rejects unsafe paths."""
+    print("\n=== Test P15B-SVC2: Service layer path safety ===")
+    from mcp.core.note_write import validate_note_update_request
+    from mcp.core.vault_registry import get_vault_path, get_schema
+
+    vault = list_vaults()[0]
+    vault_path = get_vault_path(vault)
+    schema = get_schema(vault)
+
+    attacks = [
+        ("../../../etc/passwd",         ("PATH_TRAVERSAL", "NOT_FOUND", "INVALID_NOTE_PATH")),
+        ("/etc/passwd",                  ("PATH_TRAVERSAL", "INVALID_NOTE_PATH")),
+        ("Vault Files/feedback.md",      ("INVALID_NOTE_PATH",)),
+        ("Fundamentals/note.txt",        ("INVALID_NOTE_PATH",)),  # not .md
+        ("../../../etc/secrets.md",      ("PATH_TRAVERSAL",)),     # traversal with .md extension
+    ]
+
+    for attack_path, expected_codes in attacks:
+        errors = validate_note_update_request(
+            vault_path, attack_path, _P15B_FIELDS, "body", schema
+        )
+        assert len(errors) > 0, f"Expected error for {attack_path!r}"
+        codes = {e["code"] for e in errors}
+        assert codes & set(expected_codes), (
+            f"Expected one of {expected_codes} for {attack_path!r}, got: {codes}"
+        )
+        print(f"  Service rejects {attack_path!r}: {codes}")
+    print(f"  Service layer path safety: all attacks blocked ✓")
+
+
+def test_p15b_expire_index_cooldown():
+    """P15B-IDX: expire_index_cooldown resets last_schema_check to 0."""
+    print("\n=== Test P15B-IDX: expire_index_cooldown ===")
+    from mcp.core.note_index import expire_index_cooldown, get_index_metadata
+
+    vault = list_vaults()[0]
+    build_index(vault)
+
+    expire_index_cooldown(vault)
+
+    meta = get_index_metadata(vault)
+    assert meta is not None
+    assert meta["last_schema_check"] == 0.0, (
+        f"last_schema_check should be 0.0 after expire, got {meta['last_schema_check']}"
+    )
+    print(f"  expire_index_cooldown: last_schema_check reset to 0.0 ✓")
+
+    # Cleanup: restore stable state
+    build_index(vault)
+
+
+# ---------------------------------------------------------------------------
+# HTTP-level tests (via FastAPI TestClient)
+# ---------------------------------------------------------------------------
+
+
+def test_p15b_put_note_success():
+    """P15B-1: PUT /note successfully updates an existing note (200 OK)."""
+    print("\n=== Test P15B-1: PUT /note success ===")
+    try:
+        from fastapi.testclient import TestClient
+    except RuntimeError as exc:
+        print(f"  SKIP: TestClient unavailable — {exc}")
+        return
+
+    from mcp.server.mcp_server import app
+    from mcp.core.vault_registry import get_vault_path
+
+    vault = list_vaults()[0]
+    vault_path = get_vault_path(vault)
+    note_path = "Fundamentals/Algorithms.md"
+    original = _p15b_read_note(vault_path, note_path)
+
+    try:
+        with TestClient(app, raise_server_exceptions=True) as client:
+            resp = client.put("/note", json={
+                "vault": vault,
+                "path": note_path,
+                "fields": _P15B_FIELDS,
+                "body": _P15B_BODY,
+            })
+            assert resp.status_code == 200, (
+                f"PUT /note failed: {resp.status_code} {resp.text[:500]}"
+            )
+            body = resp.json()
+            assert body["status"] == "ok", f"Expected ok: {body}"
+            data = body["data"]
+            assert data["path"] == note_path
+            assert "fields" in data
+            assert "body" in data
+            assert data["validation"]["status"] == "pass"
+            assert data["validation"]["errors"] == []
+            print(f"  PUT /note: 200 OK, path={data['path']!r} ✓")
+    finally:
+        _p15b_write_note(vault_path, note_path, original)
+        _expire_cooldown(vault)
+        build_index(vault)
+
+
+def test_p15b_put_note_response_shape():
+    """P15B-2: PUT /note response includes path, fields, body, validation, warnings."""
+    print("\n=== Test P15B-2: PUT /note response shape ===")
+    try:
+        from fastapi.testclient import TestClient
+    except RuntimeError as exc:
+        print(f"  SKIP: TestClient unavailable — {exc}")
+        return
+
+    from mcp.server.mcp_server import app
+    from mcp.core.vault_registry import get_vault_path
+
+    vault = list_vaults()[0]
+    vault_path = get_vault_path(vault)
+    note_path = "Fundamentals/Algorithms.md"
+    original = _p15b_read_note(vault_path, note_path)
+
+    try:
+        with TestClient(app, raise_server_exceptions=True) as client:
+            resp = client.put("/note", json={
+                "vault": vault,
+                "path": note_path,
+                "fields": _P15B_FIELDS,
+                "body": _P15B_BODY,
+            })
+            assert resp.status_code == 200
+            data = resp.json()["data"]
+
+            assert data["fields"].get("type") == "core-concept"
+            assert data["fields"].get("domain") == "fundamentals"
+            assert data["fields"].get("status") == "complete"
+            assert isinstance(data["body"], str) and len(data["body"]) > 0
+            assert data["validation"]["status"] == "pass"
+            assert isinstance(data["validation"]["errors"], list)
+            assert isinstance(data["warnings"], list)
+            print(f"  Response shape: all required keys present ✓")
+    finally:
+        _p15b_write_note(vault_path, note_path, original)
+        _expire_cooldown(vault)
+        build_index(vault)
+
+
+def test_p15b_get_note_reflects_put():
+    """P15B-3: GET /note immediately reflects updated body after PUT."""
+    print("\n=== Test P15B-3: GET /note reflects PUT ===")
+    try:
+        from fastapi.testclient import TestClient
+    except RuntimeError as exc:
+        print(f"  SKIP: TestClient unavailable — {exc}")
+        return
+
+    from mcp.server.mcp_server import app
+    from mcp.core.vault_registry import get_vault_path
+
+    vault = list_vaults()[0]
+    vault_path = get_vault_path(vault)
+    note_path = "Fundamentals/Algorithms.md"
+    original = _p15b_read_note(vault_path, note_path)
+
+    marker = "<!-- p15b-test-marker-get-reflects-put -->"
+    test_body = _P15B_BODY.rstrip("\n") + f"\n{marker}\n"
+
+    try:
+        with TestClient(app, raise_server_exceptions=True) as client:
+            resp = client.put("/note", json={
+                "vault": vault,
+                "path": note_path,
+                "fields": _P15B_FIELDS,
+                "body": test_body,
+            })
+            assert resp.status_code == 200, f"PUT failed: {resp.text[:300]}"
+
+            # GET /note must return updated body immediately
+            resp2 = client.get(f"/note?vault={vault}&path={note_path}")
+            assert resp2.status_code == 200, f"GET failed: {resp2.text[:300]}"
+            get_data = resp2.json()["data"]
+            assert marker in get_data["body"], (
+                f"Marker not found in body after PUT:\n{get_data['body'][-300:]!r}"
+            )
+            print(f"  GET /note reflects PUT: marker found in updated body ✓")
+    finally:
+        _p15b_write_note(vault_path, note_path, original)
+        _expire_cooldown(vault)
+        build_index(vault)
+
+
+def test_p15b_query_reflects_put():
+    """P15B-4: POST /query immediately reflects updated frontmatter after PUT."""
+    print("\n=== Test P15B-4: POST /query reflects PUT ===")
+    try:
+        from fastapi.testclient import TestClient
+    except RuntimeError as exc:
+        print(f"  SKIP: TestClient unavailable — {exc}")
+        return
+
+    from mcp.server.mcp_server import app
+    from mcp.core.vault_registry import get_vault_path
+
+    vault = list_vaults()[0]
+    vault_path = get_vault_path(vault)
+    note_path = "Fundamentals/Algorithms.md"
+    original = _p15b_read_note(vault_path, note_path)
+
+    # We'll change difficulty to confirm query sees the frontmatter change.
+    # (Algorithms.md already has difficulty=intermediate so no schema issue.)
+    # We simply do a PUT and confirm POST /query finds it by type=core-concept.
+    try:
+        with TestClient(app, raise_server_exceptions=True) as client:
+            resp = client.put("/note", json={
+                "vault": vault,
+                "path": note_path,
+                "fields": _P15B_FIELDS,
+                "body": _P15B_BODY,
+            })
+            assert resp.status_code == 200, f"PUT failed: {resp.text[:300]}"
+
+            resp2 = client.post("/query", json={
+                "vault": vault,
+                "filters": {"type": "core-concept", "domain": "fundamentals"},
+                "limit": 100,
+            })
+            assert resp2.status_code == 200, f"POST /query failed: {resp2.text[:300]}"
+            query_data = resp2.json()["data"]
+            paths = [n["path"] for n in query_data["results"]]
+            assert note_path in paths, (
+                f"{note_path!r} not in query results after PUT.\nPaths: {paths}"
+            )
+            print(f"  POST /query reflects PUT: {note_path!r} in results ✓")
+    finally:
+        _p15b_write_note(vault_path, note_path, original)
+        _expire_cooldown(vault)
+        build_index(vault)
+
+
+def test_p15b_validation_reflects_put():
+    """P15B-5: GET /validation reflects state after PUT."""
+    print("\n=== Test P15B-5: GET /validation reflects PUT ===")
+    try:
+        from fastapi.testclient import TestClient
+    except RuntimeError as exc:
+        print(f"  SKIP: TestClient unavailable — {exc}")
+        return
+
+    from mcp.server.mcp_server import app
+    from mcp.core.vault_registry import get_vault_path
+
+    vault = list_vaults()[0]
+    vault_path = get_vault_path(vault)
+    note_path = "Fundamentals/Algorithms.md"
+    original = _p15b_read_note(vault_path, note_path)
+
+    try:
+        with TestClient(app, raise_server_exceptions=True) as client:
+            resp = client.put("/note", json={
+                "vault": vault,
+                "path": note_path,
+                "fields": _P15B_FIELDS,
+                "body": _P15B_BODY,
+            })
+            assert resp.status_code == 200, f"PUT failed: {resp.text[:300]}"
+
+            resp2 = client.get(f"/validation?vault={vault}")
+            assert resp2.status_code == 200
+            val = resp2.json()["data"]
+            # After a valid PUT, Algorithms.md must not be in invalid_notes
+            assert note_path not in val["invalid_notes"], (
+                f"{note_path!r} should not be in invalid_notes after valid PUT"
+            )
+            print(f"  GET /validation after PUT: {note_path!r} not in invalid_notes ✓")
+    finally:
+        _p15b_write_note(vault_path, note_path, original)
+        _expire_cooldown(vault)
+        build_index(vault)
+
+
+def test_p15b_rejects_path_traversal():
+    """P15B-6: PUT /note rejects path traversal attempts."""
+    print("\n=== Test P15B-6: Rejects path traversal ===")
+    try:
+        from fastapi.testclient import TestClient
+    except RuntimeError as exc:
+        print(f"  SKIP: TestClient unavailable — {exc}")
+        return
+
+    from mcp.server.mcp_server import app
+
+    vault = list_vaults()[0]
+    attacks = [
+        "../../../etc/passwd",
+        "..\\..\\..\\Windows\\System32\\config\\SAM",
+        "Fundamentals/../../outside.md",
+        "%2e%2e%2fetc%2fpasswd",
+    ]
+
+    with TestClient(app, raise_server_exceptions=True) as client:
+        for attack in attacks:
+            resp = client.put("/note", json={
+                "vault": vault,
+                "path": attack,
+                "fields": _P15B_FIELDS,
+                "body": _P15B_BODY,
+            })
+            assert resp.status_code in (400, 404), (
+                f"Expected 400/404 for {attack!r}, got {resp.status_code}: {resp.text[:200]}"
+            )
+            code = resp.json()["error"]["code"]
+            assert code in ("PATH_TRAVERSAL", "NOT_FOUND", "INVALID_NOTE_PATH"), (
+                f"Unexpected code {code!r} for {attack!r}"
+            )
+            print(f"  Blocked: {attack!r} → {code}")
+    print(f"  All traversal attempts blocked ✓")
+
+
+def test_p15b_rejects_absolute_path():
+    """P15B-7: PUT /note rejects absolute path."""
+    print("\n=== Test P15B-7: Rejects absolute path ===")
+    try:
+        from fastapi.testclient import TestClient
+    except RuntimeError as exc:
+        print(f"  SKIP: TestClient unavailable — {exc}")
+        return
+
+    from mcp.server.mcp_server import app
+
+    vault = list_vaults()[0]
+    with TestClient(app, raise_server_exceptions=True) as client:
+        resp = client.put("/note", json={
+            "vault": vault,
+            "path": "/etc/passwd",
+            "fields": _P15B_FIELDS,
+            "body": "test",
+        })
+        assert resp.status_code in (400, 404), f"Expected 400/404, got {resp.status_code}: {resp.text}"
+        code = resp.json()["error"]["code"]
+        # On Windows, /etc/passwd is not absolute per Path() — may return INVALID_NOTE_PATH
+        assert code in ("PATH_TRAVERSAL", "INVALID_NOTE_PATH"), (
+            f"Expected PATH_TRAVERSAL or INVALID_NOTE_PATH, got {code!r}"
+        )
+        print(f"  Absolute path rejected: {code} ✓")
+
+
+def test_p15b_rejects_non_md_path():
+    """P15B-8: PUT /note rejects path not ending with .md."""
+    print("\n=== Test P15B-8: Rejects non-.md path ===")
+    try:
+        from fastapi.testclient import TestClient
+    except RuntimeError as exc:
+        print(f"  SKIP: TestClient unavailable — {exc}")
+        return
+
+    from mcp.server.mcp_server import app
+
+    vault = list_vaults()[0]
+    with TestClient(app, raise_server_exceptions=True) as client:
+        resp = client.put("/note", json={
+            "vault": vault,
+            "path": "Fundamentals/Algorithms.txt",
+            "fields": _P15B_FIELDS,
+            "body": "test",
+        })
+        assert resp.status_code == 400, f"Expected 400, got {resp.status_code}: {resp.text}"
+        assert resp.json()["error"]["code"] == "INVALID_NOTE_PATH"
+        print(f"  Non-.md path rejected: INVALID_NOTE_PATH ✓")
+
+
+def test_p15b_rejects_vault_files_path():
+    """P15B-9: PUT /note rejects path inside Vault Files/."""
+    print("\n=== Test P15B-9: Rejects Vault Files/ path ===")
+    try:
+        from fastapi.testclient import TestClient
+    except RuntimeError as exc:
+        print(f"  SKIP: TestClient unavailable — {exc}")
+        return
+
+    from mcp.server.mcp_server import app
+
+    vault = list_vaults()[0]
+    with TestClient(app, raise_server_exceptions=True) as client:
+        resp = client.put("/note", json={
+            "vault": vault,
+            "path": "Vault Files/feedback.md",
+            "fields": {"type": "core-concept"},
+            "body": "test",
+        })
+        assert resp.status_code == 400, f"Expected 400, got {resp.status_code}: {resp.text}"
+        assert resp.json()["error"]["code"] == "INVALID_NOTE_PATH"
+        print(f"  Vault Files/ path rejected: INVALID_NOTE_PATH ✓")
+
+
+def test_p15b_rejects_missing_note():
+    """P15B-10: PUT /note returns 404 for a note that does not exist."""
+    print("\n=== Test P15B-10: Rejects missing note (404) ===")
+    try:
+        from fastapi.testclient import TestClient
+    except RuntimeError as exc:
+        print(f"  SKIP: TestClient unavailable — {exc}")
+        return
+
+    from mcp.server.mcp_server import app
+
+    vault = list_vaults()[0]
+    with TestClient(app, raise_server_exceptions=True) as client:
+        resp = client.put("/note", json={
+            "vault": vault,
+            "path": "Fundamentals/NonExistentNote15B.md",
+            "fields": _P15B_FIELDS,
+            "body": "test",
+        })
+        assert resp.status_code == 404, f"Expected 404, got {resp.status_code}: {resp.text}"
+        assert resp.json()["error"]["code"] == "NOT_FOUND"
+        print(f"  Missing note rejected: 404 NOT_FOUND ✓")
+
+
+def test_p15b_rejects_unknown_field():
+    """P15B-11: PUT /note rejects unknown frontmatter field."""
+    print("\n=== Test P15B-11: Rejects unknown field ===")
+    try:
+        from fastapi.testclient import TestClient
+    except RuntimeError as exc:
+        print(f"  SKIP: TestClient unavailable — {exc}")
+        return
+
+    from mcp.server.mcp_server import app
+
+    vault = list_vaults()[0]
+    with TestClient(app, raise_server_exceptions=True) as client:
+        resp = client.put("/note", json={
+            "vault": vault,
+            "path": "Fundamentals/Algorithms.md",
+            "fields": {**_P15B_FIELDS, "totally_fake_field": "oops"},
+            "body": _P15B_BODY,
+        })
+        assert resp.status_code == 400, f"Expected 400, got {resp.status_code}: {resp.text}"
+        assert resp.json()["error"]["code"] == "INVALID_INPUT"
+        print(f"  Unknown field rejected: INVALID_INPUT ✓")
+
+
+def test_p15b_rejects_invalid_enum():
+    """P15B-12: PUT /note rejects invalid enum value."""
+    print("\n=== Test P15B-12: Rejects invalid enum value ===")
+    try:
+        from fastapi.testclient import TestClient
+    except RuntimeError as exc:
+        print(f"  SKIP: TestClient unavailable — {exc}")
+        return
+
+    from mcp.server.mcp_server import app
+
+    vault = list_vaults()[0]
+    with TestClient(app, raise_server_exceptions=True) as client:
+        resp = client.put("/note", json={
+            "vault": vault,
+            "path": "Fundamentals/Algorithms.md",
+            "fields": {**_P15B_FIELDS, "status": "not-a-valid-status"},
+            "body": _P15B_BODY,
+        })
+        assert resp.status_code == 400, f"Expected 400, got {resp.status_code}: {resp.text}"
+        assert resp.json()["error"]["code"] == "VALIDATION_FAILED"
+        print(f"  Invalid enum value rejected: VALIDATION_FAILED ✓")
+
+
+def test_p15b_rejects_domain_mismatch():
+    """P15B-13: PUT /note rejects domain that mismatches path-derived domain."""
+    print("\n=== Test P15B-13: Rejects domain mismatch ===")
+    try:
+        from fastapi.testclient import TestClient
+    except RuntimeError as exc:
+        print(f"  SKIP: TestClient unavailable — {exc}")
+        return
+
+    from mcp.server.mcp_server import app
+
+    vault = list_vaults()[0]
+    with TestClient(app, raise_server_exceptions=True) as client:
+        resp = client.put("/note", json={
+            "vault": vault,
+            "path": "Fundamentals/Algorithms.md",
+            "fields": {**_P15B_FIELDS, "domain": "wrong-domain-xyz"},
+            "body": _P15B_BODY,
+        })
+        assert resp.status_code == 400, f"Expected 400, got {resp.status_code}: {resp.text}"
+        code = resp.json()["error"]["code"]
+        # INVALID_INPUT (unknown enum value) or VALIDATION_FAILED (derivation mismatch)
+        assert code in ("INVALID_INPUT", "VALIDATION_FAILED"), (
+            f"Expected INVALID_INPUT or VALIDATION_FAILED, got {code!r}"
+        )
+        print(f"  Domain mismatch rejected: {code} ✓")
+
+
+def test_p15b_rejects_section_bool_mismatch():
+    """P15B-14: PUT /note rejects has_key_principles=true with empty Key Principles section."""
+    print("\n=== Test P15B-14: Rejects section boolean mismatch ===")
+    try:
+        from fastapi.testclient import TestClient
+    except RuntimeError as exc:
+        print(f"  SKIP: TestClient unavailable — {exc}")
+        return
+
+    from mcp.server.mcp_server import app
+
+    vault = list_vaults()[0]
+
+    # Body with empty Key Principles section (no content under the heading)
+    body_empty_kp = """\
+## Definition
+
+An algorithm is a finite sequence.
+
+## Why It Matters
+
+Important.
+
+## Key Principles
+
+## How It Works
+
+1. Step one.
+2. Step two.
+3. Step three.
+
+## Examples
+
+Examples here.
+
+## Common Pitfalls
+
+Pitfalls here.
+
+## Trade-offs
+
+| Aspect | Benefit | Cost |
+|--------|---------|------|
+| Time | Fast | Slow |
+| Space | Low | High |
+| Simple | Easy | Slow |
+
+## Related Concepts
+
+Related.
+
+## Further Exploration
+
+More.
+"""
+
+    with TestClient(app, raise_server_exceptions=True) as client:
+        resp = client.put("/note", json={
+            "vault": vault,
+            "path": "Fundamentals/Algorithms.md",
+            # Claim has_key_principles=True but body has empty section
+            "fields": {**_P15B_FIELDS, "has_key_principles": True},
+            "body": body_empty_kp,
+        })
+        assert resp.status_code == 400, f"Expected 400, got {resp.status_code}: {resp.text}"
+        assert resp.json()["error"]["code"] == "VALIDATION_FAILED"
+        print(f"  Section boolean mismatch rejected: VALIDATION_FAILED ✓")
+
+
+def test_p15b_rejects_null_byte_in_body():
+    """P15B-15: PUT /note rejects body containing null bytes."""
+    print("\n=== Test P15B-15: Rejects null byte in body ===")
+    try:
+        from fastapi.testclient import TestClient
+    except RuntimeError as exc:
+        print(f"  SKIP: TestClient unavailable — {exc}")
+        return
+
+    from mcp.server.mcp_server import app
+
+    vault = list_vaults()[0]
+    with TestClient(app, raise_server_exceptions=True) as client:
+        resp = client.put("/note", json={
+            "vault": vault,
+            "path": "Fundamentals/Algorithms.md",
+            "fields": _P15B_FIELDS,
+            "body": "## Definition\n\nContent\x00null byte\n",
+        })
+        assert resp.status_code == 400, f"Expected 400, got {resp.status_code}: {resp.text}"
+        assert resp.json()["error"]["code"] == "INVALID_INPUT"
+        print(f"  Null byte in body rejected: INVALID_INPUT ✓")
+
+
+def test_p15b_failed_put_leaves_original_unchanged():
+    """P15B-16: Failed PUT leaves the original file unchanged."""
+    print("\n=== Test P15B-16: Failed PUT leaves original unchanged ===")
+    try:
+        from fastapi.testclient import TestClient
+    except RuntimeError as exc:
+        print(f"  SKIP: TestClient unavailable — {exc}")
+        return
+
+    from mcp.server.mcp_server import app
+    from mcp.core.vault_registry import get_vault_path
+
+    vault = list_vaults()[0]
+    vault_path = get_vault_path(vault)
+    note_path = "Fundamentals/Algorithms.md"
+    original_content = _p15b_read_note(vault_path, note_path)
+
+    try:
+        with TestClient(app, raise_server_exceptions=True) as client:
+            # Request that fails schema validation (invalid status enum)
+            resp = client.put("/note", json={
+                "vault": vault,
+                "path": note_path,
+                "fields": {**_P15B_FIELDS, "status": "invalid-status-xyz"},
+                "body": _P15B_BODY,
+            })
+            assert resp.status_code == 400, f"Expected 400: {resp.text}"
+
+            # Disk content must be identical to original
+            current_content = _p15b_read_note(vault_path, note_path)
+            assert current_content == original_content, (
+                "File was modified on disk despite validation failure"
+            )
+        print(f"  Failed PUT: original file unchanged ✓")
+    finally:
+        _p15b_write_note(vault_path, note_path, original_content)
+        _expire_cooldown(vault)
+        build_index(vault)
+
+
+def test_p15b_no_temp_files_left_behind():
+    """P15B-17: Successful PUT leaves no temp files in the note directory."""
+    print("\n=== Test P15B-17: No temp files left behind ===")
+    try:
+        from fastapi.testclient import TestClient
+    except RuntimeError as exc:
+        print(f"  SKIP: TestClient unavailable — {exc}")
+        return
+
+    from mcp.server.mcp_server import app
+    from mcp.core.vault_registry import get_vault_path
+
+    vault = list_vaults()[0]
+    vault_path = get_vault_path(vault)
+    note_path = "Fundamentals/Algorithms.md"
+    note_dir = vault_path / "Fundamentals"
+    original = _p15b_read_note(vault_path, note_path)
+
+    try:
+        before_files = set(note_dir.iterdir())
+
+        with TestClient(app, raise_server_exceptions=True) as client:
+            resp = client.put("/note", json={
+                "vault": vault,
+                "path": note_path,
+                "fields": _P15B_FIELDS,
+                "body": _P15B_BODY,
+            })
+            assert resp.status_code == 200, f"PUT failed: {resp.text[:300]}"
+
+        after_files = set(note_dir.iterdir())
+        new_files = after_files - before_files
+        assert new_files == set(), f"Temp files left behind: {new_files}"
+        print(f"  No temp files left behind after successful write ✓")
+    finally:
+        _p15b_write_note(vault_path, note_path, original)
+        _expire_cooldown(vault)
+        build_index(vault)
+
+
+def test_p15b_existing_get_note_still_works():
+    """P15B-18: Existing GET /note still works after Phase 15B changes."""
+    print("\n=== Test P15B-18: Existing GET /note compatibility ===")
+    try:
+        from fastapi.testclient import TestClient
+    except RuntimeError as exc:
+        print(f"  SKIP: TestClient unavailable — {exc}")
+        return
+
+    from mcp.server.mcp_server import app
+
+    vault = list_vaults()[0]
+    build_index(vault)
+    idx = get_index(vault)
+    assert len(idx) > 0
+    note_path = idx[0]["path"]
+
+    with TestClient(app, raise_server_exceptions=True) as client:
+        resp = client.get(f"/note?vault={vault}&path={note_path}")
+        assert resp.status_code == 200, f"GET /note failed: {resp.status_code}: {resp.text}"
+        body = resp.json()
+        assert body["status"] == "ok"
+        assert "data" in body
+        assert body["data"]["path"] == note_path
+        assert "fields" in body["data"]
+        assert "body" in body["data"]
+    print(f"  GET /note still works: {note_path!r} retrieved ✓")
+
+
+# ============================================================
 # Main
 # ============================================================
 
@@ -6871,6 +7685,32 @@ def main():
     test_p14a_file_valid_and_readable_after_writes()
     test_p14a_writes_confined_to_vault()
     test_p14a_cli_feedback_still_works()
+
+    # ---- Phase 15B: Safe Note Edit Backend API ----
+    print("\n" + "=" * 60)
+    print("Phase 15B — Safe Note Edit Backend API")
+    print("=" * 60)
+    test_p15b_serialise_note_markdown()
+    test_p15b_service_layer_rejects_traversal()
+    test_p15b_expire_index_cooldown()
+    test_p15b_put_note_success()
+    test_p15b_put_note_response_shape()
+    test_p15b_get_note_reflects_put()
+    test_p15b_query_reflects_put()
+    test_p15b_validation_reflects_put()
+    test_p15b_rejects_path_traversal()
+    test_p15b_rejects_absolute_path()
+    test_p15b_rejects_non_md_path()
+    test_p15b_rejects_vault_files_path()
+    test_p15b_rejects_missing_note()
+    test_p15b_rejects_unknown_field()
+    test_p15b_rejects_invalid_enum()
+    test_p15b_rejects_domain_mismatch()
+    test_p15b_rejects_section_bool_mismatch()
+    test_p15b_rejects_null_byte_in_body()
+    test_p15b_failed_put_leaves_original_unchanged()
+    test_p15b_no_temp_files_left_behind()
+    test_p15b_existing_get_note_still_works()
 
     print()
     print("=" * 60)

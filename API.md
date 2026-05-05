@@ -29,6 +29,7 @@ py mcp/server/mcp_server.py
 | `GET` | `/summary` | Vault-level completion summary |
 | `POST` | `/query` | Filtered note query |
 | `GET` | `/note` | Single note by vault + path |
+| `PUT` | `/note` | Safely update an existing note (Phase 15B) |
 | `GET` | `/stats` | Field-value frequency aggregation |
 | `GET` | `/validation` | Schema validation result |
 | `GET` | `/tasks` | Prioritised improvement tasks |
@@ -186,6 +187,69 @@ Retrieve a single note by vault and path.
 **Error codes:**
 - `NOT_FOUND` — no note at that path (HTTP 404).
 - `PATH_TRAVERSAL` — path attempts to escape vault root (HTTP 400).
+
+---
+
+### PUT /note
+
+Safely update an existing Markdown note in a vault. The note must already exist; this endpoint does not create new notes. Writes are atomic (temp-file + rename), and the note is fully validated against the vault schema before any disk change is made. The in-memory index and result cache are invalidated on success.
+
+**Request body:**
+```json
+{
+  "vault": "demo-vault",
+  "path": "Fundamentals/Algorithms.md",
+  "fields": {
+    "type": "core-concept",
+    "domain": "fundamentals",
+    "status": "complete",
+    "has_key_principles": true,
+    "has_how_it_works": true,
+    "has_tradeoffs": true,
+    "difficulty": "intermediate"
+  },
+  "body": "## Definition\n\nAn algorithm is a finite sequence...\n"
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `vault` | string | yes | Registered vault name |
+| `path` | string | yes | Vault-relative POSIX path (must be an existing `.md` file, not inside `Vault Files/`) |
+| `fields` | object | yes | All frontmatter fields. Only known schema fields are accepted. Booleans as JSON `true`/`false`. |
+| `body` | string | yes | Markdown body (everything after the frontmatter block). No null bytes. |
+
+**Safety guarantees:**
+- Path traversal is rejected at both service and HTTP layers.
+- Null bytes in path or body are rejected.
+- All known schema enum values are validated (`status`, `domain`, `difficulty`, `type`).
+- Section boolean fields (`has_key_principles`, `has_how_it_works`, `has_tradeoffs`) are reconciled against actual body content.
+- If validation fails, the disk file is never modified (pre-validation before write).
+- Write uses `mkstemp` + `os.replace` (atomic rename) to prevent partial writes.
+- On success, `expire_index_cooldown` is called so the next query rebuilds the index.
+
+**Success response (HTTP 200):**
+```json
+{
+  "status": "ok",
+  "data": {
+    "path": "Fundamentals/Algorithms.md",
+    "fields": {"type": "core-concept", "domain": "fundamentals", ...},
+    "body": "## Definition\n\n...",
+    "validation": {"status": "pass", "errors": []},
+    "warnings": []
+  }
+}
+```
+
+**Error codes:**
+- `INVALID_INPUT` — unknown field, null byte, non-string body, or missing required request field (HTTP 400).
+- `PATH_TRAVERSAL` — path escapes vault root or is absolute (HTTP 400).
+- `INVALID_NOTE_PATH` — path is not `.md` or is inside `Vault Files/` (HTTP 400).
+- `NOT_FOUND` — note does not exist (HTTP 404).
+- `INVALID_VAULT` — vault not registered (HTTP 404).
+- `VALIDATION_FAILED` — note content fails schema validation (HTTP 400). Includes `details` list.
+- `WRITE_FAILED` — disk write or atomic rename failed (HTTP 500).
 
 ---
 

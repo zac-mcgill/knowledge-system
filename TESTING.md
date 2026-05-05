@@ -352,6 +352,54 @@ py run.py feedback         # exits 0, valid JSON
 - `TESTING.md` — added Phase 15A section (this entry).
 - `ROADMAP.md` — added Phase 15A Complete row; Phase 15 moved to Partial/In Progress.
 
+### Phase 15B — Safe Note Edit Backend API
+
+Phase 15B adds a `PUT /note` HTTP endpoint with path safety, schema validation, and atomic writes. No UI changes were made (note edit UI is not yet implemented).
+
+**Verification steps for Phase 15B:**
+
+```bash
+py mcp/test_verify.py      # 242 tests — all must pass (20 new Phase 15B tests added)
+py run.py validate         # 19/19 valid
+py run.py security         # status: pass
+py run.py feedback         # exits 0, valid JSON
+```
+
+**Tests added (20 total):**
+
+- `test_p15b_serialise_note_markdown` — `serialise_note_markdown()` produces canonical YAML frontmatter + body, omits None/empty fields, renders booleans as `true`/`false`, output is re-parseable by vault schema.
+- `test_p15b_service_layer_rejects_traversal` — `validate_note_update_request()` blocks path traversal, absolute paths, non-`.md` paths, and `Vault Files/` paths at the service layer.
+- `test_p15b_expire_index_cooldown` — `expire_index_cooldown()` sets `last_schema_check` to `0.0` under the vault lock.
+- `test_p15b_put_note_success` — `PUT /note` with a fully valid request returns HTTP 200 with `status: ok`, `path`, `fields`, `body`, and `validation: {status: pass, errors: []}`.
+- `test_p15b_put_note_response_shape` — Response envelope includes all required keys: `path`, `fields`, `body`, `validation`, `warnings`.
+- `test_p15b_get_note_reflects_put` — `GET /note` immediately returns the updated body after a successful `PUT /note`.
+- `test_p15b_query_reflects_put` — `POST /query` finds the updated note in results after a successful `PUT /note`.
+- `test_p15b_validation_reflects_put` — `GET /validation` does not list the note in `invalid_notes` after a valid `PUT /note`.
+- `test_p15b_rejects_path_traversal` — HTTP 400/404 for path traversal attempts (multiple attack vectors including URL-encoded and backslash variants).
+- `test_p15b_rejects_absolute_path` — HTTP 400 with `PATH_TRAVERSAL` or `INVALID_NOTE_PATH` for absolute path input.
+- `test_p15b_rejects_non_md_path` — HTTP 400 `INVALID_NOTE_PATH` for paths not ending in `.md`.
+- `test_p15b_rejects_vault_files_path` — HTTP 400 `INVALID_NOTE_PATH` for paths inside `Vault Files/`.
+- `test_p15b_rejects_missing_note` — HTTP 404 `NOT_FOUND` for a note that does not exist on disk.
+- `test_p15b_rejects_unknown_field` — HTTP 400 `INVALID_INPUT` when request `fields` contains an unknown schema field.
+- `test_p15b_rejects_invalid_enum` — HTTP 400 `VALIDATION_FAILED` for an invalid enum value in `status`.
+- `test_p15b_rejects_domain_mismatch` — HTTP 400 for a domain value that does not match the path-derived domain.
+- `test_p15b_rejects_section_bool_mismatch` — HTTP 400 `VALIDATION_FAILED` when `has_key_principles: true` but the Key Principles section has no content.
+- `test_p15b_rejects_null_byte_in_body` — HTTP 400 `INVALID_INPUT` when body contains a null byte.
+- `test_p15b_failed_put_leaves_original_unchanged` — Disk file is identical to original when `PUT /note` fails validation.
+- `test_p15b_no_temp_files_left_behind` — No temporary files remain in the note directory after a successful `PUT /note`.
+- `test_p15b_existing_get_note_still_works` — `GET /note` for an existing note still returns correct data after Phase 15B changes.
+
+**What was added:**
+
+- `mcp/core/note_write.py` — new service module: `serialise_note_markdown`, `_check_path_safety`, `_validate_body`, `validate_note_update_request`, `_validate_candidate`, `update_note`, `invalidate_note_caches`, `_error_response`.
+- `mcp/core/note_index.py` — added `expire_index_cooldown(vault_name)` function.
+- `mcp/server/mcp_server.py` — added `NoteUpdateRequest` Pydantic model; added `PUT /note` endpoint.
+- `mcp/test_verify.py` — added 21 Phase 15B test functions (3 service-layer + 18 HTTP-level).
+- `API.md` — added `PUT /note` to Route Index and endpoint documentation.
+- `QUICKSTART.md` — added §4e note update API usage.
+- `TESTING.md` — added Phase 15B section (this entry).
+- `ROADMAP.md` — marked Phase 15B Complete.
+
 ### Phase 14B — Feedback Workflow UI
 
 Phase 14B is a frontend-only phase. No new backend tests were added (all 222 backend tests still pass).

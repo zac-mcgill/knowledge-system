@@ -229,7 +229,7 @@ Phase 14	Feedback and Task Workflow UI	Complete
 Future
 Phase	Name	Priority
 Phase 15A	Note Browser Read-Only Inspector UI	Complete
-Phase 15B	Safe Note Edit Backend API	Pending
+Phase 15B	Safe Note Edit Backend API	Complete
 Phase 15	Note Browser and Safe Editing UI	In Progress
 Phase 16	Visual Graph and Missing Concepts UI	Medium
 Phase 17	Distribution and Packaging	Medium
@@ -747,6 +747,27 @@ py run.py security: pass (0 findings)
 py run.py feedback: exits 0, valid JSON
 
 Suggested Commit: feat(ui): add note browser read-only inspector UI (Phase 15A)
+Phase 15B - Safe Note Edit Backend API
+Status: Complete
+
+Delivered:
+PUT /note endpoint in mcp/server/mcp_server.py
+Path safety: traversal, absolute, non-.md, Vault Files/ all rejected
+Atom writes via mkstemp + os.replace (no partial writes)
+Full schema validation before disk write (pre-validation)
+Cache invalidation via expire_index_cooldown on success
+NoteUpdateRequest Pydantic model
+note_write.py service module with serialise_note_markdown, update_note, etc.
+expire_index_cooldown() added to note_index.py
+21 new tests in mcp/test_verify.py (3 service-layer + 18 HTTP-level)
+
+Verification:
+py mcp/test_verify.py: ALL VERIFICATION TESTS PASSED (242 tests)
+py run.py validate: PASSED (19/19)
+py run.py security: pass
+py run.py feedback: exits 0
+
+Suggested Commit: feat(api): add PUT /note safe note edit backend API (Phase 15B)
 Phase 16 - Visual Graph and Missing Concepts UI
 Purpose
 

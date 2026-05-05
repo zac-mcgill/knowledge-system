@@ -173,6 +173,36 @@ Each task gains a `feedback_weight` field showing the score delta and contributi
 
 ---
 
+## 4e. Update a Note via API (Phase 15B)
+
+The backend provides a `PUT /note` endpoint for safe, atomic updates to existing notes. The endpoint validates all fields and body content against the vault schema before writing.
+
+**Update an existing note:**
+```bash
+curl -X PUT http://127.0.0.1:8000/note \
+  -H "Content-Type: application/json" \
+  -d '{
+    "vault": "demo-vault",
+    "path": "Fundamentals/Algorithms.md",
+    "fields": {
+      "type": "core-concept",
+      "domain": "fundamentals",
+      "status": "complete",
+      "has_key_principles": true,
+      "has_how_it_works": true,
+      "has_tradeoffs": true,
+      "difficulty": "intermediate"
+    },
+    "body": "## Definition\n\nAn algorithm is a finite sequence...\n"
+  }'
+```
+
+On success returns the updated note's `path`, `fields`, `body`, and `validation` (always `{"status": "pass", "errors": []}`). Validation failures return HTTP 400 with `VALIDATION_FAILED` and a `details` list — the file on disk is unchanged.
+
+> **Note:** The note edit UI is not yet implemented. The backend API is complete.
+
+---
+
 ## 5d. Export Context Package (Phase 4)
 
 **Export the default bundle to disk:**

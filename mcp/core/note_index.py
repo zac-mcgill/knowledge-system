@@ -277,3 +277,21 @@ def get_index_metadata(vault_name: str) -> dict | None:
             "index_size_bytes": entry.get("index_size_bytes", 0),
             "baseline_size_bytes": entry.get("baseline_size", 0),
         }
+
+
+def expire_index_cooldown(vault_name: str) -> None:
+    """Reset the index schema-check timestamp to zero for ``vault_name``.
+
+    After this call, the next ``get_index()`` invocation will skip the
+    cooldown window and immediately re-check the schema hash and notes
+    fingerprint.  If the note mtime changed (e.g. after a write), the
+    index is rebuilt on the next access.
+
+    Used by the note-write service to ensure GET /note reflects updates
+    without waiting for the cooldown to expire naturally.
+    """
+    lock = _get_vault_lock(vault_name)
+    with lock:
+        if vault_name in _indices:
+            _indices[vault_name]["last_schema_check"] = 0.0
+            logger.info("index_cooldown_expired vault=%s", vault_name)

@@ -1,10 +1,11 @@
 """
-MCP Server — read-only API layer over multiple Obsidian vaults.
+MCP Server — read-mostly API layer over multiple Obsidian vaults.
 
 Endpoints:
     GET  /vaults  — list registered vault names
     POST /query   — query a vault with filters
     GET  /note    — retrieve a single note by vault + path
+    PUT  /note    — safely update an existing note (Phase 15B)
     GET  /stats   — aggregate a field across a vault
     GET  /health  — server health and metrics
 
@@ -39,6 +40,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, HTMLResponse, Response
 from starlette.requests import Request
 from pydantic import BaseModel, Field
+from typing import Any
 import mimetypes
 
 from mcp.core.vault_registry import list_vaults, get_vault_path, get_schema, reload_config
@@ -66,6 +68,7 @@ from core.shared.feedback import (
 from core.shared.context_package import export_context_package as _export_package
 from core.shared.context_security import scan_vault_context as _scan_vault_context
 from core.shared.context_security import scan_context_bundle as _scan_context_bundle
+from mcp.core.note_write import update_note as _update_note
 
 
 # ---------- Structured Logging (Phase 7) ----------
@@ -574,6 +577,15 @@ class VaultBootstrapRequest(BaseModel):
     )
 
 
+class NoteUpdateRequest(BaseModel):
+    """Request body for PUT /note."""
+
+    vault: str = Field(..., description="Vault name")
+    path: str = Field(..., description="Vault-relative POSIX path to the note (e.g. 'Fundamentals/Algorithms.md')")
+    fields: dict[str, Any] = Field(..., description="Complete frontmatter fields for the updated note")
+    body: str = Field(..., description="Markdown body text (without frontmatter)")
+
+
 # ---------- Error helpers ----------
 
 def _error(code: str, message: str, status_code: int = 400) -> JSONResponse:
@@ -683,6 +695,62 @@ def endpoint_note(
         return result
     except Exception as exc:
         return _error("RETRIEVAL_FAILED", f"Retrieval failed: {exc}", 500)
+
+
+@app.put("/note")
+def endpoint_note_update(req: NoteUpdateRequest):
+    """Safely update an existing Markdown note.
+
+    Validates path safety, field schema, and body integrity before writing.
+    Writes atomically via temp-file-then-rename in the same directory.
+    Expires the index cooldown after a successful write so that subsequent
+    GET /note and POST /query reflect the updated content immediately.
+
+    Request body:
+        vault (str, required): Vault name.
+        path (str, required): Vault-relative POSIX path (e.g. ``Fundamentals/Algorithms.md``).
+        fields (dict, required): Complete frontmatter fields for the updated note.
+        body (str, required): Markdown body text (without frontmatter).
+
+    Response data on success:
+        path (str): Vault-relative path of the updated note.
+        fields (dict): Parsed frontmatter fields as written.
+        body (str): Markdown body as written.
+        validation (dict): ``{"status": "pass", "errors": []}``.
+        warnings (list): Non-fatal notices (empty in most cases).
+
+    Error codes:
+        INVALID_VAULT:        Vault is not registered (HTTP 404).
+        INVALID_INPUT:        Request body fails Pydantic or structural validation (HTTP 400).
+        PATH_TRAVERSAL:       path escapes the vault root (HTTP 400).
+        NOT_FOUND:            Note does not exist (HTTP 404).
+        INVALID_NOTE_PATH:    path is absolute, not ``.md``, or inside ``Vault Files/`` (HTTP 400).
+        VALIDATION_FAILED:    Candidate note fails schema validation (HTTP 400).
+        WRITE_FAILED:         Atomic write to disk failed (HTTP 500).
+
+    Safety:
+        - PUT /note only updates existing notes.  It cannot create new notes.
+        - PUT /note cannot write outside the vault root.
+        - PUT /note cannot write into ``Vault Files/``.
+        - On any validation or write failure the original file is left unchanged.
+    """
+    err = _validate_vault(req.vault)
+    if err:
+        return err
+
+    result = _update_note(req.vault, req.path, req.fields, req.body)
+
+    if result["status"] == "error":
+        code = result["error"].get("code", "UNKNOWN")
+        if code in ("NOT_FOUND", "INVALID_VAULT"):
+            status_code = 404
+        elif code == "WRITE_FAILED":
+            status_code = 500
+        else:
+            status_code = 400
+        return JSONResponse(status_code=status_code, content=result)
+
+    return result
 
 
 @app.get("/stats")
