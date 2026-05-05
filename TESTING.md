@@ -308,6 +308,50 @@ Regression tests for correctness fixes:
 - `test_p11a_api_bootstrap_success_envelope` — `POST /vault/bootstrap` with valid inputs returns HTTP 200 with standard `status/data` envelope, and `data` contains `vault`, `created`, and `warnings`.
 - `test_p11a_api_bootstrap_invalid_input_errors` — Various invalid inputs return structured `status/error/code/message` responses with 400 or 422 status.
 
+### Phase 15A — Note Browser Read-Only Inspector UI
+
+Phase 15A is a frontend-only phase. No backend changes were made (all 222 backend tests still pass).
+
+**Verification steps for Phase 15A:**
+
+```bash
+cd ui && npm run build     # must complete with 0 errors; NoteBrowser.svelte compiled
+py mcp/test_verify.py      # 222 tests — all must pass
+py run.py validate         # 19/19 valid
+py run.py security         # status: pass
+py run.py feedback         # exits 0, valid JSON
+```
+
+**Manual checks for Phase 15A:**
+
+1. Start the backend: `py mcp/server/mcp_server.py`
+2. Serve the built UI: `cd ui && npx serve dist`
+3. Navigate to `http://localhost:3000/app/notes`
+4. Confirm the vault selector loads vaults and selects the first one.
+5. Confirm notes appear in the list with name, status badge, difficulty badge, and missing-sections badge.
+6. Confirm the text filter narrows the list in real time.
+7. Confirm the status and difficulty dropdowns filter correctly; confirm "Clear" resets all filters.
+8. Confirm "Missing sections only" checkbox filters to notes with at least one missing section.
+9. Click a note — confirm the detail panel loads on the right with path, frontmatter fields, section outline, body, validation context, and task context.
+10. Confirm the validation panel shows WARN for a known-invalid note, or PASS for a valid note.
+11. Confirm the improvement task panel shows task details (priority, missing sections, constraints) when a task exists, or "No active improvement task" when none.
+12. Expand the Query Search panel; enter a search term; click **Search**; confirm results appear with relevance scores.
+13. Click a search result and confirm note detail loads.
+14. Click **Clear search** and confirm the base note list returns.
+15. Confirm all raw JSON panels are hidden by default behind `<details>` expanders.
+16. Confirm the Notes nav item no longer shows a "soon" badge.
+17. Confirm no save buttons, edit inputs, or write controls are present anywhere on the page.
+
+**What was added:**
+
+- `ui/src/components/NoteBrowser.svelte` — full Note Browser island. Vault selector, filter controls (text/status/difficulty/missing-only + clear), collapsible Query Search panel (q, q_fields checkboxes, status/difficulty/domain/type filters, limit, search/clear), note list with status/difficulty/missing badges and selected highlight, two-column desktop layout, note detail panel (header with badges, frontmatter fields table, section outline from Markdown headings, read-only body, validation context, task/improvement context with feedback weight behind details), raw JSON expanders for note detail and query responses, notes list response expander in left column.
+- `ui/src/lib/api.ts` — added `NoteListItem`, `NotesData`, `NoteFields`, `NoteDetail`, `NoteQueryRequest`, `QueryResultItem`, `NoteQueryResponse` types; added `fetchNotes`, `fetchNote`, `queryNotes` functions.
+- `ui/src/pages/notes.astro` — replaced `PlaceholderPage` with `<NoteBrowser client:load />`.
+- `ui/src/layouts/AppLayout.astro` — removed "Notes" from placeholder items; removed "soon" badge from Notes nav item; updated footer to "Phase 15A — Note Browser".
+- `QUICKSTART.md` — added §6i Note Browser UI section.
+- `TESTING.md` — added Phase 15A section (this entry).
+- `ROADMAP.md` — added Phase 15A Complete row; Phase 15 moved to Partial/In Progress.
+
 ### Phase 14B — Feedback Workflow UI
 
 Phase 14B is a frontend-only phase. No new backend tests were added (all 222 backend tests still pass).

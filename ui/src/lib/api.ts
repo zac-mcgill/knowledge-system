@@ -594,3 +594,81 @@ export function exportContextPackage(
 ): Promise<ApiResult<ContextExportResponse>> {
   return post<ContextExportResponse>('/context/export', request);
 }
+// ---------------------------------------------------------------------------
+// Note Browser — GET /notes, GET /note, POST /query
+// ---------------------------------------------------------------------------
+
+/** Item returned by GET /notes. */
+export interface NoteListItem {
+  name: string;
+  status: string;
+  difficulty: string;
+  missing: string[];
+  path: string;
+}
+
+export interface NotesData {
+  notes: NoteListItem[];
+}
+
+/** Frontmatter fields from a single note (all values are unknown from YAML). */
+export interface NoteFields {
+  title?: string;
+  status?: string;
+  domain?: string;
+  type?: string;
+  difficulty?: string;
+  [key: string]: unknown;
+}
+
+/** Full note detail returned by GET /note. Includes path, fields, and body. */
+export interface NoteDetail {
+  path: string;
+  fields: NoteFields;
+  body?: string;
+}
+
+/** Request body for POST /query. */
+export interface NoteQueryRequest {
+  vault: string;
+  filters?: Record<string, string | string[]>;
+  limit?: number;
+  offset?: number;
+  strict?: boolean;
+  q?: string;
+  q_fields?: string[];
+}
+
+/** Single result item from POST /query. */
+export interface QueryResultItem {
+  path: string;
+  fields: NoteFields;
+  score?: number;
+}
+
+/** Response data from POST /query. */
+export interface NoteQueryResponse {
+  count: number;
+  returned: number;
+  offset: number;
+  limit: number;
+  results: QueryResultItem[];
+}
+
+/** GET /notes — list all notes with metadata. */
+export function fetchNotes(vault?: string): Promise<ApiResult<NotesData>> {
+  const qs = vault ? `?vault=${encodeURIComponent(vault)}` : '';
+  return get<NotesData>(`/notes${qs}`);
+}
+
+/** GET /note — retrieve a single note by vault and path. Includes body. */
+export function fetchNote(vault: string, path: string): Promise<ApiResult<NoteDetail>> {
+  return get<NoteDetail>(
+    `/note?vault=${encodeURIComponent(vault)}&path=${encodeURIComponent(path)}`,
+  );
+}
+
+/** POST /query — query notes with optional filters and free-text search. */
+export function queryNotes(request: NoteQueryRequest): Promise<ApiResult<NoteQueryResponse>> {
+  return post<NoteQueryResponse>('/query', request);
+}

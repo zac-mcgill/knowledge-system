@@ -582,6 +582,44 @@ The Feedback Workflow UI at `/app/feedback` lets you view, add, edit, delete, an
 
 ---
 
+## 6i. Note Browser UI (Phase 15A)
+
+The Note Browser at `/app/notes` lets you browse, filter, search, and inspect vault notes in read-only mode.
+
+**To use the Note Browser:**
+1. Navigate to **Notes** in the sidebar.
+2. Select a **Vault** from the dropdown. The note list loads automatically.
+3. Use the **Filters** panel to narrow the list:
+   - Text search over note name and path.
+   - Status dropdown (complete / partial / stub / all).
+   - Difficulty dropdown.
+   - "Missing sections only" checkbox.
+   - Click **Clear** to reset all filters.
+4. Click any note in the list to load its full detail on the right.
+
+**Note detail panel** (read-only):
+- **Header** — note title (from frontmatter), vault-relative path, and status / difficulty / domain / type badges.
+- **Frontmatter Fields** — all YAML frontmatter key/value pairs in a table.
+- **Section Outline** — headings extracted client-side from the Markdown body with heading level and line number.
+- **Markdown Body** — raw Markdown text in a scrollable read-only panel.
+- **Validation** — shows a warning if the note appears in the invalid notes list (`GET /validation`), or a pass badge if valid.
+- **Improvement Task** — shows the highest-priority improvement task for the note from `GET /tasks?include_feedback=true`, including priority, missing sections, constraints, and optional feedback weight. Shows "No active improvement task" if none exists.
+- **Raw JSON** — note detail and query responses hidden behind `<details>` expanders.
+
+**Query Search panel (POST /query):**
+1. Click **Query Search** in the left column to expand the panel.
+2. Enter a free-text query in the **Free text (q)** field.
+3. Select which fields to search: body, path, frontmatter.
+4. Optionally add filters: status, difficulty, domain, type.
+5. Set the result limit (1–500, default 50).
+6. Click **Search** — results replace the note list and show relevance scores.
+7. Click a result to load its note detail.
+8. Click **Clear search** to return to the base note list.
+
+**Note:** This page is read-only. Note editing is not available in Phase 15A.
+
+---
+
 ## 7. Query the System
 
 **Vault overview**

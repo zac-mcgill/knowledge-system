@@ -228,7 +228,9 @@ Phase 14B	Feedback and Task Workflow UI	Complete
 Phase 14	Feedback and Task Workflow UI	Complete
 Future
 Phase	Name	Priority
-Phase 15	Note Browser and Safe Editing UI	Medium
+Phase 15A	Note Browser Read-Only Inspector UI	Complete
+Phase 15B	Safe Note Edit Backend API	Pending
+Phase 15	Note Browser and Safe Editing UI	In Progress
 Phase 16	Visual Graph and Missing Concepts UI	Medium
 Phase 17	Distribution and Packaging	Medium
 Phase 18	CI and Release Hardening	Medium
@@ -720,41 +722,31 @@ Verification:
 - py run.py feedback: exits 0
 
 Suggested Commit: feat(ui): add feedback and task workflow UI (Phase 14B)
-Phase 15 - Note Browser and Safe Editing UI
-Purpose
+Phase 15A - Note Browser Read-Only Inspector UI
+Status: Complete
 
-Allow users to browse and lightly edit notes without leaving the app.
+Delivered:
+Note Browser UI at /app/notes
+Vault selector (loads first vault by default)
+Note list from GET /notes with status/difficulty/missing badges
+Filter controls: text search, status, difficulty, missing-only, clear
+Query Search panel using POST /query (q, q_fields, filters, limit)
+Search results replace list; clear search restores base list
+Note detail via GET /note: frontmatter fields table, section outline, read-only body
+Validation context from GET /validation
+Task/improvement context from GET /tasks?include_feedback=true
+Raw JSON behind details/summary expanders
+Responsive two-column layout (desktop); single column on mobile
+No note editing, no save controls, no write routes added
 
-This should be conservative. The system should not become a full Obsidian clone.
+Verification:
+npm run build: pass
+py mcp/test_verify.py: ALL VERIFICATION TESTS PASSED (222 tests)
+py run.py validate: PASSED (19/19)
+py run.py security: pass (0 findings)
+py run.py feedback: exits 0, valid JSON
 
-Features
-Note list
-Filter by status/domain/type
-Search using lexical q
-View note frontmatter
-View note body
-Edit frontmatter fields through form controls
-Edit sections in text areas
-Validate before save
-Save writes Markdown file
-Show diff preview before save
-Safety Rules
-No arbitrary file path writes
-Only edit files inside the active vault
-Preserve frontmatter order where practical
-Preserve headings
-Validate after save
-Show validation errors immediately
-No automatic AI rewriting
-Acceptance Criteria
-User can view notes
-User can search notes
-User can edit a section
-Save triggers validation
-Invalid edits are rejected or clearly warned
-CLI validation still passes after UI edits
-Suggested Commit
-feat(ui): add note browser and safe editing
+Suggested Commit: feat(ui): add note browser read-only inspector UI (Phase 15A)
 Phase 16 - Visual Graph and Missing Concepts UI
 Purpose
 
