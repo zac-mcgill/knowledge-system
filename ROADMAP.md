@@ -212,10 +212,11 @@ Phase 8b	Schema data demo improvements	Complete
 Phase 9	Public presentation pass	Complete
 Phase 10	Local Web UI Foundation	Complete
 Phase 11A	Guided Vault Bootstrap Backend API	Complete
+Phase 11B	Guided Vault Bootstrap UI Form	Complete
+Phase 11	Guided Vault Bootstrap (full)	Complete
 Future
 Phase	Name	Priority
-Phase 11B	Guided Vault Bootstrap UI Form	Highest
-Phase 12	Vault Dashboard and Issue Review	High
+Phase 12	Vault Dashboard and Issue Review	Highest
 Phase 13	Bundle, Export, and Security UI	High
 Phase 14	Feedback and Task Workflow UI	Medium
 Phase 15	Note Browser and Safe Editing UI	Medium
@@ -555,7 +556,8 @@ Config updates safely
 Existing py run.py bootstrap still works
 Tests cover invalid names, duplicate vaults, and successful bootstrap
 Suggested Commit
-feat(ui): add guided vault bootstrap workflow
+feat(ui): add guided vault bootstrap UI form (Phase 11B)
+
 Phase 12 - Vault Dashboard and Issue Review
 Purpose
 
@@ -930,7 +932,15 @@ Recommended Next Phase
 
 Start with:
 
-Phase 11B - Guided Vault Bootstrap UI Form
+Phase 12 - Vault Dashboard and Issue Review
+
+Phase 11B (Guided Vault Bootstrap UI Form) is complete:
+
+- ui/src/components/VaultSetup.svelte — full form, live validation, preview panel, submit, success/error/warning handling
+- ui/src/pages/vault-setup.astro — functional Vault Setup page (replaced PlaceholderPage)
+- ui/src/lib/api.ts — VaultBootstrapRequest/Response types; bootstrapVault() function
+- ui/src/layouts/AppLayout.astro — Vault Setup active in sidebar; phase footer updated
+- npm run build passes with no TypeScript errors
 
 Phase 11A (Guided Vault Bootstrap Backend API) is complete:
 

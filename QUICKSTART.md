@@ -372,6 +372,29 @@ The CLI flow `py run.py bootstrap` is unchanged and remains fully supported.
 
 ---
 
+## 6d. Guided Vault Bootstrap UI (Phase 11B)
+
+A browser-based guided setup form is available in the local web UI.
+
+1. Start the backend server and build the UI (see section 6b above).
+2. Open [http://127.0.0.1:8000/app/vault-setup](http://127.0.0.1:8000/app/vault-setup).
+3. Fill in:
+   - **Vault Name** — slug-style directory name (letters, numbers, underscores, hyphens)
+   - **Domain** — human-readable domain label
+   - **Note Type** — slug for the primary note type (e.g. `breed-profile`)
+   - **Required Sections** — canonical section headings (minimum 2, defaults pre-filled)
+   - **Expected Concepts** — optional named concepts (accepted with a backend warning; not yet written to schema)
+4. The live validation panel and preview update as you type.
+5. Click **Create Vault** to call `POST /vault/bootstrap`.
+6. On success the page shows created file paths and any backend warnings.
+7. Use **Go to Dashboard** to return to the vault overview.
+
+The CLI flow `py run.py bootstrap` remains unchanged and is still the recommended path for automation.
+
+**Expected concepts limitation:** The backend accepts `expected_concepts` in the request and echoes them in the response warnings, but does not yet write them into `vault_schema.py`. This is a known limitation noted in the UI.
+
+---
+
 ## 7. Query the System
 
 **Vault overview**

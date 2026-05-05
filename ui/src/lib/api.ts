@@ -202,3 +202,28 @@ export function isOk<T>(result: ApiResult<T>): result is ApiOk<T> {
 export function errorMessage(result: ApiErrorEnvelope): string {
   return result.error?.message ?? 'Unknown error';
 }
+
+// ---------------------------------------------------------------------------
+// Vault Bootstrap — POST /vault/bootstrap
+// ---------------------------------------------------------------------------
+
+export interface VaultBootstrapRequest {
+  vault_name: string;
+  domain: string;
+  note_type: string;
+  sections: string[];
+  expected_concepts: string[];
+}
+
+export interface VaultBootstrapResponse {
+  vault: string;
+  created: string[];
+  warnings: string[];
+}
+
+/** POST /vault/bootstrap — create a new vault from structured inputs. */
+export function bootstrapVault(
+  request: VaultBootstrapRequest,
+): Promise<ApiResult<VaultBootstrapResponse>> {
+  return post<VaultBootstrapResponse>('/vault/bootstrap', request);
+}

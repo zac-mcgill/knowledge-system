@@ -1,11 +1,7 @@
 ---
 import AppLayout from '../layouts/AppLayout.astro';
-import PlaceholderPage from '../components/PlaceholderPage.astro';
+import VaultSetup from '../components/VaultSetup.svelte';
 ---
 <AppLayout title="Vault Setup">
-  <PlaceholderPage
-    pageTitle="Vault Setup"
-    description="Guided vault bootstrap: choose a domain, define your schema, and generate starter notes."
-    phase="11"
-  />
+  <VaultSetup client:load />
 </AppLayout>

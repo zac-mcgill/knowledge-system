@@ -308,6 +308,48 @@ Regression tests for correctness fixes:
 - `test_p11a_api_bootstrap_success_envelope` — `POST /vault/bootstrap` with valid inputs returns HTTP 200 with standard `status/data` envelope, and `data` contains `vault`, `created`, and `warnings`.
 - `test_p11a_api_bootstrap_invalid_input_errors` — Various invalid inputs return structured `status/error/code/message` responses with 400 or 422 status.
 
+### Phase 11B — Guided Vault Bootstrap UI Form
+
+Phase 11B is a frontend-only phase. No new backend tests were added (all 202 Phase 11A tests still pass).
+
+**Verification steps for Phase 11B:**
+
+```bash
+# Frontend build verification (run from repo root)
+cd ui
+npm install        # if node_modules absent
+npm run build      # must produce ui/dist/ with no TypeScript errors
+
+# Backend suite (unchanged — 202 tests)
+py mcp/test_verify.py
+
+# Vault validation
+py run.py validate
+
+# Security scan
+py run.py security
+```
+
+**What was added:**
+- `ui/src/components/VaultSetup.svelte` — Svelte island with full form, live validation, preview panel, submit, success/error/warning handling
+- `ui/src/pages/vault-setup.astro` — replaced PlaceholderPage with `<VaultSetup client:load />`
+- `ui/src/lib/api.ts` — `VaultBootstrapRequest`, `VaultBootstrapResponse` types and `bootstrapVault()` function
+- `ui/src/layouts/AppLayout.astro` — Vault Setup no longer shows "soon" badge; phase footer updated
+
+**Manual verification checklist (no automated frontend unit tests in this phase):**
+- Vault Setup page loads at `/app/vault-setup`
+- All five fields render correctly
+- Validation panel updates live as fields change
+- Preview panel reflects current field values
+- Sections can be added and removed
+- Expected Concepts can be added and removed
+- Submit button disabled when form is invalid or loading
+- On success: created file list and warnings shown
+- On error: error code and message shown with friendly title
+- Network failure displays backend-unavailable message
+- Dashboard link works from success panel
+- `npm run build` completes with zero TypeScript errors
+
 ---
 
 ## Interpreting Failures
