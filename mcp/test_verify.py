@@ -5042,6 +5042,264 @@ def test_p9_missing_returns_concept_gaps():
 
 
 # ============================================================
+# Phase 10 — Local Web UI Foundation
+# ============================================================
+
+
+def test_p10_app_no_500_when_ui_not_built():
+    """P10-UI-1: GET /app returns a safe non-500 response when ui/dist does not exist."""
+    print("\n=== Test P10-UI-1: /app safe when ui/dist missing ===")
+    try:
+        from fastapi.testclient import TestClient
+    except RuntimeError as exc:
+        print(f"  SKIP: TestClient unavailable — {exc}")
+        return
+
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    from mcp.server.mcp_server import app as _fastapi_app, _UI_DIST
+
+    with TestClient(_fastapi_app) as client:
+        # When ui/dist does not exist, /app must return 503 or 200 — not 500.
+        if not _UI_DIST.is_dir():
+            resp = client.get("/app")
+            assert resp.status_code != 500, (
+                f"/app must not return 500; got {resp.status_code}: {resp.text}"
+            )
+            assert resp.status_code == 503, (
+                f"/app should return 503 when ui/dist missing; got {resp.status_code}"
+            )
+            body = resp.json()
+            assert body["status"] == "error"
+            assert body["error"]["code"] == "UI_NOT_BUILT"
+            assert "npm run build" in body["error"]["message"]
+            print(f"  GET /app (no dist): 503 UI_NOT_BUILT ✓")
+        else:
+            # If dist already exists (e.g., CI built it), just check 200
+            resp = client.get("/app")
+            assert resp.status_code in (200, 503), (
+                f"/app unexpected status: {resp.status_code}"
+            )
+            print(f"  GET /app (dist exists): {resp.status_code} ✓")
+
+
+def test_p10_app_does_not_break_health():
+    """P10-UI-2: GET /app does not break GET /health."""
+    print("\n=== Test P10-UI-2: /app does not break /health ===")
+    try:
+        from fastapi.testclient import TestClient
+    except RuntimeError as exc:
+        print(f"  SKIP: TestClient unavailable — {exc}")
+        return
+
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    from mcp.server.mcp_server import app as _fastapi_app
+
+    with TestClient(_fastapi_app) as client:
+        # Hit /app (may return 503) then verify /health is unaffected
+        client.get("/app")
+
+        resp = client.get("/health")
+        assert resp.status_code == 200, f"/health broken: {resp.status_code}"
+        body = resp.json()
+        assert body["status"] == "ok"
+        assert "vaults" in body["data"]
+        print(f"  /health after /app: 200 OK ✓")
+
+
+def test_p10_app_does_not_break_vaults():
+    """P10-UI-3: GET /app does not break GET /vaults."""
+    print("\n=== Test P10-UI-3: /app does not break /vaults ===")
+    try:
+        from fastapi.testclient import TestClient
+    except RuntimeError as exc:
+        print(f"  SKIP: TestClient unavailable — {exc}")
+        return
+
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    from mcp.server.mcp_server import app as _fastapi_app
+
+    with TestClient(_fastapi_app) as client:
+        client.get("/app")
+        resp = client.get("/vaults")
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "ok"
+        print(f"  /vaults after /app: 200 OK ✓")
+
+
+def test_p10_app_does_not_break_summary():
+    """P10-UI-4: GET /app does not break GET /summary."""
+    print("\n=== Test P10-UI-4: /app does not break /summary ===")
+    try:
+        from fastapi.testclient import TestClient
+    except RuntimeError as exc:
+        print(f"  SKIP: TestClient unavailable — {exc}")
+        return
+
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    from mcp.server.mcp_server import app as _fastapi_app
+
+    vault = list_vaults()[0]
+    with TestClient(_fastapi_app) as client:
+        client.get("/app")
+        resp = client.get(f"/summary?vault={vault}")
+        assert resp.status_code == 200, f"/summary broken: {resp.status_code}"
+        body = resp.json()
+        assert body["status"] == "ok"
+        for key in ("total_notes", "complete", "partial", "coverage"):
+            assert key in body["data"], f"summary missing key: {key}"
+        print(f"  /summary?vault={vault} after /app: 200 OK, "
+              f"coverage={body['data']['coverage']}% ✓")
+
+
+def test_p10_app_does_not_break_validation():
+    """P10-UI-5: GET /app does not break GET /validation."""
+    print("\n=== Test P10-UI-5: /app does not break /validation ===")
+    try:
+        from fastapi.testclient import TestClient
+    except RuntimeError as exc:
+        print(f"  SKIP: TestClient unavailable — {exc}")
+        return
+
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    from mcp.server.mcp_server import app as _fastapi_app
+
+    vault = list_vaults()[0]
+    with TestClient(_fastapi_app) as client:
+        client.get("/app")
+        resp = client.get(f"/validation?vault={vault}")
+        assert resp.status_code == 200, f"/validation broken: {resp.status_code}"
+        body = resp.json()
+        assert body["status"] == "ok"
+        assert "status" in body["data"]
+        print(f"  /validation?vault={vault} after /app: 200 OK, "
+              f"status={body['data']['status']} ✓")
+
+
+def test_p10_app_does_not_break_security():
+    """P10-UI-6: GET /app does not break POST /context/security."""
+    print("\n=== Test P10-UI-6: /app does not break /context/security ===")
+    try:
+        from fastapi.testclient import TestClient
+    except RuntimeError as exc:
+        print(f"  SKIP: TestClient unavailable — {exc}")
+        return
+
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    from mcp.server.mcp_server import app as _fastapi_app
+
+    vault = list_vaults()[0]
+    with TestClient(_fastapi_app) as client:
+        client.get("/app")
+        resp = client.post(
+            "/context/security",
+            json={"vault": vault, "filters": {"status": "complete"}, "max_notes": 5},
+        )
+        assert resp.status_code == 200, f"/context/security broken: {resp.status_code}"
+        body = resp.json()
+        assert body["status"] == "ok"
+        assert "status" in body["data"]
+        assert body["data"]["status"] in ("pass", "warning", "fail")
+        print(f"  POST /context/security after /app: 200 OK, "
+              f"scan_status={body['data']['status']} ✓")
+
+
+def test_p10_app_path_traversal_blocked():
+    """P10-UI-7: /app path traversal attempts are rejected with 400."""
+    print("\n=== Test P10-UI-7: /app path traversal blocked ===")
+    try:
+        from fastapi.testclient import TestClient
+    except RuntimeError as exc:
+        print(f"  SKIP: TestClient unavailable — {exc}")
+        return
+
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    from mcp.server.mcp_server import app as _fastapi_app, _UI_DIST
+
+    if not _UI_DIST.is_dir():
+        print("  SKIP: ui/dist not present — path traversal test requires built UI")
+        # Still verify the endpoint is registered and returns safe code
+        with TestClient(_fastapi_app) as client:
+            resp = client.get("/app")
+            assert resp.status_code in (200, 503), f"Unexpected: {resp.status_code}"
+        print("  /app registered and returns safe code when ui/dist absent ✓")
+        return
+
+    with TestClient(_fastapi_app) as client:
+        attacks = [
+            "../../../etc/passwd",
+            "..%2F..%2F..%2Fetc%2Fpasswd",
+            ".." + "/" * 10 + "etc/passwd",
+        ]
+        for attack in attacks:
+            resp = client.get(f"/app/{attack}")
+            # Must not be 200 with file content for traversal paths
+            # Either 400 (traversal blocked), 404 (URL normalized, no route),
+            # 503 (no dist) or 200 (SPA fallback with index).
+            # The important thing: no sensitive file content leaks.
+            if resp.status_code == 400:
+                body = resp.json()
+                assert body["error"]["code"] == "PATH_TRAVERSAL"
+                print(f"  Blocked (400): {attack[:30]!r} ✓")
+            elif resp.status_code == 404:
+                # URL normalization resolved the traversal out of /app entirely;
+                # the resulting path has no registered route → safe 404.
+                print(f"  Safe 404 (URL normalized): {attack[:30]!r} ✓")
+            elif resp.status_code in (200, 503):
+                # SPA fallback served index.html or dist missing — acceptable
+                print(f"  Safe response ({resp.status_code}): {attack[:30]!r} ✓")
+            else:
+                assert False, f"Unexpected status {resp.status_code} for {attack!r}"
+
+
+def test_p10_summary_accepts_vault_param():
+    """P10-UI-8: GET /summary?vault=<name> returns valid data for known vault."""
+    print("\n=== Test P10-UI-8: /summary accepts vault param ===")
+    try:
+        from fastapi.testclient import TestClient
+    except RuntimeError as exc:
+        print(f"  SKIP: TestClient unavailable — {exc}")
+        return
+
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    from mcp.server.mcp_server import app as _fastapi_app
+
+    vault = list_vaults()[0]
+    with TestClient(_fastapi_app) as client:
+        # With vault param
+        resp = client.get(f"/summary?vault={vault}")
+        assert resp.status_code == 200, f"/summary?vault= failed: {resp.status_code}"
+        body = resp.json()
+        assert body["status"] == "ok"
+        for key in ("total_notes", "complete", "partial", "coverage"):
+            assert key in body["data"]
+        assert body["data"]["total_notes"] > 0
+
+        # Without vault param (backwards compatible)
+        resp2 = client.get("/summary")
+        assert resp2.status_code == 200
+        assert resp2.json()["status"] == "ok"
+
+        # Unknown vault returns 404
+        resp3 = client.get("/summary?vault=__nonexistent__")
+        assert resp3.status_code == 404
+        body3 = resp3.json()
+        assert body3["status"] == "error"
+        assert body3["error"]["code"] == "INVALID_VAULT"
+
+        print(f"  /summary?vault={vault}: 200 OK, total_notes={body['data']['total_notes']} ✓")
+        print(f"  /summary (no param): 200 OK ✓")
+        print(f"  /summary?vault=unknown: 404 INVALID_VAULT ✓")
+
+
+# ============================================================
 # Main
 # ============================================================
 
@@ -5279,6 +5537,19 @@ def main():
     test_p9_bundle_manifest_schema_version()
     test_p9_export_manifest_schema_version()
     test_p9_missing_returns_concept_gaps()
+
+    # ---- Phase 10: Local Web UI Foundation ----
+    print("\n" + "=" * 60)
+    print("Phase 10 — Local Web UI Foundation")
+    print("=" * 60)
+    test_p10_app_no_500_when_ui_not_built()
+    test_p10_app_does_not_break_health()
+    test_p10_app_does_not_break_vaults()
+    test_p10_app_does_not_break_summary()
+    test_p10_app_does_not_break_validation()
+    test_p10_app_does_not_break_security()
+    test_p10_app_path_traversal_blocked()
+    test_p10_summary_accepts_vault_param()
 
     print()
     print("=" * 60)

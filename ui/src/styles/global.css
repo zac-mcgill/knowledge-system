@@ -1,0 +1,38 @@
+/* Tailwind CSS 4 — single import activates all utilities */
+@import "tailwindcss";
+
+/* Base typographic defaults for the dark dashboard shell */
+@layer base {
+  html {
+    font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+      "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-size: 15px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    background-color: #09090b; /* zinc-950 */
+    color: #f4f4f5;            /* zinc-100 */
+  }
+
+  code, pre, kbd {
+    font-family: ui-monospace, "Cascadia Code", "Fira Code", Consolas,
+      "Liberation Mono", Menlo, monospace;
+    font-size: 0.875em;
+  }
+
+  /* Minimal scrollbar for dark theme */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #18181b; /* zinc-900 */
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #3f3f46; /* zinc-700 */
+    border-radius: 3px;
+  }
+}

@@ -39,7 +39,7 @@ python run.py security
 # Export — writes integrity-verified package to dist/ with SHA-256 manifest
 python run.py export --overwrite
 
-# Full test suite — 180 tests covering all pipeline stages
+# Full test suite — 188 tests covering all pipeline stages
 python mcp/test_verify.py
 ```
 
@@ -129,6 +129,44 @@ py run.py security --fail-on-warning  # exit 1 for warning results too
 ```
 
 On Windows, use ``py run.py ...``. On macOS/Linux, use ``python3 run.py ...``.
+
+---
+
+## Local Web UI (Phase 10)
+
+A local browser UI is available alongside the CLI and API. The UI is built with **Astro + TypeScript + Tailwind CSS + Svelte** and served by the same FastAPI backend.
+
+### Development
+
+```bash
+# 1. Start the backend (required)
+py mcp/server/mcp_server.py
+
+# 2. In a separate terminal — start the UI dev server
+cd ui
+npm install
+npm run dev
+# → http://localhost:4321/app
+```
+
+### Production (build once, served by FastAPI)
+
+```bash
+cd ui
+npm install
+npm run build
+# Compiled output written to ui/dist/
+
+# Serve via the existing FastAPI server
+py mcp/server/mcp_server.py
+# → http://127.0.0.1:8000/app
+```
+
+`GET /app` serves the compiled frontend. If `ui/dist` has not been built, it returns a structured `503 UI_NOT_BUILT` response with build instructions. No other API routes are affected.
+
+**Stack:** Astro 5, TypeScript, Tailwind CSS 4, Svelte 5 islands.  
+**UI scope (Phase 10):** server health, vault list, vault selector, completion summary, validation status, security scan status, navigation shell for future pages.  
+**CLI and API:** remain fully supported and unchanged.
 
 ---
 

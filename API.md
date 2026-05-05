@@ -48,6 +48,8 @@ py mcp/server/mcp_server.py
 | `POST` | `/context/bundle` | Generate a deterministic context bundle |
 | `POST` | `/context/export` | Export a context bundle as a portable package |
 | `POST` | `/context/security` | Scan a context bundle for security issues |
+| `GET` | `/app` | Serve compiled local web UI (index.html) |
+| `GET` | `/app/{ui_path:path}` | Serve compiled local web UI static assets |
 
 ---
 
@@ -561,6 +563,39 @@ All fields except `vault` are optional.
 
 ---
 
+## Local Web UI
+
+### GET /app
+
+### GET /app/{ui_path:path}
+
+Serve the compiled local web UI static files from `ui/dist/`.
+
+- **`GET /app`** — serves `ui/dist/index.html`.
+- **`GET /app/{ui_path:path}`** — serves the requested static asset from `ui/dist/`. If the exact path is not found, serves `index.html` (SPA fallback).
+- **Path traversal protection:** any path containing `..` returns HTTP 400 `PATH_TRAVERSAL`.
+- **UI not built:** if `ui/dist/` does not exist, returns HTTP 503 with `UI_NOT_BUILT` error and build instructions.
+
+**Successful response:** Static HTML/CSS/JS files (not JSON).
+
+**Error responses:**
+```json
+{"status": "error", "error": {"code": "UI_NOT_BUILT", "message": "UI not built. Run: cd ui && npm install && npm run build"}}
+{"status": "error", "error": {"code": "PATH_TRAVERSAL", "message": "Path traversal detected"}}
+```
+
+**Building the UI:**
+```bash
+cd ui
+npm install
+npm run build
+# ui/dist/ is now ready — served at GET /app
+```
+
+All existing API routes (`/health`, `/vaults`, `/summary`, etc.) remain fully functional whether or not `ui/dist/` is present.
+
+---
+
 ## Error Reference
 
 | Code | HTTP Status | Meaning |
@@ -575,4 +610,5 @@ All fields except `vault` are optional.
 | `PACKAGE_EXISTS` | 409 | Package directory already exists, `overwrite=false` |
 | `SECURITY_SCAN_FAIL` | 400 | Security scan failed and `require_security_pass=true` |
 | `RATE_LIMIT` | 429 | Too many requests (>50/sec) |
+| `UI_NOT_BUILT` | 503 | `ui/dist/` not present — run `npm run build` in `ui/` |
 | `INTERNAL` | 500 | Unexpected server error |

@@ -1,6 +1,6 @@
 # Context Vault Engine — Testing
 
-All tests live in `mcp/test_verify.py`. There are 180 test functions covering all implemented phases.
+All tests live in `mcp/test_verify.py`. There are 188 test functions covering all implemented phases.
 
 ---
 
@@ -275,6 +275,19 @@ Regression tests for correctness fixes:
 - `test_p9_bundle_manifest_schema_version` — bundle `manifest.schema_version` equals `'3.0.0'`.
 - `test_p9_export_manifest_schema_version` — exported `manifest.json` contains `schema_version = '3.0.0'`.
 - `test_p9_missing_returns_concept_gaps` — `GET /missing` returns `total_expected=5`, `total_missing=5`, one subdomain, and a ranked gap list.
+
+### Phase 10 — Local Web UI Foundation Tests
+
+8 tests verifying the `/app` endpoint and that it does not break existing API routes:
+
+- `test_p10_app_no_500_when_ui_not_built` — `GET /app` returns 503 with `UI_NOT_BUILT` error (not 500) when `ui/dist` has not been built.
+- `test_p10_app_does_not_break_health` — `GET /health` remains functional after hitting `/app`.
+- `test_p10_app_does_not_break_vaults` — `GET /vaults` remains functional after hitting `/app`.
+- `test_p10_app_does_not_break_summary` — `GET /summary?vault=<name>` works after hitting `/app`.
+- `test_p10_app_does_not_break_validation` — `GET /validation?vault=<name>` works after hitting `/app`.
+- `test_p10_app_does_not_break_security` — `POST /context/security` works after hitting `/app`.
+- `test_p10_app_path_traversal_blocked` — `/app/<traversal>` returns 400 `PATH_TRAVERSAL` (or safe SPA fallback); no sensitive file content leaks.
+- `test_p10_summary_accepts_vault_param` — `GET /summary?vault=<name>` returns valid summary; `GET /summary` (no param) is backwards-compatible; `GET /summary?vault=__nonexistent__` returns 404 `INVALID_VAULT`.
 
 ---
 

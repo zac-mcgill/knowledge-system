@@ -35,9 +35,11 @@ if _project_root not in sys.path:
 
 from fastapi import FastAPI, Query
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse, HTMLResponse, Response
 from starlette.requests import Request
 from pydantic import BaseModel, Field
+import mimetypes
 
 from mcp.core.vault_registry import list_vaults, get_vault_path, get_schema
 from mcp.core.note_index import build_index, get_index, get_schema_hash, get_index_metadata
@@ -297,6 +299,25 @@ app = FastAPI(
     version="0.3.0",
     lifespan=lifespan,
 )
+
+# ---------- CORS (Phase 10) ----------
+# Allow the Astro dev server (localhost:4321/4322) to call the API during
+# development.  Production requests come from the same origin (/app on :8000).
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:4321",
+        "http://127.0.0.1:4321",
+        "http://localhost:4322",
+        "http://127.0.0.1:4322",
+    ],
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type"],
+    allow_credentials=False,
+)
+
+# Path to the compiled Astro frontend (relative to this file)
+_UI_DIST: Path = Path(__file__).resolve().parent.parent.parent / "ui" / "dist"
 
 
 # ---------- Exception Handlers ----------
@@ -761,7 +782,9 @@ def endpoint_validation(
 
 
 @app.get("/summary")
-def endpoint_summary():
+def endpoint_summary(
+    vault: str = Query(None, description="Vault name (defaults to first registered vault)"),
+):
     """Aggregate vault-level decision signals.
 
     Response data:
@@ -770,8 +793,12 @@ def endpoint_summary():
         partial (int): Notes not yet complete.
         coverage (int): Completion percentage (0–100).
     """
+    if vault is not None:
+        err = _validate_vault(vault)
+        if err:
+            return err
     try:
-        result = get_all_notes()
+        result = get_all_notes(vault_name=vault)
         if "error" in result:
             return _error("SUMMARY_FAILED", result["error"], 500)
 
@@ -1642,6 +1669,76 @@ def endpoint_context_security(req: SecurityRequest):
         return {"status": "ok", "data": result}
     except Exception as exc:
         return _error("SECURITY_SCAN_FAILED", f"Security scan failed: {exc}", 500)
+
+
+# ---------- Phase 10: Static UI Serving ----------
+
+
+@app.get("/app", include_in_schema=False)
+@app.get("/app/{ui_path:path}", include_in_schema=False)
+def endpoint_app(ui_path: str = ""):
+    """Serve the compiled Astro frontend from ui/dist.
+
+    Requires a prior production build:
+        cd ui
+        npm install
+        npm run build
+
+    Returns HTTP 503 with instructions when ui/dist does not exist.
+    Path traversal attempts outside ui/dist are rejected with HTTP 400.
+    """
+    if not _UI_DIST.is_dir():
+        return JSONResponse(
+            status_code=503,
+            content={
+                "status": "error",
+                "error": {
+                    "code": "UI_NOT_BUILT",
+                    "message": (
+                        "Frontend not built. "
+                        "Run: cd ui && npm install && npm run build"
+                    ),
+                },
+            },
+        )
+
+    # Resolve the requested file path, defaulting to index.html
+    clean = ui_path.strip("/") if ui_path else ""
+    if clean:
+        candidate = _UI_DIST / clean
+    else:
+        candidate = _UI_DIST / "index.html"
+
+    # Path traversal protection: resolved path must stay inside _UI_DIST
+    try:
+        candidate.resolve().relative_to(_UI_DIST.resolve())
+    except ValueError:
+        return JSONResponse(
+            status_code=400,
+            content={
+                "status": "error",
+                "error": {"code": "PATH_TRAVERSAL", "message": "Access denied"},
+            },
+        )
+
+    # SPA fallback: unknown paths serve index.html
+    if not candidate.is_file():
+        candidate = _UI_DIST / "index.html"
+        if not candidate.is_file():
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "status": "error",
+                    "error": {
+                        "code": "UI_MISSING_INDEX",
+                        "message": "index.html not found in ui/dist. Rebuild the frontend.",
+                    },
+                },
+            )
+
+    content = candidate.read_bytes()
+    media_type, _ = mimetypes.guess_type(str(candidate))
+    return Response(content=content, media_type=media_type or "application/octet-stream")
 
 
 # ---------- Run ----------

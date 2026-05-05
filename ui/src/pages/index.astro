@@ -1,0 +1,9 @@
+---
+import AppLayout from '../layouts/AppLayout.astro';
+import Dashboard from '../components/Dashboard.svelte';
+---
+
+<AppLayout title="Dashboard">
+  <!-- Svelte island: client:load hydrates immediately on page load -->
+  <Dashboard client:load />
+</AppLayout>

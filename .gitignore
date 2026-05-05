@@ -30,3 +30,8 @@ mcp/tmp/
 
 # Generated context packages (Phase 4 build artefacts)
 dist/
+
+# Phase 10: UI build artefacts and dependencies
+ui/dist/
+ui/.astro/
+ui/node_modules/

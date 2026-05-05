@@ -306,6 +306,45 @@ py mcp/server/mcp_server.py
 
 ---
 
+## 6b. Local Web UI (Phase 10)
+
+A browser dashboard is available for viewing vault status without the CLI.
+
+### Development workflow
+
+```bash
+# Terminal 1 — backend (must be running)
+pip install -r mcp/requirements.txt
+py mcp/server/mcp_server.py
+
+# Terminal 2 — Astro dev server
+cd ui
+npm install
+npm run dev
+# Open: http://localhost:4321/app
+```
+
+The dev server hot-reloads on UI file changes. API calls go directly to `http://127.0.0.1:8000`. Set `PUBLIC_API_BASE_URL` in `ui/.env` to override.
+
+### Production build
+
+```bash
+cd ui
+npm install
+npm run build
+# Output: ui/dist/
+
+# The existing FastAPI server now serves the UI
+py mcp/server/mcp_server.py
+# Open: http://127.0.0.1:8000/app
+```
+
+`GET /app` serves the compiled Astro frontend from `ui/dist`. If `ui/dist` does not exist, it returns `503 UI_NOT_BUILT` with instructions — no other API routes are affected.
+
+**Stack:** Astro 5 · TypeScript · Tailwind CSS 4 · Svelte 5 islands
+
+---
+
 ## 7. Query the System
 
 **Vault overview**
