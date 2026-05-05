@@ -41,7 +41,7 @@ from starlette.requests import Request
 from pydantic import BaseModel, Field
 import mimetypes
 
-from mcp.core.vault_registry import list_vaults, get_vault_path, get_schema
+from mcp.core.vault_registry import list_vaults, get_vault_path, get_schema, reload_config
 from mcp.core.note_index import build_index, get_index, get_schema_hash, get_index_metadata
 from mcp.core.query_engine import query, list_notes, get_note, aggregate
 from mcp.core.contract_runner import run_all_checks, run_lightweight_checks
@@ -528,6 +528,19 @@ class SecurityRequest(BaseModel):
     allow_partial: bool = Field(
         default=False,
         description="Include notes with status=partial",
+    )
+
+
+class VaultBootstrapRequest(BaseModel):
+    """Request body for POST /vault/bootstrap."""
+
+    vault_name: str = Field(..., description="New vault directory name (e.g. 'dogs-vault')")
+    domain: str = Field(..., description="Primary domain display name (e.g. 'Dogs')")
+    note_type: str = Field(..., description="Note type slug (e.g. 'breed-profile')")
+    sections: list[str] = Field(..., description="Canonical section names (minimum 2)")
+    expected_concepts: list[str] = Field(
+        default_factory=list,
+        description="Optional expected concept names (accepted but not yet written to schema)",
     )
 
 
@@ -1669,6 +1682,139 @@ def endpoint_context_security(req: SecurityRequest):
         return {"status": "ok", "data": result}
     except Exception as exc:
         return _error("SECURITY_SCAN_FAILED", f"Security scan failed: {exc}", 500)
+
+
+# ---------- Phase 11A: Vault Bootstrap ----------
+
+# Module-level override for the bootstrap repository root.
+# Set to a Path in tests to redirect vault creation to a temp directory
+# without restarting the server process.
+_BOOTSTRAP_REPO_ROOT: Path | None = None
+
+
+def _get_bootstrap_repo_root() -> Path:
+    """Return the effective repository root used by POST /vault/bootstrap."""
+    return _BOOTSTRAP_REPO_ROOT if _BOOTSTRAP_REPO_ROOT is not None else Path(_project_root)
+
+
+@app.post("/vault/bootstrap")
+def endpoint_vault_bootstrap(req: VaultBootstrapRequest):
+    """Create a new vault from a structured request.
+
+    Validates all inputs strictly before writing any files.  On success,
+    creates the vault directory, writes vault_schema.py, updates
+    config/config.yaml atomically, and generates canonical templates.
+    The in-process vault registry is refreshed after a successful bootstrap.
+
+    Request body:
+        vault_name (str, required): New vault directory name.
+            Must match ^[A-Za-z0-9_-]+$. Must not already exist.
+        domain (str, required): Primary domain display name (e.g. 'Dogs').
+        note_type (str, required): Note type slug (e.g. 'breed-profile').
+            Must match ^[a-z0-9]+(?:-[a-z0-9]+)*$.
+        sections (list[str], required): Canonical section names (min 2,
+            no duplicates).
+        expected_concepts (list[str]): Optional expected concept names.
+            Accepted and echoed in warnings; not yet written to schema.
+
+    Response data on success:
+        vault (str): Created vault name.
+        created (list[str]): Relative paths of files written.
+        warnings (list[str]): Non-fatal notices (e.g. expected_concepts,
+            registry refresh advisory).
+
+    Error codes:
+        INVALID_INPUT:       Request body fails Pydantic validation.
+        VALIDATION_ERROR:    One or more fields fail domain validation.
+        VAULT_EXISTS:        A vault with vault_name already exists.
+        PATH_TRAVERSAL:      vault_name resolves outside the repository root.
+        BOOTSTRAP_FAILED:    Vault creation or template generation error.
+        CONFIG_UPDATE_FAILED: Config write failed after vault was created
+                              (vault rolled back where possible).
+    """
+    repo_root = _get_bootstrap_repo_root()
+
+    from core.shared.bootstrap_service import (
+        validate_bootstrap_request,
+        bootstrap_vault_noninteractive,
+    )
+
+    # Pre-validate to return structured errors with specific codes
+    validation_errors = validate_bootstrap_request(
+        repo_root,
+        req.vault_name,
+        req.domain,
+        req.note_type,
+        req.sections,
+        req.expected_concepts if req.expected_concepts else None,
+    )
+
+    if validation_errors:
+        # Map first error to a specific error code for caller convenience
+        first = validation_errors[0].lower()
+        if "already exists" in first:
+            code = "VAULT_EXISTS"
+            status_code = 409
+        elif "path traversal" in first or "outside repository" in first:
+            code = "PATH_TRAVERSAL"
+            status_code = 400
+        else:
+            code = "INVALID_INPUT"
+            status_code = 422
+        return _error(
+            code,
+            "; ".join(validation_errors),
+            status_code,
+        )
+
+    try:
+        result = bootstrap_vault_noninteractive(
+            repo_root=repo_root,
+            vault_name=req.vault_name,
+            domain=req.domain,
+            note_type=req.note_type,
+            sections=req.sections,
+            expected_concepts=req.expected_concepts if req.expected_concepts else None,
+        )
+    except FileExistsError as exc:
+        return _error("VAULT_EXISTS", str(exc), 409)
+    except ValueError as exc:
+        return _error("INVALID_INPUT", str(exc), 422)
+    except RuntimeError as exc:
+        msg = str(exc)
+        if "config update failed" in msg.lower():
+            return _error("CONFIG_UPDATE_FAILED", msg, 500)
+        return _error("BOOTSTRAP_FAILED", msg, 500)
+    except Exception as exc:
+        logger.exception("vault_bootstrap_unhandled vault=%s", req.vault_name)
+        return _error("BOOTSTRAP_FAILED", f"Unexpected bootstrap error: {exc}", 500)
+
+    # Refresh in-process vault registry so the new vault is immediately
+    # queryable without a server restart.
+    try:
+        reload_config()
+        logger.info(
+            "vault_registry_refreshed after_bootstrap vault=%s", req.vault_name
+        )
+        # Remove the generic registry-refresh warning since we did it in-process
+        result["warnings"] = [
+            w for w in result["warnings"]
+            if "registry cache may be stale" not in w
+        ]
+    except Exception as exc:
+        logger.warning(
+            "vault_registry_refresh_failed vault=%s error=%s", req.vault_name, exc
+        )
+        # Warning is already in result["warnings"] from the service; leave it
+
+    return {
+        "status": "ok",
+        "data": {
+            "vault": result["vault"],
+            "created": result["created"],
+            "warnings": result["warnings"],
+        },
+    }
 
 
 # ---------- Phase 10: Static UI Serving ----------

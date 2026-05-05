@@ -289,6 +289,25 @@ Regression tests for correctness fixes:
 - `test_p10_app_path_traversal_blocked` — `/app/<traversal>` returns 400 `PATH_TRAVERSAL` (or safe SPA fallback); no sensitive file content leaks.
 - `test_p10_summary_accepts_vault_param` — `GET /summary?vault=<name>` returns valid summary; `GET /summary` (no param) is backwards-compatible; `GET /summary?vault=__nonexistent__` returns 404 `INVALID_VAULT`.
 
+### Phase 11A — Guided Vault Bootstrap Backend API Tests
+
+14 tests covering the `POST /vault/bootstrap` endpoint, `core/shared/bootstrap_service.py`, and CLI compatibility:
+
+- `test_p11a_valid_bootstrap_creates_vault` — Valid inputs create a vault directory with files listed in `created`.
+- `test_p11a_path_traversal_rejected` — `vault_name` values containing `..` or path separators are rejected before any file write.
+- `test_p11a_absolute_path_rejected` — Absolute paths as `vault_name` are rejected.
+- `test_p11a_duplicate_vault_rejected` — Requesting a `vault_name` that already exists returns a validation error.
+- `test_p11a_empty_domain_rejected` — Empty or whitespace-only `domain` is rejected with an error mentioning `domain`.
+- `test_p11a_invalid_note_type_rejected` — `note_type` values that don't match the slug pattern (e.g. uppercase, underscore, space) are rejected.
+- `test_p11a_too_few_sections_rejected` — Fewer than 2 non-whitespace sections are rejected.
+- `test_p11a_duplicate_sections_rejected` — Duplicate sections (case-insensitive) are rejected.
+- `test_p11a_config_updated_atomically` — After bootstrap `config/config.yaml` is valid YAML with `vault_root` pointing to the new vault.
+- `test_p11a_vault_has_schema` — Bootstrapped vault contains `Vault Files/Scripts/vault_schema.py` with `VALID_TYPES` and `DOMAIN_MAP`.
+- `test_p11a_vault_has_templates` — Bootstrapped vault contains at least one `.md` template file with section headers.
+- `test_p11a_cli_bootstrap_still_importable` — `core.bootstrap_vault` is importable and exports `main`, `collect_input`, `_create_vault_structure`, and `_update_config`.
+- `test_p11a_api_bootstrap_success_envelope` — `POST /vault/bootstrap` with valid inputs returns HTTP 200 with standard `status/data` envelope, and `data` contains `vault`, `created`, and `warnings`.
+- `test_p11a_api_bootstrap_invalid_input_errors` — Various invalid inputs return structured `status/error/code/message` responses with 400 or 422 status.
+
 ---
 
 ## Interpreting Failures

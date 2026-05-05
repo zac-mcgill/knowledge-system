@@ -262,29 +262,13 @@ def _create_vault_structure(
 
 
 def _update_config(repo_root: Path, vault_name: str) -> None:
-    """Atomically update config/config.yaml to point to *vault_name*."""
-    config_path = repo_root / "config" / "config.yaml"
-    if not config_path.is_file():
-        raise FileNotFoundError(f"config/config.yaml not found: {config_path}")
+    """Atomically update config/config.yaml to point to *vault_name*.
 
-    with open(config_path, encoding="utf-8") as f:
-        content = f.read()
-
-    updated = re.sub(
-        r"^(vault_root:\s*).*$",
-        rf"\g<1>./{vault_name}",
-        content,
-        flags=re.MULTILINE,
-    )
-
-    tmp_fd, tmp_path = tempfile.mkstemp(dir=config_path.parent, suffix=".yaml")
-    try:
-        with os.fdopen(tmp_fd, "w", encoding="utf-8") as tmp:
-            tmp.write(updated)
-        Path(tmp_path).replace(config_path)
-    except BaseException:
-        Path(tmp_path).unlink(missing_ok=True)
-        raise
+    Delegates to the shared bootstrap service so the config-update logic
+    is defined in exactly one place.
+    """
+    from core.shared.bootstrap_service import update_config
+    update_config(repo_root, vault_name)
 
 
 # ---------------------------------------------------------------------------

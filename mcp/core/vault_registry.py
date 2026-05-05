@@ -82,3 +82,20 @@ def get_schema(name: str) -> ModuleType:
         _schemas[name] = load_schema(_vaults[name], vault_name=name)
 
     return _schemas[name]
+
+
+def reload_config() -> None:
+    """Clear the vault and schema cache and reload from config.yaml.
+
+    Safe to call at runtime — clears the in-memory registry and reloads vault
+    paths from the current state of config/config.yaml.  Schema modules cached
+    in sys.modules are NOT removed (they remain importable but the registry
+    will reload them fresh on next get_schema() call).
+
+    Use this after a vault bootstrap to make the new vault discoverable without
+    restarting the process.
+    """
+    global _vaults, _schemas
+    _vaults = {}
+    _schemas = {}
+    _load_config()

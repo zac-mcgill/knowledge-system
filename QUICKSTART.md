@@ -345,6 +345,33 @@ py mcp/server/mcp_server.py
 
 ---
 
+## 6c. API-based Vault Bootstrap (Phase 11A)
+
+As an alternative to `py run.py bootstrap`, you can create a new vault via the API:
+
+```bash
+# Start the server first
+py mcp/server/mcp_server.py
+
+# Create a vault via HTTP
+curl -X POST http://127.0.0.1:8000/vault/bootstrap \
+  -H "Content-Type: application/json" \
+  -d '{
+    "vault_name": "dogs-vault",
+    "domain": "Dogs",
+    "note_type": "breed-profile",
+    "sections": ["Overview", "Care Requirements", "Health Risks"]
+  }'
+```
+
+The API bootstrap creates the vault directory, writes `vault_schema.py`, updates `config/config.yaml` atomically, and generates canonical templates. The running server's vault registry is refreshed immediately.
+
+The CLI flow `py run.py bootstrap` is unchanged and remains fully supported.
+
+**Note:** The guided UI form for vault creation is planned for Phase 11B.
+
+---
+
 ## 7. Query the System
 
 **Vault overview**

@@ -50,6 +50,7 @@ py mcp/server/mcp_server.py
 | `POST` | `/context/security` | Scan a context bundle for security issues |
 | `GET` | `/app` | Serve compiled local web UI (index.html) |
 | `GET` | `/app/{ui_path:path}` | Serve compiled local web UI static assets |
+| `POST` | `/vault/bootstrap` | Create a new vault (Phase 11A) |
 
 ---
 
@@ -596,6 +597,76 @@ All existing API routes (`/health`, `/vaults`, `/summary`, etc.) remain fully fu
 
 ---
 
+## Vault Management
+
+### POST /vault/bootstrap
+
+Create a new vault from a structured request.  This is the backend foundation
+for guided vault creation (Phase 11A).  The CLI `py run.py bootstrap` flow
+remains supported and is unaffected.
+
+**Request body:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `vault_name` | string | yes | New vault directory name. Pattern: `^[A-Za-z0-9_-]+$`. Must not already exist. |
+| `domain` | string | yes | Primary domain display name (e.g. `"Dogs"`). |
+| `note_type` | string | yes | Note type slug (e.g. `"breed-profile"`). Pattern: `^[a-z0-9]+(?:-[a-z0-9]+)*$`. |
+| `sections` | list[string] | yes | Canonical section names (minimum 2, no duplicates). |
+| `expected_concepts` | list[string] | no | Expected concept names. Accepted but not yet written to schema (see limitations). |
+
+**Example request:**
+```json
+{
+  "vault_name": "dogs-vault",
+  "domain": "Dogs",
+  "note_type": "breed-profile",
+  "sections": ["Overview", "Care Requirements", "Health Risks"],
+  "expected_concepts": ["Labrador Retriever", "German Shepherd"]
+}
+```
+
+**Success response (HTTP 200):**
+```json
+{
+  "status": "ok",
+  "data": {
+    "vault": "dogs-vault",
+    "created": [
+      "dogs-vault/Vault Files/Scripts/vault_schema.py",
+      "dogs-vault/Vault Files/Templates/breed-profile.md"
+    ],
+    "warnings": [
+      "expected_concepts were accepted but not written into vault_schema.py. ...",
+    ]
+  }
+}
+```
+
+**Error responses:**
+
+| Code | HTTP Status | Trigger |
+|------|-------------|---------|
+| `INVALID_INPUT` | 422 | One or more fields fail domain validation |
+| `VAULT_EXISTS` | 409 | A vault with `vault_name` already exists |
+| `PATH_TRAVERSAL` | 400 | `vault_name` resolves outside the repository root |
+| `BOOTSTRAP_FAILED` | 500 | Vault creation or template generation error |
+| `CONFIG_UPDATE_FAILED` | 500 | Config write failed (vault rolled back where safe) |
+
+**Security rules:**
+- `vault_name` must match `^[A-Za-z0-9_-]+$` — no path separators, no `..`
+- Resolved vault path must remain within the repository root
+- No overwrite of existing directories
+- `config/config.yaml` is updated atomically (temp-file + replace)
+
+**Limitation — `expected_concepts`:**  
+`expected_concepts` are validated and echoed in the response `warnings` list, but are not yet written into `vault_schema.py`. The schema generator does not currently support `EXPECTED_CONCEPTS` injection via the bootstrap API. Add them manually to `vault_schema.py` after bootstrap.
+
+**Registry behaviour:**  
+The in-process vault registry is refreshed automatically after a successful bootstrap so the new vault is immediately queryable without a server restart.
+
+---
+
 ## Error Reference
 
 | Code | HTTP Status | Meaning |
@@ -611,4 +682,7 @@ All existing API routes (`/health`, `/vaults`, `/summary`, etc.) remain fully fu
 | `SECURITY_SCAN_FAIL` | 400 | Security scan failed and `require_security_pass=true` |
 | `RATE_LIMIT` | 429 | Too many requests (>50/sec) |
 | `UI_NOT_BUILT` | 503 | `ui/dist/` not present — run `npm run build` in `ui/` |
+| `VAULT_EXISTS` | 409 | Vault directory already exists (bootstrap) |
+| `BOOTSTRAP_FAILED` | 500 | Vault creation or template generation error (bootstrap) |
+| `CONFIG_UPDATE_FAILED` | 500 | Config write failed during bootstrap |
 | `INTERNAL` | 500 | Unexpected server error |

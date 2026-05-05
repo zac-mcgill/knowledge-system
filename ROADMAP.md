@@ -211,9 +211,10 @@ Phase 8a	Demo vault completion	Complete
 Phase 8b	Schema data demo improvements	Complete
 Phase 9	Public presentation pass	Complete
 Phase 10	Local Web UI Foundation	Complete
+Phase 11A	Guided Vault Bootstrap Backend API	Complete
 Future
 Phase	Name	Priority
-Phase 11	Guided Vault Bootstrap UI	Highest
+Phase 11B	Guided Vault Bootstrap UI Form	Highest
 Phase 12	Vault Dashboard and Issue Review	High
 Phase 13	Bundle, Export, and Security UI	High
 Phase 14	Feedback and Task Workflow UI	Medium
@@ -461,7 +462,32 @@ Add at least one backend test proving UI static route exists if served by FastAP
 Frontend tests optional at this stage
 Suggested Commit
 feat(ui): add local web interface foundation
-Phase 11 - Guided Vault Bootstrap UI
+
+Phase 11A - Guided Vault Bootstrap Backend API
+Status: Complete
+
+Purpose: Provide a non-interactive, HTTP-accessible vault bootstrap pathway that the CLI and the future UI form can both use.
+
+Delivered:
+- core/shared/bootstrap_service.py — shared vault bootstrap service (validate, create, rollback, config update)
+- core/bootstrap_vault.py — refactored _update_config() to delegate to service; interactive CLI unchanged
+- mcp/core/vault_registry.py — reload_config() for in-process registry refresh after bootstrap
+- mcp/server/mcp_server.py — POST /vault/bootstrap endpoint, VaultBootstrapRequest model, _BOOTSTRAP_REPO_ROOT override for tests
+- mcp/test_verify.py — 14 Phase 11A tests added (202 total)
+- API.md — documented POST /vault/bootstrap, request/response shapes, error codes
+- QUICKSTART.md — section 6c covers API-based vault bootstrap
+- TESTING.md — Phase 11A test descriptions added
+
+Acceptance criteria met:
+- POST /vault/bootstrap creates vault, schema, templates, updates config
+- CLI py run.py bootstrap still works
+- All prior 188 tests still pass
+- expected_concepts accepted with warning; not written to schema yet
+
+Suggested Commit
+feat(bootstrap): add POST /vault/bootstrap API endpoint (Phase 11A)
+
+Phase 11B - Guided Vault Bootstrap UI Form
 Purpose
 
 Make vault creation low-friction.
@@ -904,7 +930,15 @@ Recommended Next Phase
 
 Start with:
 
-Phase 11 - Guided Vault Bootstrap UI
+Phase 11B - Guided Vault Bootstrap UI Form
+
+Phase 11A (Guided Vault Bootstrap Backend API) is complete:
+
+- POST /vault/bootstrap endpoint added to FastAPI server
+- core/shared/bootstrap_service.py — shared service (validate, create, rollback, config update)
+- CLI py run.py bootstrap unchanged; _update_config() now delegates to shared service
+- vault_registry.reload_config() for in-process registry refresh
+- 14 backend tests added (202 total passing)
 
 Phase 10 (Local Web UI Foundation) is complete:
 

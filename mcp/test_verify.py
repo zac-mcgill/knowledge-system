@@ -5300,6 +5300,516 @@ def test_p10_summary_accepts_vault_param():
 
 
 # ============================================================
+# Phase 11A — Guided Vault Bootstrap Backend API
+# ============================================================
+
+
+def _make_temp_repo() -> Path:
+    """Create a minimal temp repo structure suitable for bootstrap tests.
+
+    Returns the repo_root path.  The caller is responsible for cleanup
+    (e.g. via shutil.rmtree or tempfile.TemporaryDirectory).
+    """
+    import tempfile, shutil
+
+    tmp = Path(tempfile.mkdtemp(prefix="kv_p11a_"))
+    # Minimal config
+    (tmp / "config").mkdir()
+    (tmp / "config" / "config.yaml").write_text(
+        "vault_root: ./demo-vault\n", encoding="utf-8"
+    )
+    # Minimal fake demo-vault (not needed by bootstrap_service but avoids
+    # validate_bootstrap_request vault-exists check against real repo)
+    return tmp
+
+
+def test_p11a_valid_bootstrap_creates_vault():
+    """P11A-1: Valid bootstrap request creates a vault with schema and templates."""
+    print("\n=== Test P11A-1: Valid Bootstrap Creates Vault ===")
+    import tempfile, shutil
+    from core.shared.bootstrap_service import bootstrap_vault_noninteractive
+
+    with tempfile.TemporaryDirectory(prefix="kv_p11a_1_") as tmp_str:
+        repo_root = Path(tmp_str)
+        (repo_root / "config").mkdir()
+        (repo_root / "config" / "config.yaml").write_text(
+            "vault_root: ./demo-vault\n", encoding="utf-8"
+        )
+
+        result = bootstrap_vault_noninteractive(
+            repo_root=repo_root,
+            vault_name="dogs-vault",
+            domain="Dogs",
+            note_type="breed-profile",
+            sections=["Overview", "Care Requirements", "Health Risks"],
+            expected_concepts=["Labrador Retriever", "German Shepherd"],
+        )
+
+        assert result["vault"] == "dogs-vault"
+        vault_path = repo_root / "dogs-vault"
+        assert vault_path.is_dir(), "Vault directory not created"
+        assert "created" in result
+        assert len(result["created"]) > 0, "No files listed in created"
+        print(f"  Created vault: {result['vault']}")
+        print(f"  Files created: {result['created']}")
+
+
+def test_p11a_path_traversal_rejected():
+    """P11A-2: vault_name with path traversal is rejected before any file write."""
+    print("\n=== Test P11A-2: Path Traversal Rejected ===")
+    import tempfile
+    from core.shared.bootstrap_service import validate_bootstrap_request
+
+    with tempfile.TemporaryDirectory(prefix="kv_p11a_2_") as tmp_str:
+        repo_root = Path(tmp_str)
+        traversal_names = [
+            "../../etc",
+            "../outside",
+            "sub/../../../etc",
+        ]
+        for name in traversal_names:
+            errors = validate_bootstrap_request(
+                repo_root, name, "Dogs", "breed-profile",
+                ["Overview", "Health"], None,
+            )
+            assert len(errors) > 0, f"Expected rejection for vault_name={name!r}"
+            print(f"  Rejected {name!r}: {errors[0]}")
+
+
+def test_p11a_absolute_path_rejected():
+    """P11A-3: Absolute path as vault_name is rejected."""
+    print("\n=== Test P11A-3: Absolute Path Rejected ===")
+    import tempfile
+    from core.shared.bootstrap_service import validate_bootstrap_request
+
+    with tempfile.TemporaryDirectory(prefix="kv_p11a_3_") as tmp_str:
+        repo_root = Path(tmp_str)
+        absolute_names = [
+            "/etc/passwd",
+            "C:\\Windows",
+            "/tmp/evil-vault",
+        ]
+        for name in absolute_names:
+            errors = validate_bootstrap_request(
+                repo_root, name, "Dogs", "breed-profile",
+                ["Overview", "Health"], None,
+            )
+            assert len(errors) > 0, f"Expected rejection for vault_name={name!r}"
+            print(f"  Rejected {name!r}: {errors[0]}")
+
+
+def test_p11a_duplicate_vault_rejected():
+    """P11A-4: Requesting a vault_name that already exists is rejected."""
+    print("\n=== Test P11A-4: Duplicate Vault Rejected ===")
+    import tempfile
+    from core.shared.bootstrap_service import validate_bootstrap_request
+
+    with tempfile.TemporaryDirectory(prefix="kv_p11a_4_") as tmp_str:
+        repo_root = Path(tmp_str)
+        # Create the vault directory to simulate it already existing
+        existing = repo_root / "dogs-vault"
+        existing.mkdir()
+
+        errors = validate_bootstrap_request(
+            repo_root, "dogs-vault", "Dogs", "breed-profile",
+            ["Overview", "Health"], None,
+        )
+        assert len(errors) > 0, "Expected error for existing vault"
+        assert any("already exists" in e for e in errors)
+        print(f"  Duplicate vault rejected: {errors[0]}")
+
+
+def test_p11a_empty_domain_rejected():
+    """P11A-5: Empty domain is rejected."""
+    print("\n=== Test P11A-5: Empty Domain Rejected ===")
+    import tempfile
+    from core.shared.bootstrap_service import validate_bootstrap_request
+
+    with tempfile.TemporaryDirectory(prefix="kv_p11a_5_") as tmp_str:
+        repo_root = Path(tmp_str)
+        for empty_domain in ("", "   "):
+            errors = validate_bootstrap_request(
+                repo_root, "test-vault", empty_domain, "breed-profile",
+                ["Overview", "Health"], None,
+            )
+            assert len(errors) > 0, f"Expected error for domain={empty_domain!r}"
+            assert any("domain" in e for e in errors)
+            print(f"  Empty domain {empty_domain!r} rejected: {errors[0]}")
+
+
+def test_p11a_invalid_note_type_rejected():
+    """P11A-6: Invalid note_type is rejected."""
+    print("\n=== Test P11A-6: Invalid note_type Rejected ===")
+    import tempfile
+    from core.shared.bootstrap_service import validate_bootstrap_request
+
+    with tempfile.TemporaryDirectory(prefix="kv_p11a_6_") as tmp_str:
+        repo_root = Path(tmp_str)
+        bad_types = [
+            "",          # empty
+            "BreedProfile",  # uppercase
+            "-breed",        # leading hyphen
+            "breed_profile", # underscore (not allowed in slug)
+            "breed profile", # space
+        ]
+        for bad_type in bad_types:
+            errors = validate_bootstrap_request(
+                repo_root, "test-vault", "Dogs", bad_type,
+                ["Overview", "Health"], None,
+            )
+            assert len(errors) > 0, f"Expected rejection for note_type={bad_type!r}"
+            assert any("note_type" in e for e in errors), (
+                f"Error should mention note_type, got: {errors}"
+            )
+            print(f"  note_type={bad_type!r} rejected: {errors[0]}")
+
+
+def test_p11a_too_few_sections_rejected():
+    """P11A-7: Fewer than 2 sections is rejected."""
+    print("\n=== Test P11A-7: Too Few Sections Rejected ===")
+    import tempfile
+    from core.shared.bootstrap_service import validate_bootstrap_request
+
+    with tempfile.TemporaryDirectory(prefix="kv_p11a_7_") as tmp_str:
+        repo_root = Path(tmp_str)
+        bad_section_lists = [
+            [],
+            ["Only One"],
+            ["  ", "  "],   # all whitespace → effectively empty
+        ]
+        for bad_sections in bad_section_lists:
+            errors = validate_bootstrap_request(
+                repo_root, "test-vault", "Dogs", "breed-profile",
+                bad_sections, None,
+            )
+            assert len(errors) > 0, f"Expected rejection for sections={bad_sections!r}"
+            assert any("sections" in e for e in errors)
+            print(f"  sections={bad_sections!r} rejected: {errors[0]}")
+
+
+def test_p11a_duplicate_sections_rejected():
+    """P11A-8: Duplicate sections (case-insensitive) are rejected."""
+    print("\n=== Test P11A-8: Duplicate Sections Rejected ===")
+    import tempfile
+    from core.shared.bootstrap_service import validate_bootstrap_request
+
+    with tempfile.TemporaryDirectory(prefix="kv_p11a_8_") as tmp_str:
+        repo_root = Path(tmp_str)
+        # Exact duplicate
+        errors = validate_bootstrap_request(
+            repo_root, "test-vault", "Dogs", "breed-profile",
+            ["Overview", "Overview", "Health"], None,
+        )
+        assert len(errors) > 0, "Expected rejection for duplicate sections"
+        assert any("duplicate" in e.lower() for e in errors)
+        print(f"  Exact duplicate sections rejected: {errors[0]}")
+
+        # Case-insensitive duplicate
+        errors2 = validate_bootstrap_request(
+            repo_root, "test-vault", "Dogs", "breed-profile",
+            ["Overview", "overview"], None,
+        )
+        assert len(errors2) > 0, "Expected rejection for case-insensitive duplicate"
+        assert any("duplicate" in e.lower() for e in errors2)
+        print(f"  Case-insensitive duplicate sections rejected: {errors2[0]}")
+
+
+def test_p11a_config_updated_atomically():
+    """P11A-9: Config is updated atomically and result is valid YAML."""
+    print("\n=== Test P11A-9: Config Updated Atomically ===")
+    import tempfile, yaml
+    from core.shared.bootstrap_service import bootstrap_vault_noninteractive
+
+    with tempfile.TemporaryDirectory(prefix="kv_p11a_9_") as tmp_str:
+        repo_root = Path(tmp_str)
+        (repo_root / "config").mkdir()
+        config_path = repo_root / "config" / "config.yaml"
+        config_path.write_text("vault_root: ./demo-vault\n", encoding="utf-8")
+
+        bootstrap_vault_noninteractive(
+            repo_root=repo_root,
+            vault_name="dogs-vault",
+            domain="Dogs",
+            note_type="breed-profile",
+            sections=["Overview", "Care Requirements"],
+        )
+
+        # Config must be valid YAML pointing to new vault
+        with open(config_path, encoding="utf-8") as f:
+            cfg = yaml.safe_load(f)
+        assert cfg is not None, "Config is not valid YAML after bootstrap"
+        assert "vault_root" in cfg, "Config missing vault_root after bootstrap"
+        assert "dogs-vault" in cfg["vault_root"], (
+            f"Config vault_root not updated: {cfg['vault_root']!r}"
+        )
+        print(f"  Config vault_root updated to: {cfg['vault_root']!r}")
+        print(f"  Config is valid YAML: ✓")
+
+
+def test_p11a_vault_has_schema():
+    """P11A-10: Bootstrapped vault has a valid vault_schema.py."""
+    print("\n=== Test P11A-10: Vault Has Schema ===")
+    import tempfile
+    from core.shared.bootstrap_service import bootstrap_vault_noninteractive
+
+    with tempfile.TemporaryDirectory(prefix="kv_p11a_10_") as tmp_str:
+        repo_root = Path(tmp_str)
+        (repo_root / "config").mkdir()
+        (repo_root / "config" / "config.yaml").write_text(
+            "vault_root: ./demo-vault\n", encoding="utf-8"
+        )
+
+        bootstrap_vault_noninteractive(
+            repo_root=repo_root,
+            vault_name="dogs-vault",
+            domain="Dogs",
+            note_type="breed-profile",
+            sections=["Overview", "Care Requirements"],
+        )
+
+        schema_path = (
+            repo_root / "dogs-vault" / "Vault Files" / "Scripts" / "vault_schema.py"
+        )
+        assert schema_path.is_file(), (
+            f"vault_schema.py not found: {schema_path}"
+        )
+        content = schema_path.read_text(encoding="utf-8")
+        assert "VALID_TYPES" in content, "Schema missing VALID_TYPES"
+        assert "DOMAIN_MAP" in content, "Schema missing DOMAIN_MAP"
+        assert "breed-profile" in content, "Schema missing note_type 'breed-profile'"
+        print(f"  vault_schema.py exists and contains required constants ✓")
+
+
+def test_p11a_vault_has_templates():
+    """P11A-11: Bootstrapped vault has generated template files."""
+    print("\n=== Test P11A-11: Vault Has Templates ===")
+    import tempfile
+    from core.shared.bootstrap_service import bootstrap_vault_noninteractive
+
+    with tempfile.TemporaryDirectory(prefix="kv_p11a_11_") as tmp_str:
+        repo_root = Path(tmp_str)
+        (repo_root / "config").mkdir()
+        (repo_root / "config" / "config.yaml").write_text(
+            "vault_root: ./demo-vault\n", encoding="utf-8"
+        )
+
+        bootstrap_vault_noninteractive(
+            repo_root=repo_root,
+            vault_name="dogs-vault",
+            domain="Dogs",
+            note_type="breed-profile",
+            sections=["Overview", "Care Requirements"],
+        )
+
+        template_dir = repo_root / "dogs-vault" / "Vault Files" / "Templates"
+        assert template_dir.is_dir(), "Templates directory not created"
+        templates = list(template_dir.glob("*.md"))
+        assert len(templates) > 0, "No template files generated"
+        template_content = templates[0].read_text(encoding="utf-8")
+        # Template should have section headers
+        assert "## " in template_content, "Template missing section headers"
+        print(f"  Templates directory exists with {len(templates)} template(s) ✓")
+        print(f"  First template: {templates[0].name}")
+
+
+def test_p11a_cli_bootstrap_still_importable():
+    """P11A-12: CLI bootstrap module and main() are still importable."""
+    print("\n=== Test P11A-12: CLI Bootstrap Still Importable ===")
+    import importlib
+
+    # The CLI bootstrap module must be importable
+    mod = importlib.import_module("core.bootstrap_vault")
+    assert hasattr(mod, "main"), "bootstrap_vault must export main()"
+    assert callable(mod.main), "bootstrap_vault.main must be callable"
+    assert hasattr(mod, "collect_input"), "bootstrap_vault must export collect_input()"
+    assert hasattr(mod, "_create_vault_structure"), (
+        "bootstrap_vault must still have _create_vault_structure"
+    )
+    # The refactored _update_config delegates to the service but must exist
+    assert hasattr(mod, "_update_config"), (
+        "bootstrap_vault._update_config must still exist after refactor"
+    )
+    print(f"  core.bootstrap_vault importable: ✓")
+    print(f"  main(), collect_input(), _create_vault_structure() present: ✓")
+    print(f"  _update_config() still present (delegates to service): ✓")
+
+
+def test_p11a_api_bootstrap_success_envelope():
+    """P11A-13: POST /vault/bootstrap returns standard success envelope."""
+    print("\n=== Test P11A-13: API Bootstrap Success Envelope ===")
+    import tempfile
+
+    try:
+        from fastapi.testclient import TestClient
+    except RuntimeError as exc:
+        print(f"  SKIP: TestClient unavailable — {exc}")
+        return
+
+    import mcp.server.mcp_server as srv
+    from mcp.server.mcp_server import app
+
+    with tempfile.TemporaryDirectory(prefix="kv_p11a_13_") as tmp_str:
+        repo_root = Path(tmp_str)
+        (repo_root / "config").mkdir()
+        (repo_root / "config" / "config.yaml").write_text(
+            "vault_root: ./demo-vault\n", encoding="utf-8"
+        )
+
+        # Redirect bootstrap to temp repo
+        original_override = srv._BOOTSTRAP_REPO_ROOT
+        srv._BOOTSTRAP_REPO_ROOT = repo_root
+        try:
+            with TestClient(app, raise_server_exceptions=True) as client:
+                resp = client.post(
+                    "/vault/bootstrap",
+                    json={
+                        "vault_name": "dogs-vault",
+                        "domain": "Dogs",
+                        "note_type": "breed-profile",
+                        "sections": [
+                            "Overview",
+                            "Care Requirements",
+                            "Health Risks",
+                        ],
+                        "expected_concepts": [
+                            "Labrador Retriever",
+                            "German Shepherd",
+                        ],
+                    },
+                )
+        finally:
+            srv._BOOTSTRAP_REPO_ROOT = original_override
+
+        assert resp.status_code == 200, (
+            f"Expected 200, got {resp.status_code}: {resp.text[:400]}"
+        )
+        body = resp.json()
+        assert body["status"] == "ok", f"Expected status=ok: {body}"
+        assert "data" in body, "Response missing 'data'"
+        data = body["data"]
+        assert "vault" in data, "data missing 'vault'"
+        assert "created" in data, "data missing 'created'"
+        assert "warnings" in data, "data missing 'warnings'"
+        assert data["vault"] == "dogs-vault", f"Unexpected vault name: {data['vault']}"
+        assert isinstance(data["created"], list), "created must be a list"
+        assert len(data["created"]) > 0, "created must be non-empty on success"
+        assert isinstance(data["warnings"], list), "warnings must be a list"
+        # expected_concepts warning must be present
+        assert any("expected_concepts" in w for w in data["warnings"]), (
+            "warnings must mention expected_concepts limitation"
+        )
+        print(f"  POST /vault/bootstrap: 200 OK ✓")
+        print(f"  data.vault={data['vault']!r}")
+        print(f"  data.created={data['created']}")
+        print(f"  data.warnings count={len(data['warnings'])}")
+
+
+def test_p11a_api_bootstrap_invalid_input_errors():
+    """P11A-14: POST /vault/bootstrap returns structured errors for invalid input."""
+    print("\n=== Test P11A-14: API Bootstrap Invalid Input Errors ===")
+
+    try:
+        from fastapi.testclient import TestClient
+    except RuntimeError as exc:
+        print(f"  SKIP: TestClient unavailable — {exc}")
+        return
+
+    import mcp.server.mcp_server as srv
+    from mcp.server.mcp_server import app
+
+    with TestClient(app, raise_server_exceptions=True) as client:
+
+        # --- Missing required field (vault_name) ---
+        resp = client.post(
+            "/vault/bootstrap",
+            json={
+                "domain": "Dogs",
+                "note_type": "breed-profile",
+                "sections": ["Overview", "Health"],
+            },
+        )
+        assert resp.status_code == 422, (
+            f"Missing field should return 422, got {resp.status_code}"
+        )
+        body = resp.json()
+        assert body["status"] == "error"
+        print(f"  Missing required field: 422 structured error ✓")
+
+        # --- Path traversal vault_name ---
+        resp = client.post(
+            "/vault/bootstrap",
+            json={
+                "vault_name": "../../evil",
+                "domain": "Dogs",
+                "note_type": "breed-profile",
+                "sections": ["Overview", "Health"],
+            },
+        )
+        assert resp.status_code in (400, 422), (
+            f"Path traversal should return 400/422, got {resp.status_code}"
+        )
+        body = resp.json()
+        assert body["status"] == "error"
+        assert "code" in body["error"]
+        print(f"  Path traversal vault_name: {resp.status_code} {body['error']['code']} ✓")
+
+        # --- Empty domain ---
+        resp = client.post(
+            "/vault/bootstrap",
+            json={
+                "vault_name": "test-vault",
+                "domain": "",
+                "note_type": "breed-profile",
+                "sections": ["Overview", "Health"],
+            },
+        )
+        assert resp.status_code in (400, 422), (
+            f"Empty domain should return 400/422, got {resp.status_code}"
+        )
+        body = resp.json()
+        assert body["status"] == "error"
+        assert "code" in body["error"]
+        assert "message" in body["error"]
+        print(f"  Empty domain: {resp.status_code} structured error, code={body['error']['code']} ✓")
+
+        # --- Only one section ---
+        resp = client.post(
+            "/vault/bootstrap",
+            json={
+                "vault_name": "test-vault",
+                "domain": "Dogs",
+                "note_type": "breed-profile",
+                "sections": ["OnlyOne"],
+            },
+        )
+        assert resp.status_code in (400, 422), (
+            f"Too few sections should return 400/422, got {resp.status_code}"
+        )
+        body = resp.json()
+        assert body["status"] == "error"
+        print(f"  Too few sections: {resp.status_code} structured error ✓")
+
+        # --- Invalid note_type ---
+        resp = client.post(
+            "/vault/bootstrap",
+            json={
+                "vault_name": "test-vault",
+                "domain": "Dogs",
+                "note_type": "Invalid_Type",
+                "sections": ["Overview", "Health"],
+            },
+        )
+        assert resp.status_code in (400, 422), (
+            f"Invalid note_type should return 400/422, got {resp.status_code}"
+        )
+        body = resp.json()
+        assert body["status"] == "error"
+        print(f"  Invalid note_type: {resp.status_code} structured error ✓")
+
+    print(f"  All invalid input scenarios return structured errors ✓")
+
+
+# ============================================================
 # Main
 # ============================================================
 
@@ -5550,6 +6060,25 @@ def main():
     test_p10_app_does_not_break_security()
     test_p10_app_path_traversal_blocked()
     test_p10_summary_accepts_vault_param()
+
+    # ---- Phase 11A: Guided Vault Bootstrap Backend API ----
+    print("\n" + "=" * 60)
+    print("Phase 11A — Guided Vault Bootstrap Backend API")
+    print("=" * 60)
+    test_p11a_valid_bootstrap_creates_vault()
+    test_p11a_path_traversal_rejected()
+    test_p11a_absolute_path_rejected()
+    test_p11a_duplicate_vault_rejected()
+    test_p11a_empty_domain_rejected()
+    test_p11a_invalid_note_type_rejected()
+    test_p11a_too_few_sections_rejected()
+    test_p11a_duplicate_sections_rejected()
+    test_p11a_config_updated_atomically()
+    test_p11a_vault_has_schema()
+    test_p11a_vault_has_templates()
+    test_p11a_cli_bootstrap_still_importable()
+    test_p11a_api_bootstrap_success_envelope()
+    test_p11a_api_bootstrap_invalid_input_errors()
 
     print()
     print("=" * 60)
