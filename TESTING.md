@@ -308,6 +308,57 @@ Regression tests for correctness fixes:
 - `test_p11a_api_bootstrap_success_envelope` — `POST /vault/bootstrap` with valid inputs returns HTTP 200 with standard `status/data` envelope, and `data` contains `vault`, `created`, and `warnings`.
 - `test_p11a_api_bootstrap_invalid_input_errors` — Various invalid inputs return structured `status/error/code/message` responses with 400 or 422 status.
 
+### Phase 13C — Security Scan UI
+
+Phase 13C is a frontend-only phase. No new backend tests were added (all 202 backend tests still pass).
+
+**Verification steps for Phase 13C:**
+
+```bash
+# Frontend build verification
+cd ui
+npm run build      # must produce no TypeScript errors (SecurityScan.svelte built cleanly)
+
+# Backend suite (unchanged — 202 tests)
+py mcp/test_verify.py
+
+# Vault validation and security scan
+py run.py validate
+py run.py security
+```
+
+**What was added:**
+- `ui/src/lib/api.ts` — added `SecurityScanned` interface, `ContextSecurityResponse` type alias, `ContextSecurityRequest` interface, and `scanContextSecurity()` function calling `POST /context/security`
+- `ui/src/components/SecurityScan.svelte` — full Security Scan island: vault selector, filter controls (status/domain/type/difficulty), section tag editor with duplicate/empty validation, content option checkboxes (include_body/allow_partial), budget number inputs, request preview panel, Run security scan button; result panel with Scan Overview (status badge, total findings, fail/warning/info counts, notes scanned, source path count), Findings (expandable cards with severity/path/rule/field/detail, severity filter buttons, text filter), Scanned Notes panel (per-path finding counts and F/W/I severity badges), Rule Summary panel (client-side rule breakdown), Raw JSON toggle
+- `ui/src/pages/security.astro` — replaced PlaceholderPage with SecurityScan island
+- `ui/src/layouts/AppLayout.astro` — removed "soon" badge from Security nav item; footer updated to Phase 13C
+
+**Manual acceptance checks:**
+- `/app/security` loads the Security Scan form
+- Vault dropdown populates from `GET /vaults`
+- Status buttons toggle between complete / partial / all
+- Domain, type, difficulty inputs accept optional values
+- Default sections (Key Principles, How It Works, Trade-offs) pre-filled as tags
+- Adding a duplicate section shows an error; adding empty shows an error
+- Sections can be removed with the X button
+- include_body and allow_partial checkboxes work
+- Partial-status conflict warning appears when status=partial + allow_partial=false
+- max_notes and max_chars inputs accept values in range
+- Request preview panel shows vault, filters, sections, include_body, allow_partial, max_notes, max_chars, and scope note
+- Run security scan button POSTs `POST /context/security` with correct request shape
+- Loading spinner shown while request is in flight
+- Pass result: Scan Overview shows "pass" badge (emerald), zero findings, strong pass message panel
+- Fail/warning result: Overview shows correct status badge (red/amber), finding counts, finding cards expandable
+- Findings severity filter (all/fail/warning/info) and text filter work; total counts shown in buttons regardless of filter
+- Scanned Notes panel shows source paths with finding counts and severity badges; clean notes show "clean"
+- Rule Summary panel shows rule name, count, and highest severity
+- Structured backend errors show error title and message
+- Network failure shows "Backend Unavailable" panel with server address hint
+- Raw JSON is hidden by default; toggle reveals full response
+- Navigation sidebar: Security no longer shows "soon" badge
+
+---
+
 ### Phase 13B — Export Package UI
 
 Phase 13B is a frontend-only phase. No new backend tests were added (all 202 backend tests still pass).

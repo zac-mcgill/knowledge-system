@@ -481,6 +481,30 @@ Packages are written to `dist/context-bundles/<bundle-id>/` under the repo root.
 
 ---
 
+## 6g. Security Scan UI (Phase 13C)
+
+The Security Scan UI at `/app/security` lets you run a fully configurable `POST /context/security` scan and inspect results interactively.
+
+**To run a security scan:**
+1. Navigate to **Security** in the sidebar.
+2. Select a **Vault** from the dropdown.
+3. Configure **Filters** — status (complete / partial / all), optional domain / type / difficulty.
+4. Configure **Sections to Scan** — defaults are Key Principles, How It Works, Trade-offs. Add or remove as needed.
+5. Configure **Content Options** — include body, allow partial notes.
+6. Set **Budget** — max notes (1–100), max chars (100–500,000).
+7. Review the **Request Preview** panel to confirm your request before submitting.
+8. Click **Run security scan** to call `POST /context/security`.
+9. The result panel shows:
+    - **Scan Overview** — overall status badge (pass / warning / fail), total findings, fail / warning / info counts, notes scanned, source path count
+    - **Findings** — expandable finding cards filterable by severity (fail / warning / info) and text search over path / rule / detail; each card shows severity, path, rule, field, and detail
+    - **Scanned Notes** — all source paths with per-path finding counts and severity breakdown (F / W / I)
+    - **Rule Summary** — client-side rule breakdown showing rule name, count, and highest severity
+    - **Raw JSON** — full security response, hidden by default
+
+**Pass state:** When the vault is clean, a strong pass indicator is shown with no empty broken panels.
+
+**Error handling:** Network errors and backend errors are displayed with structured error panels. If the backend is unavailable, a clear message prompts you to start the server.
+
 ---
 
 ## 7. Query the System

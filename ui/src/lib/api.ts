@@ -101,14 +101,29 @@ export interface SecuritySummary {
   info: number;
 }
 
+export interface SecurityScanned {
+  note_count: number;
+  source_paths: string[];
+}
+
 export interface SecurityData {
   status: 'pass' | 'warning' | 'fail';
   findings: SecurityFinding[];
   summary: SecuritySummary;
-  scanned: {
-    note_count: number;
-    source_paths: string[];
-  };
+  scanned: SecurityScanned;
+}
+
+// Alias so SecurityScan.svelte can import a distinct name
+export type ContextSecurityResponse = SecurityData;
+
+export interface ContextSecurityRequest {
+  vault: string;
+  filters?: Record<string, string | string[]>;
+  include_sections?: string[];
+  include_body?: boolean;
+  max_notes?: number;
+  max_chars?: number;
+  allow_partial?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -189,6 +204,16 @@ export function fetchSecurity(vault: string): Promise<ApiResult<SecurityData>> {
     include_body: true,
     allow_partial: false,
   });
+}
+
+/**
+ * POST /context/security — full configurable security scan.
+ * Used by the Security Scan UI for user-configured requests.
+ */
+export function scanContextSecurity(
+  request: ContextSecurityRequest,
+): Promise<ApiResult<ContextSecurityResponse>> {
+  return post<ContextSecurityResponse>('/context/security', request);
 }
 
 // ---------------------------------------------------------------------------

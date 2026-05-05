@@ -219,10 +219,10 @@ Phase 12B	Dashboard Issue Review	Complete
 Phase 12	Vault Dashboard and Issue Review	Complete
 Phase 13A	Bundle Builder UI	Complete
 Phase 13B	Export Package UI	Complete
+Phase 13C	Security Scan UI	Complete
+Phase 13	Bundle, Export, and Security UI	Complete
 Future
 Phase	Name	Priority
-Phase 13C	Security Scan UI	High
-Phase 13	Bundle, Export, and Security UI	In Progress
 Phase 14	Feedback and Task Workflow UI	Medium
 Phase 15	Note Browser and Safe Editing UI	Medium
 Phase 16	Visual Graph and Missing Concepts UI	Medium
@@ -671,6 +671,8 @@ User can inspect manifest hashes
 UI clearly distinguishes warning vs fail
 Suggested Commit
 feat(ui): add bundle export and security scan screens
+
+Phase 13 is complete. All three UI phases (13A Bundle Builder, 13B Export Package, 13C Security Scan) are implemented and verified.
 Phase 14 - Feedback and Task Workflow UI
 Purpose
 

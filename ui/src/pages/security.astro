@@ -1,11 +1,7 @@
 ---
 import AppLayout from '../layouts/AppLayout.astro';
-import PlaceholderPage from '../components/PlaceholderPage.astro';
+import SecurityScan from '../components/SecurityScan.svelte';
 ---
 <AppLayout title="Security">
-  <PlaceholderPage
-    pageTitle="Security"
-    description="Full security scan panel: per-note findings, severity breakdown, rule details, and export gate status."
-    phase="13"
-  />
+  <SecurityScan client:load />
 </AppLayout>
