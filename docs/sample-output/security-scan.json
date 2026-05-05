@@ -1,0 +1,16 @@
+{
+  "_note": "Illustrative example. A clean vault produces no findings.",
+  "bundle_id": "a3f8c2d1e4b7906f53c2a1d8e7f0b4c9a2d5e8f1b4c7d0e3f6a9b2c5d8e1f4a7",
+  "status": "pass",
+  "findings": [],
+  "summary": {
+    "total_notes_scanned": 19,
+    "findings_by_severity": {
+      "critical": 0,
+      "high": 0,
+      "medium": 0,
+      "low": 0,
+      "warning": 0
+    }
+  }
+}

@@ -1,6 +1,66 @@
 # Context Vault Engine
 
-Context Vault Engine is a local-first system for turning structured Markdown vaults into validated, queryable, packageable, and agent-consumable context. It treats context as an engineered artefact — validated against an explicit schema, analysed for quality and gaps, packaged as deterministic build artefacts, scanned for security issues, and improved through a feedback loop. This is not a generic AI-agent framework, a RAG wrapper, a replacement for Obsidian, or a cloud platform.
+Context Vault Engine is a local-first Python pipeline for validating, scanning, and securely packaging structured Markdown content. It enforces a schema contract on every note, scans content for credential leaks, prompt-injection patterns, and suspicious executable/script blocks, then exports integrity-verified packages with SHA-256 manifests. All security rules are deterministic and regex-based, so every finding is explainable, reproducible, and auditable without an LLM or cloud dependency.
+
+**Local-first Python pipeline: credential leak scanning, prompt-injection detection, schema enforcement, rate-limited API, path-traversal blocking, SHA-256 artefact integrity. 180 tests.**
+
+---
+
+## Capabilities
+
+- Schema validation on every note — required fields, section presence, derived-field consistency
+- Credential leak detection: private keys, AWS/GitHub/Slack token patterns, bearer tokens, password assignments
+- Prompt-injection pattern detection
+- Suspicious HTML, script-tag, and executable-code-block detection
+- Path-traversal rejection on all file-path inputs
+- Rate-limited FastAPI API (50 req/s, structured `RATE_LIMIT` error responses)
+- SHA-256 manifest on every exported package
+- Optional export security gate: `require_security_pass: true` aborts export on `fail`-severity findings
+- Relationship graph, quality audit, missing-concept detection
+- 180 deterministic tests
+
+---
+
+## Why this matters
+
+Most content pipelines either trust their input or delegate scanning to an external service. Context Vault Engine validates, scans, and gates export at the pipeline level — deterministically, without network calls, and with structured JSON output that can be reviewed or piped into other tools. Every finding references the specific note and field that triggered it, and every exported package carries a SHA-256 hash for integrity verification.
+
+---
+
+## Review in 5 minutes
+
+```bash
+# Schema compliance — validates all notes against the schema contract
+python run.py validate
+
+# Security scan — checks for credential leaks, injection patterns, suspicious code
+python run.py security
+
+# Export — writes integrity-verified package to dist/ with SHA-256 manifest
+python run.py export --overwrite
+
+# Full test suite — 180 tests covering all pipeline stages
+python mcp/test_verify.py
+```
+
+Each command exits `0` on success, `1` on failure, and writes structured JSON output where applicable.
+
+---
+
+## Security Controls Demonstrated
+
+| Control | Implementation |
+|---------|---------------|
+| Credential leak scanning | Regex patterns for: PEM private key blocks, AWS `AKIA` keys, GitHub `ghp_` tokens, Slack `xox` tokens, bearer tokens, password assignments |
+| Prompt-injection detection | Matches instruction-override phrases and tool-misuse patterns in note content |
+| Suspicious content detection | Flags `<script>` tags, executable code blocks, and inline executable references |
+| Path-traversal rejection | User-supplied file paths validated against vault root; `..` sequences rejected with structured error |
+| Rate limiting | 50 requests/second enforced in API middleware; excess returns `{"code": "RATE_LIMIT", ...}` |
+| Structured error responses | All error paths return machine-readable JSON with a `code` field |
+| SHA-256 artefact integrity | `manifest.json` in every exported package contains SHA-256 hashes of all package files |
+| Export security gate | `require_security_pass: true` aborts package write when `fail`-severity findings exist |
+
+> **Scope:** This is a rule-based static scanner demonstrating common detection patterns. It is not a full DLP system, production-grade secret scanner, or malware analyser. Treat findings as review signals.
 
 ---
 
@@ -15,7 +75,7 @@ Context Vault Engine is a local-first system for turning structured Markdown vau
 | **Export** | Writes a portable context package to ``dist/context-bundles/<bundle-id>/`` with SHA-256 hashes, a manifest, and a Markdown rendering. |
 | **Security** | Scans a context bundle for secrets, prompt injection patterns, suspicious code blocks, and external links using deterministic regex rules. |
 | **Feedback** | Parses vault feedback entries and adjusts task priorities when requested. Does not rewrite notes. |
-| **API** | Serves all of the above through a FastAPI HTTP interface for programmatic and agent use. |
+| **API** | Serves all of the above through a rate-limited FastAPI HTTP interface for programmatic use. |
 
 ---
 
