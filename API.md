@@ -773,6 +773,137 @@ All fields except `vault` are optional.
 
 ---
 
+### GET /context/state
+
+Return a deterministic snapshot of the current vault state, aggregated from all services. This endpoint is read-only and makes no changes to the vault.
+
+**Query parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `vault` | string | Yes | Registered vault name |
+
+**Response:**
+```json
+{
+  "status": "ok",
+  "data": {
+    "vault": "demo-vault",
+    "state": {
+      "summary": {
+        "validation_status": "pass",
+        "security_status": "pass",
+        "total_tasks": 3,
+        "total_missing": 2,
+        "feedback_entry_count": 1,
+        "graph_node_count": 19
+      },
+      "validation": { "...": "..." },
+      "security": { "...": "..." },
+      "tasks": { "...": "..." },
+      "missing": { "...": "..." },
+      "feedback": { "...": "..." },
+      "graph": { "...": "..." }
+    },
+    "readiness": {
+      "valid": true,
+      "security_passed": true,
+      "has_tasks": true,
+      "has_missing_concepts": false,
+      "has_feedback_warnings": false,
+      "ready_to_export": true,
+      "ready_for_agent_context": true
+    },
+    "blockers": [],
+    "warnings": ["3 pending tasks"]
+  }
+}
+```
+
+**Readiness flags:**
+
+| Flag | Description |
+|------|-------------|
+| `valid` | Vault passed the last validation run |
+| `security_passed` | Security scan status is `pass` or `warning` |
+| `has_tasks` | There is at least one pending/in-progress task |
+| `has_missing_concepts` | At least one expected concept is missing a note |
+| `has_feedback_warnings` | Feedback file has at least one entry |
+| `ready_to_export` | `valid` and `security_passed` — safe to call `/context/export` |
+| `ready_for_agent_context` | `valid` and `security_passed` — safe to use as LLM context |
+
+**Error codes:**
+- `INVALID_VAULT` — vault not registered (HTTP 404).
+
+---
+
+### POST /context/plan
+
+Build a prioritised recommendation plan for a specific intent. All recommendations are derived deterministically from the current vault state — no LLM is involved.
+
+**Request body:**
+```json
+{
+  "vault": "demo-vault",
+  "intent": "review"
+}
+```
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `vault` | string | — | Registered vault name |
+| `intent` | string | `"review"` | Planning intent (see table below) |
+
+**Valid intent values:**
+
+| Intent | Description |
+|--------|-------------|
+| `review` | General vault health and completeness |
+| `export` | Readiness for context bundle export |
+| `agent-context` | Readiness for use as LLM agent context |
+| `quality` | Content quality and coverage gaps |
+| `security` | Security findings and risks |
+
+**Response:**
+```json
+{
+  "status": "ok",
+  "data": {
+    "vault": "demo-vault",
+    "intent": "review",
+    "readiness": { "...": true },
+    "recommendations": [
+      {
+        "rank": 1,
+        "action": "fix_validation",
+        "severity": "critical",
+        "title": "Fix validation errors",
+        "reason": "Vault has validation errors that block export and agent use.",
+        "source": "validation",
+        "links": {
+          "ui": "/app/validation",
+          "api": "/validate"
+        }
+      }
+    ],
+    "blockers": [],
+    "warnings": ["3 pending tasks"],
+    "next_best_action": {
+      "action": "fix_validation",
+      "title": "Fix validation errors"
+    }
+  }
+}
+```
+
+`next_best_action` is the first (rank-1) recommendation, or `null` if there are no recommendations.
+
+**Error codes:**
+- `INVALID_VAULT` — vault not registered (HTTP 404).
+- `INVALID_INTENT` — `intent` is not one of the five valid values (HTTP 400).
+
+---
+
 ## Local Web UI
 
 ### GET /app

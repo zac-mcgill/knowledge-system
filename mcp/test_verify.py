@@ -10145,6 +10145,480 @@ def test_p18c_vaultstate_has_clear():
 
 
 # ============================================================
+# Phase 19 — Context Controller Layer
+# ============================================================
+
+def test_p19_context_state_basic_shape():
+    """P19-S1: GET /context/state returns required top-level fields."""
+    print("\n=== Test P19-S1: /context/state basic shape ===")
+    try:
+        from fastapi.testclient import TestClient
+    except RuntimeError as exc:
+        print(f"  SKIP: TestClient unavailable — {exc}")
+        return
+
+    from mcp.server.mcp_server import app
+
+    vault = list_vaults()[0]
+    build_index(vault)
+
+    with TestClient(app, raise_server_exceptions=True) as client:
+        resp = client.get(f"/context/state?vault={vault}")
+        assert resp.status_code == 200, (
+            f"GET /context/state status {resp.status_code}: {resp.text[:300]}"
+        )
+        body = resp.json()
+        assert body["status"] == "ok", f"Expected ok envelope: {body}"
+        data = body["data"]
+        for key in ("vault", "state", "readiness", "blockers", "warnings"):
+            assert key in data, f"Missing top-level key: {key!r}"
+        assert data["vault"] == vault
+        assert isinstance(data["blockers"], list)
+        assert isinstance(data["warnings"], list)
+        print(f"  GET /context/state: 200 OK, vault={data['vault']!r} ✓")
+
+
+def test_p19_context_state_readiness_flags():
+    """P19-S2: readiness contains all seven expected boolean flags."""
+    print("\n=== Test P19-S2: readiness flags ===")
+    try:
+        from fastapi.testclient import TestClient
+    except RuntimeError as exc:
+        print(f"  SKIP: TestClient unavailable — {exc}")
+        return
+
+    from mcp.server.mcp_server import app
+
+    vault = list_vaults()[0]
+
+    with TestClient(app, raise_server_exceptions=True) as client:
+        resp = client.get(f"/context/state?vault={vault}")
+        assert resp.status_code == 200
+        readiness = resp.json()["data"]["readiness"]
+        required_flags = [
+            "valid",
+            "security_passed",
+            "has_tasks",
+            "has_missing_concepts",
+            "has_feedback_warnings",
+            "ready_to_export",
+            "ready_for_agent_context",
+        ]
+        for flag in required_flags:
+            assert flag in readiness, f"readiness missing flag: {flag!r}"
+            assert isinstance(readiness[flag], bool), (
+                f"readiness.{flag} must be bool, got {type(readiness[flag])}"
+            )
+        print(f"  All 7 readiness flags present and typed correctly ✓")
+        print(f"  readiness: {readiness}")
+
+
+def test_p19_context_state_service_sections():
+    """P19-S3: state contains all six service-level sub-sections."""
+    print("\n=== Test P19-S3: state service sections ===")
+    try:
+        from fastapi.testclient import TestClient
+    except RuntimeError as exc:
+        print(f"  SKIP: TestClient unavailable — {exc}")
+        return
+
+    from mcp.server.mcp_server import app
+
+    vault = list_vaults()[0]
+
+    with TestClient(app, raise_server_exceptions=True) as client:
+        resp = client.get(f"/context/state?vault={vault}")
+        assert resp.status_code == 200
+        state = resp.json()["data"]["state"]
+        required_sections = [
+            "summary", "validation", "security", "tasks", "missing", "feedback", "graph"
+        ]
+        for section in required_sections:
+            assert section in state, f"state missing section: {section!r}"
+        summary = state["summary"]
+        for key in (
+            "validation_status", "security_status", "total_tasks",
+            "total_missing", "feedback_entry_count", "graph_node_count"
+        ):
+            assert key in summary, f"summary missing key: {key!r}"
+        print(f"  All 7 state sections present ✓")
+        print(f"  summary: {summary}")
+
+
+def test_p19_context_state_unknown_vault():
+    """P19-S4: GET /context/state with unknown vault returns 404."""
+    print("\n=== Test P19-S4: unknown vault returns 404 ===")
+    try:
+        from fastapi.testclient import TestClient
+    except RuntimeError as exc:
+        print(f"  SKIP: TestClient unavailable — {exc}")
+        return
+
+    from mcp.server.mcp_server import app
+
+    with TestClient(app, raise_server_exceptions=True) as client:
+        resp = client.get("/context/state?vault=__nonexistent__")
+        assert resp.status_code == 404, (
+            f"Expected 404 for unknown vault, got {resp.status_code}: {resp.text[:200]}"
+        )
+        body = resp.json()
+        assert body["status"] == "error"
+        assert body["error"]["code"] == "INVALID_VAULT"
+        print(f"  Unknown vault: 404 INVALID_VAULT ✓")
+
+
+def test_p19_context_state_deterministic():
+    """P19-S5: Two identical calls to /context/state return the same result."""
+    print("\n=== Test P19-S5: /context/state is deterministic ===")
+    try:
+        from fastapi.testclient import TestClient
+    except RuntimeError as exc:
+        print(f"  SKIP: TestClient unavailable — {exc}")
+        return
+
+    from mcp.server.mcp_server import app
+
+    vault = list_vaults()[0]
+
+    with TestClient(app, raise_server_exceptions=True) as client:
+        r1 = client.get(f"/context/state?vault={vault}")
+        r2 = client.get(f"/context/state?vault={vault}")
+        assert r1.status_code == 200 and r2.status_code == 200
+        d1, d2 = r1.json()["data"], r2.json()["data"]
+        assert d1["readiness"] == d2["readiness"], "readiness not deterministic"
+        assert d1["blockers"] == d2["blockers"], "blockers not deterministic"
+        assert d1["warnings"] == d2["warnings"], "warnings not deterministic"
+        assert d1["state"]["summary"] == d2["state"]["summary"], "summary not deterministic"
+        print(f"  Deterministic: readiness, blockers, warnings, summary match ✓")
+
+
+def test_p19_context_plan_basic_shape():
+    """P19-P1: POST /context/plan returns required top-level fields."""
+    print("\n=== Test P19-P1: /context/plan basic shape ===")
+    try:
+        from fastapi.testclient import TestClient
+    except RuntimeError as exc:
+        print(f"  SKIP: TestClient unavailable — {exc}")
+        return
+
+    from mcp.server.mcp_server import app
+
+    vault = list_vaults()[0]
+
+    with TestClient(app, raise_server_exceptions=True) as client:
+        resp = client.post("/context/plan", json={"vault": vault, "intent": "review"})
+        assert resp.status_code == 200, (
+            f"POST /context/plan status {resp.status_code}: {resp.text[:300]}"
+        )
+        body = resp.json()
+        assert body["status"] == "ok", f"Expected ok envelope: {body}"
+        data = body["data"]
+        for key in ("vault", "intent", "readiness", "recommendations", "blockers",
+                    "warnings", "next_best_action"):
+            assert key in data, f"Missing key: {key!r}"
+        assert data["vault"] == vault
+        assert data["intent"] == "review"
+        assert isinstance(data["recommendations"], list)
+        assert isinstance(data["blockers"], list)
+        assert isinstance(data["warnings"], list)
+        print(f"  POST /context/plan: 200 OK ✓")
+
+
+def test_p19_context_plan_recommendation_shape():
+    """P19-P2: Each recommendation has the required fields."""
+    print("\n=== Test P19-P2: recommendation shape ===")
+    try:
+        from fastapi.testclient import TestClient
+    except RuntimeError as exc:
+        print(f"  SKIP: TestClient unavailable — {exc}")
+        return
+
+    from mcp.server.mcp_server import app
+
+    vault = list_vaults()[0]
+
+    with TestClient(app, raise_server_exceptions=True) as client:
+        resp = client.post("/context/plan", json={"vault": vault, "intent": "review"})
+        assert resp.status_code == 200
+        recs = resp.json()["data"]["recommendations"]
+        for rec in recs:
+            for field in ("rank", "action", "severity", "title", "reason", "source", "links"):
+                assert field in rec, f"recommendation missing field: {field!r}"
+            assert isinstance(rec["rank"], int) and rec["rank"] >= 1
+            assert "ui" in rec["links"] and "api" in rec["links"]
+        # ranks must be 1-based sequential
+        if recs:
+            ranks = [r["rank"] for r in recs]
+            assert ranks == list(range(1, len(recs) + 1)), (
+                f"Ranks must be sequential 1..N, got: {ranks}"
+            )
+        print(f"  {len(recs)} recommendations — all have required fields ✓")
+
+
+def test_p19_context_plan_all_intents_succeed():
+    """P19-P3: All five valid intents return 200 ok."""
+    print("\n=== Test P19-P3: all valid intents succeed ===")
+    try:
+        from fastapi.testclient import TestClient
+    except RuntimeError as exc:
+        print(f"  SKIP: TestClient unavailable — {exc}")
+        return
+
+    from mcp.server.mcp_server import app
+
+    vault = list_vaults()[0]
+    intents = ["review", "export", "agent-context", "quality", "security"]
+
+    with TestClient(app, raise_server_exceptions=True) as client:
+        for intent in intents:
+            resp = client.post("/context/plan", json={"vault": vault, "intent": intent})
+            assert resp.status_code == 200, (
+                f"intent={intent!r}: expected 200, got {resp.status_code}: {resp.text[:200]}"
+            )
+            body = resp.json()
+            assert body["status"] == "ok", f"intent={intent!r}: expected ok: {body}"
+            assert body["data"]["intent"] == intent
+            print(f"  intent={intent!r}: 200 OK ✓")
+
+
+def test_p19_context_plan_invalid_intent():
+    """P19-P4: POST /context/plan with invalid intent returns 400 INVALID_INTENT."""
+    print("\n=== Test P19-P4: invalid intent returns 400 ===")
+    try:
+        from fastapi.testclient import TestClient
+    except RuntimeError as exc:
+        print(f"  SKIP: TestClient unavailable — {exc}")
+        return
+
+    from mcp.server.mcp_server import app
+
+    vault = list_vaults()[0]
+
+    with TestClient(app, raise_server_exceptions=True) as client:
+        resp = client.post("/context/plan", json={"vault": vault, "intent": "__bad_intent__"})
+        assert resp.status_code == 400, (
+            f"Expected 400 for invalid intent, got {resp.status_code}: {resp.text[:200]}"
+        )
+        body = resp.json()
+        assert body["status"] == "error"
+        assert body["error"]["code"] == "INVALID_INTENT"
+        print(f"  Invalid intent: 400 INVALID_INTENT ✓")
+
+
+def test_p19_context_plan_unknown_vault():
+    """P19-P5: POST /context/plan with unknown vault returns 404."""
+    print("\n=== Test P19-P5: unknown vault returns 404 ===")
+    try:
+        from fastapi.testclient import TestClient
+    except RuntimeError as exc:
+        print(f"  SKIP: TestClient unavailable — {exc}")
+        return
+
+    from mcp.server.mcp_server import app
+
+    with TestClient(app, raise_server_exceptions=True) as client:
+        resp = client.post("/context/plan", json={"vault": "__nonexistent__", "intent": "review"})
+        assert resp.status_code == 404, (
+            f"Expected 404 for unknown vault, got {resp.status_code}: {resp.text[:200]}"
+        )
+        body = resp.json()
+        assert body["status"] == "error"
+        assert body["error"]["code"] == "INVALID_VAULT"
+        print(f"  Unknown vault: 404 INVALID_VAULT ✓")
+
+
+def test_p19_context_plan_default_intent():
+    """P19-P6: POST /context/plan without intent defaults to 'review'."""
+    print("\n=== Test P19-P6: default intent is review ===")
+    try:
+        from fastapi.testclient import TestClient
+    except RuntimeError as exc:
+        print(f"  SKIP: TestClient unavailable — {exc}")
+        return
+
+    from mcp.server.mcp_server import app
+
+    vault = list_vaults()[0]
+
+    with TestClient(app, raise_server_exceptions=True) as client:
+        resp = client.post("/context/plan", json={"vault": vault})
+        assert resp.status_code == 200, (
+            f"Expected 200 for default intent, got {resp.status_code}: {resp.text[:200]}"
+        )
+        body = resp.json()
+        assert body["status"] == "ok"
+        assert body["data"]["intent"] == "review"
+        print(f"  Default intent: 'review' ✓")
+
+
+def test_p19_context_plan_deterministic():
+    """P19-P7: Two identical calls to /context/plan return the same result."""
+    print("\n=== Test P19-P7: /context/plan is deterministic ===")
+    try:
+        from fastapi.testclient import TestClient
+    except RuntimeError as exc:
+        print(f"  SKIP: TestClient unavailable — {exc}")
+        return
+
+    from mcp.server.mcp_server import app
+
+    vault = list_vaults()[0]
+
+    with TestClient(app, raise_server_exceptions=True) as client:
+        for intent in ["review", "export", "security"]:
+            r1 = client.post("/context/plan", json={"vault": vault, "intent": intent})
+            r2 = client.post("/context/plan", json={"vault": vault, "intent": intent})
+            assert r1.status_code == 200 and r2.status_code == 200
+            d1, d2 = r1.json()["data"], r2.json()["data"]
+            assert d1["readiness"] == d2["readiness"], f"readiness not deterministic for {intent}"
+            r1_actions = [r["action"] for r in d1["recommendations"]]
+            r2_actions = [r["action"] for r in d2["recommendations"]]
+            assert r1_actions == r2_actions, (
+                f"recommendations not deterministic for intent={intent!r}: "
+                f"{r1_actions} vs {r2_actions}"
+            )
+            print(f"  intent={intent!r}: deterministic ✓")
+
+
+def test_p19_controller_read_only():
+    """P19-R1: Controller calls do not mutate the vault (note count unchanged)."""
+    print("\n=== Test P19-R1: controller is read-only ===")
+    try:
+        from fastapi.testclient import TestClient
+    except RuntimeError as exc:
+        print(f"  SKIP: TestClient unavailable — {exc}")
+        return
+
+    from mcp.server.mcp_server import app
+
+    vault = list_vaults()[0]
+    build_index(vault)
+    before_count = len(get_index(vault))
+
+    with TestClient(app, raise_server_exceptions=True) as client:
+        # Call state and plan multiple times
+        for _ in range(3):
+            client.get(f"/context/state?vault={vault}")
+        for intent in ["review", "export", "agent-context", "quality", "security"]:
+            client.post("/context/plan", json={"vault": vault, "intent": intent})
+
+    # Note count must be unchanged
+    after_count = len(get_index(vault))
+    assert before_count == after_count, (
+        f"Controller mutated vault: notes before={before_count}, after={after_count}"
+    )
+    print(f"  Notes before={before_count}, after={after_count} — no mutations ✓")
+
+
+def test_p19_controller_python_direct():
+    """P19-D1: context_controller module can be called directly (no HTTP layer)."""
+    print("\n=== Test P19-D1: direct Python call ===")
+    from mcp.core.context_controller import get_context_state, build_context_plan
+
+    vault = list_vaults()[0]
+
+    state = get_context_state(vault)
+    assert "vault" in state, f"get_context_state missing vault: {state}"
+    assert "readiness" in state, f"get_context_state missing readiness: {state}"
+    assert "state" in state, f"get_context_state missing state: {state}"
+    print(f"  get_context_state: vault={state['vault']!r} ✓")
+
+    plan = build_context_plan(vault, "review")
+    assert "vault" in plan, f"build_context_plan missing vault: {plan}"
+    assert "intent" in plan, f"build_context_plan missing intent: {plan}"
+    assert plan["intent"] == "review"
+    print(f"  build_context_plan(review): {len(plan['recommendations'])} recommendations ✓")
+
+    bad_intent = build_context_plan(vault, "__bad__")
+    assert bad_intent.get("status") == "error"
+    assert bad_intent["error"]["code"] == "INVALID_INTENT"
+    print(f"  build_context_plan(__bad__): INVALID_INTENT ✓")
+
+    unknown = get_context_state("__nonexistent__")
+    assert unknown.get("status") == "error"
+    assert unknown["error"]["code"] == "INVALID_VAULT"
+    print(f"  get_context_state(__nonexistent__): INVALID_VAULT ✓")
+
+
+def test_p19_controller_ui_files():
+    """P19-UI1: Controller UI files exist in the correct locations."""
+    print("\n=== Test P19-UI1: controller UI files exist ===")
+    repo_root = Path(__file__).resolve().parent.parent
+    ui = repo_root / "ui" / "src"
+
+    page = ui / "pages" / "controller.astro"
+    assert page.is_file(), f"controller.astro not found at {page}"
+    page_text = page.read_text(encoding="utf-8")
+    assert "ContextController" in page_text, "controller.astro must import ContextController"
+    print(f"  controller.astro: present, imports ContextController ✓")
+
+    component = ui / "components" / "ContextController.svelte"
+    assert component.is_file(), f"ContextController.svelte not found at {component}"
+    comp_text = component.read_text(encoding="utf-8")
+    assert "fetchContextState" in comp_text, "ContextController.svelte must use fetchContextState"
+    assert "fetchContextPlan" in comp_text, "ContextController.svelte must use fetchContextPlan"
+    assert "deterministic" in comp_text.lower(), (
+        "ContextController.svelte must mention 'deterministic'"
+    )
+    print(f"  ContextController.svelte: present, uses fetchContextState/Plan ✓")
+
+
+def test_p19_controller_api_ts():
+    """P19-UI2: api.ts exports fetchContextState, fetchContextPlan, and typed interfaces."""
+    print("\n=== Test P19-UI2: api.ts has controller types and functions ===")
+    api_ts = Path(__file__).resolve().parent.parent / "ui" / "src" / "lib" / "api.ts"
+    source = api_ts.read_text(encoding="utf-8")
+
+    for symbol in (
+        "fetchContextState",
+        "fetchContextPlan",
+        "ContextStateData",
+        "ContextPlanData",
+        "ContextReadiness",
+        "ContextRecommendation",
+    ):
+        assert symbol in source, f"api.ts missing symbol: {symbol!r}"
+        print(f"  {symbol}: present ✓")
+
+
+def test_p19_controller_nav():
+    """P19-UI3: AppLayout.astro includes a Controller nav item."""
+    print("\n=== Test P19-UI3: AppLayout.astro has Controller nav item ===")
+    layout = (
+        Path(__file__).resolve().parent.parent
+        / "ui" / "src" / "layouts" / "AppLayout.astro"
+    )
+    source = layout.read_text(encoding="utf-8")
+    assert "Controller" in source, "AppLayout.astro must have a 'Controller' nav item"
+    assert "/app/controller" in source, "AppLayout.astro must link to /app/controller"
+    print(f"  AppLayout.astro: Controller nav item present ✓")
+
+
+def test_p19_next_best_action_shape():
+    """P19-P8: next_best_action is None or has action + title fields."""
+    print("\n=== Test P19-P8: next_best_action shape ===")
+    try:
+        from fastapi.testclient import TestClient
+    except RuntimeError as exc:
+        print(f"  SKIP: TestClient unavailable — {exc}")
+        return
+
+    from mcp.server.mcp_server import app
+
+    vault = list_vaults()[0]
+
+    with TestClient(app, raise_server_exceptions=True) as client:
+        for intent in ["review", "export", "security"]:
+            resp = client.post("/context/plan", json={"vault": vault, "intent": intent})
+            assert resp.status_code == 200
+            nba = resp.json()["data"]["next_best_action"]
+            if nba is not None:
+                assert "action" in nba, f"next_best_action missing 'action': {nba}"
+                assert "title" in nba, f"next_best_action missing 'title': {nba}"
+            print(f"  intent={intent!r}: next_best_action={nba!r} ✓")
+
+
+# ============================================================
 # Main
 # ============================================================
 
@@ -10600,6 +11074,26 @@ def main():
     test_p18c_ui_no_delete_for_demo_vault()
     test_p18c_api_has_delete_vault_helper()
     test_p18c_vaultstate_has_clear()
+
+    # Phase 19 — Context Controller Layer
+    test_p19_context_state_basic_shape()
+    test_p19_context_state_readiness_flags()
+    test_p19_context_state_service_sections()
+    test_p19_context_state_unknown_vault()
+    test_p19_context_state_deterministic()
+    test_p19_context_plan_basic_shape()
+    test_p19_context_plan_recommendation_shape()
+    test_p19_context_plan_all_intents_succeed()
+    test_p19_context_plan_invalid_intent()
+    test_p19_context_plan_unknown_vault()
+    test_p19_context_plan_default_intent()
+    test_p19_context_plan_deterministic()
+    test_p19_controller_read_only()
+    test_p19_controller_python_direct()
+    test_p19_controller_ui_files()
+    test_p19_controller_api_ts()
+    test_p19_controller_nav()
+    test_p19_next_best_action_shape()
 
     print()
     print("=" * 60)

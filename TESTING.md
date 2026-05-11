@@ -557,6 +557,55 @@ git status --short         # no dist/ or ui/dist/ entries
 - `TESTING.md` — added Phase 18 section (this entry); test count updated to 272.
 - `ROADMAP.md` — Phase 18 marked Complete; active phase updated to Phase 19.
 
+### Phase 19 — Context Controller Layer
+
+Deterministic vault state aggregator and recommendation engine. Two new API endpoints and a full UI page. 19 tests added.
+
+**Verification steps:**
+
+```bash
+py mcp/test_verify.py      # 341 tests — all must pass (19 new P19 tests added)
+py run.py validate         # 19/19 valid
+py run.py security         # status: pass
+py run.py feedback         # exits 0, valid JSON
+py run.py export --overwrite   # status: ok; 7 files including context.html
+cd ui && npm run build     # must complete with 0 errors
+```
+
+**Tests added (19 total, P19-S1 through P19-S5, P19-P1 through P19-P8, P19-R1, P19-D1, P19-UI1 through P19-UI3):**
+
+- `test_p19_context_state_basic_shape` — GET /context/state returns required top-level fields.
+- `test_p19_context_state_readiness_flags` — readiness contains all seven expected boolean flags.
+- `test_p19_context_state_service_sections` — state contains all six service-level sub-sections and summary.
+- `test_p19_context_state_unknown_vault` — GET /context/state with unknown vault returns 404 INVALID_VAULT.
+- `test_p19_context_state_deterministic` — two identical calls return the same readiness, blockers, warnings, and summary.
+- `test_p19_context_plan_basic_shape` — POST /context/plan returns required top-level fields.
+- `test_p19_context_plan_recommendation_shape` — each recommendation has rank, action, severity, title, reason, source, links.
+- `test_p19_context_plan_all_intents_succeed` — all five valid intents return 200 ok.
+- `test_p19_context_plan_invalid_intent` — POST /context/plan with unknown intent returns 400 INVALID_INTENT.
+- `test_p19_context_plan_unknown_vault` — POST /context/plan with unknown vault returns 404 INVALID_VAULT.
+- `test_p19_context_plan_default_intent` — POST /context/plan without intent defaults to `"review"`.
+- `test_p19_context_plan_deterministic` — same vault+intent always produces same recommendation list.
+- `test_p19_controller_read_only` — repeated state/plan calls leave the vault note count unchanged.
+- `test_p19_controller_python_direct` — `get_context_state()` and `build_context_plan()` work without HTTP layer.
+- `test_p19_controller_ui_files` — controller.astro and ContextController.svelte are present and contain correct symbols.
+- `test_p19_controller_api_ts` — api.ts exports `fetchContextState`, `fetchContextPlan`, and four typed interfaces.
+- `test_p19_controller_nav` — AppLayout.astro includes a Controller nav item linking to `/app/controller`.
+- `test_p19_next_best_action_shape` — `next_best_action` is null or has `action` + `title` fields.
+
+**Files changed:**
+
+- `mcp/core/context_controller.py` (NEW) — `get_context_state(vault_name)` and `build_context_plan(vault_name, intent)`; aggregates validation, security, tasks, missing, feedback, and graph; computes readiness flags, blockers, warnings, and ranked recommendations.
+- `mcp/server/mcp_server.py` — added `ContextPlanRequest` model, `GET /context/state`, and `POST /context/plan` endpoints.
+- `ui/src/lib/api.ts` — added `fetchContextState()`, `fetchContextPlan()`, and interfaces `ContextStateData`, `ContextPlanData`, `ContextReadiness`, `ContextRecommendation`.
+- `ui/src/pages/controller.astro` (NEW) — Astro page for `/app/controller`.
+- `ui/src/components/ContextController.svelte` (NEW) — full UI component with vault/intent selectors, readiness grid, service summary table, recommendation list, and raw JSON toggles.
+- `ui/src/layouts/AppLayout.astro` — added "Controller" nav item linking to `/app/controller`.
+- `mcp/test_verify.py` — 19 new Phase 19 tests.
+- `API.md` — added `GET /context/state` and `POST /context/plan` endpoint documentation.
+- `ROADMAP.md` — Phase 19 marked Complete; active phase updated to 20.
+- `TESTING.md` — added Phase 19 section (this entry).
+
 ### Phase 18C — Vault Lifecycle Management
 
 Safe vault deletion through API and UI. Users can permanently delete non-demo vaults via `DELETE /vault/{vault_name}` with explicit typed confirmation. A Danger Zone section was added to the Vault Setup page. 18 backend tests added.

@@ -70,6 +70,7 @@ from core.shared.context_package import export_context_package as _export_packag
 from core.shared.context_security import scan_vault_context as _scan_vault_context
 from core.shared.context_security import scan_context_bundle as _scan_context_bundle
 from mcp.core.note_write import update_note as _update_note
+from mcp.core.context_controller import get_context_state, build_context_plan
 
 
 # ---------- Structured Logging (Phase 7) ----------
@@ -2262,6 +2263,105 @@ def endpoint_vault_delete(vault_name: str, req: VaultDeleteRequest):
             "active_vault": result["active_vault"],
         },
     }
+
+
+# ---------- Phase 19: Context Controller ----------
+
+
+class ContextPlanRequest(BaseModel):
+    """Request body for POST /context/plan."""
+
+    vault: str = Field(..., description="Vault name to plan for.")
+    intent: str = Field(
+        "review",
+        description=(
+            "Planning intent. One of: review, export, agent-context, quality, security."
+        ),
+    )
+
+
+@app.get("/context/state")
+def endpoint_context_state(vault: str = Query(...)):
+    """Return a deterministic state snapshot for the given vault.
+
+    The controller is deterministic. It does not call an LLM or make semantic
+    judgements.  All output is derived from existing adapters and services.
+
+    Query parameters:
+        vault (str, required): Name of the registered vault.
+
+    Response data on success:
+        vault (str): Vault name.
+        state (dict): Per-service summaries (validation, security, tasks,
+            missing, feedback, graph).
+        readiness (dict): Boolean flags indicating vault readiness.
+        blockers (list[str]): Issues that prevent export or agent use.
+        warnings (list[str]): Non-blocking issues to address.
+
+    Error codes:
+        INVALID_VAULT:     Vault is not registered (HTTP 404).
+        CONTROLLER_FAILED: Unexpected error in the controller (HTTP 500).
+    """
+    err = _validate_vault(vault)
+    if err:
+        return err
+    try:
+        result = get_context_state(vault)
+        if result.get("status") == "error":
+            code = result["error"]["code"]
+            msg = result["error"]["message"]
+            http_code = 404 if code == "INVALID_VAULT" else 500
+            return _error(code, msg, http_code)
+        return {"status": "ok", "data": result}
+    except Exception as exc:
+        logger.exception("context_state_failed vault=%s", vault)
+        return _error("CONTROLLER_FAILED", str(exc), 500)
+
+
+@app.post("/context/plan")
+def endpoint_context_plan(req: ContextPlanRequest):
+    """Build a deterministic intent-scoped recommendation plan.
+
+    The controller is deterministic. It does not call an LLM or make semantic
+    judgements.  Recommendations are derived from validation, security, tasks,
+    missing-concepts, and feedback state.
+
+    Request body:
+        vault (str, required): Name of the registered vault.
+        intent (str, optional): Planning intent — one of: review, export,
+            agent-context, quality, security.  Defaults to ``review``.
+
+    Response data on success:
+        vault (str): Vault name.
+        intent (str): Intent used.
+        readiness (dict): Boolean readiness flags.
+        recommendations (list[dict]): Ranked list of actions.
+        blockers (list[str]): Blocking issues.
+        warnings (list[str]): Non-blocking issues.
+        next_best_action (dict | None): Highest-ranked recommendation summary.
+
+    Error codes:
+        INVALID_VAULT:   Vault is not registered (HTTP 404).
+        INVALID_INTENT:  Intent is not a recognised value (HTTP 400).
+        CONTROLLER_FAILED: Unexpected error (HTTP 500).
+    """
+    err = _validate_vault(req.vault)
+    if err:
+        return err
+    try:
+        result = build_context_plan(req.vault, req.intent)
+        if result.get("status") == "error":
+            code = result["error"]["code"]
+            msg = result["error"]["message"]
+            if code == "INVALID_VAULT":
+                return _error(code, msg, 404)
+            if code == "INVALID_INTENT":
+                return _error(code, msg, 400)
+            return _error(code, msg, 500)
+        return {"status": "ok", "data": result}
+    except Exception as exc:
+        logger.exception("context_plan_failed vault=%s intent=%s", req.vault, req.intent)
+        return _error("CONTROLLER_FAILED", str(exc), 500)
 
 
 # ---------- Phase 10: Static UI Serving ----------

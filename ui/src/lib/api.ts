@@ -868,3 +868,126 @@ export function deleteVault(
     });
   }
 }
+
+// ---------------------------------------------------------------------------
+// Context Controller — GET /context/state  &  POST /context/plan
+// ---------------------------------------------------------------------------
+
+export interface ContextReadiness {
+  valid: boolean;
+  security_passed: boolean;
+  has_tasks: boolean;
+  has_missing_concepts: boolean;
+  has_feedback_warnings: boolean;
+  ready_to_export: boolean;
+  ready_for_agent_context: boolean;
+}
+
+export interface ContextStateSummary {
+  validation_status: string;
+  security_status: string;
+  total_tasks: number;
+  total_missing: number;
+  feedback_entry_count: number;
+  graph_node_count: number;
+}
+
+export interface ContextStateData {
+  vault: string;
+  state: {
+    summary: ContextStateSummary;
+    validation: Record<string, unknown>;
+    security: Record<string, unknown>;
+    tasks: Record<string, unknown>;
+    missing: Record<string, unknown>;
+    feedback: Record<string, unknown>;
+    graph: Record<string, unknown>;
+  };
+  readiness: ContextReadiness;
+  blockers: string[];
+  warnings: string[];
+}
+
+export interface ContextRecommendation {
+  rank: number;
+  action: string;
+  severity: string;
+  title: string;
+  reason: string;
+  source: string;
+  links: { ui: string; api: string };
+}
+
+export interface ContextPlanData {
+  vault: string;
+  intent: string;
+  readiness: ContextReadiness;
+  recommendations: ContextRecommendation[];
+  blockers: string[];
+  warnings: string[];
+  next_best_action: { action: string; title: string } | null;
+}
+
+/**
+ * GET /context/state?vault= — retrieve a full deterministic vault state snapshot.
+ *
+ * The controller is deterministic and does not call an LLM.
+ */
+export function fetchContextState(vault: string): Promise<ApiResult<ContextStateData>> {
+  try {
+    return fetch(`${API_BASE}/context/state?vault=${encodeURIComponent(vault)}`)
+      .then((resp) => resp.json())
+      .then((json) => json as ApiResult<ContextStateData>)
+      .catch((err: unknown) => ({
+        status: 'error' as const,
+        error: {
+          code: 'NETWORK_ERROR',
+          message: err instanceof Error ? err.message : 'Network request failed',
+        },
+      }));
+  } catch (err) {
+    return Promise.resolve({
+      status: 'error',
+      error: {
+        code: 'NETWORK_ERROR',
+        message: err instanceof Error ? err.message : 'Network request failed',
+      },
+    });
+  }
+}
+
+/**
+ * POST /context/plan — build an intent-scoped recommendation plan.
+ *
+ * Valid intents: review, export, agent-context, quality, security.
+ * The controller is deterministic and does not call an LLM.
+ */
+export function fetchContextPlan(
+  vault: string,
+  intent: string = 'review',
+): Promise<ApiResult<ContextPlanData>> {
+  try {
+    return fetch(`${API_BASE}/context/plan`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ vault, intent }),
+    })
+      .then((resp) => resp.json())
+      .then((json) => json as ApiResult<ContextPlanData>)
+      .catch((err: unknown) => ({
+        status: 'error' as const,
+        error: {
+          code: 'NETWORK_ERROR',
+          message: err instanceof Error ? err.message : 'Network request failed',
+        },
+      }));
+  } catch (err) {
+    return Promise.resolve({
+      status: 'error',
+      error: {
+        code: 'NETWORK_ERROR',
+        message: err instanceof Error ? err.message : 'Network request failed',
+      },
+    });
+  }
+}

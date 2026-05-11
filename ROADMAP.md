@@ -92,7 +92,7 @@ The backend is strong. The local UI has reached a usable application baseline. T
 
 ## Current Active Phase
 
-**Phase 19 - Context Controller Layer**
+**Phase 20 - MCP Compatibility Layer**
 
 ## Phase Status Overview
 
@@ -118,7 +118,7 @@ The backend is strong. The local UI has reached a usable application baseline. T
 | 17A   | HTML Bundle Renderer                    | Complete |
 | 17    | Distribution and Local App Launcher     | Complete |
 | 18    | CI and Release Hardening                | Complete |
-| 19    | Context Controller Layer                | Planned  |
+| 19    | Context Controller Layer                | Complete |
 | 20    | MCP Compatibility Layer                 | Planned  |
 | 21    | Private Cloud Mode                      | Planned  |
 | 22    | Session and Project State Layer         | Planned  |
@@ -335,7 +335,7 @@ feat(vault): safe vault deletion with typed confirmation
 
 ---
 
-### Phase 19 - Context Controller Layer
+### Phase 19 - Context Controller Layer — **Complete**
 
 #### Purpose
 
@@ -343,38 +343,27 @@ Add the orchestration layer between local LLM/tool clients and raw API routes.
 
 A weak local LLM should not decide low-level retrieval strategy. It should ask for context, and the controller should choose the plan.
 
-#### Deliver
+#### Delivered
 
-High-level functions:
+- `mcp/core/context_controller.py` — deterministic controller service; exports `get_context_state(vault_name)` and `build_context_plan(vault_name, intent)`.
+- `GET /context/state` — returns a full snapshot: per-service summaries, 7 boolean readiness flags, blockers, and warnings.
+- `POST /context/plan` — accepts one of five intents (`review`, `export`, `agent-context`, `quality`, `security`) and returns a ranked recommendation list with `next_best_action`.
+- UI page at `/app/controller` backed by `ContextController.svelte` — vault/intent selectors, readiness grid, service summary table, recommendation list.
+- "Controller" nav item added to `AppLayout.astro`.
+- 19 Phase 19 test cases added to `mcp/test_verify.py`.
+- `API.md` updated with full endpoint documentation.
 
-- `build_context_for_question`
-- `resume_project`
-- `explain_topic`
-- `prepare_agent_context`
-- `get_current_state`
-- `get_relevant_notes`
+#### Acceptance Criteria — Met
 
-Responsibilities:
+- Controller is deterministic: same vault + intent always returns the same output.
+- Controller is read-only: no vault files are mutated.
+- No LLM is invoked; all output is derived from current vault state.
+- Security scan status is reflected in readiness flags.
 
-- classify request intent
-- choose retrieval mode
-- call query/graph/tasks/feedback/bundle/security
-- apply context budget
-- include source paths
-- include warnings
-- enforce optional security scan before delivery
-
-#### Acceptance Criteria
-
-- One request can produce a useful context payload.
-- Payload is smaller and cleaner than raw API output.
-- Security scan can be enforced before delivery.
-- Deterministic behaviour is preserved.
-
-#### Suggested Commit
+#### Commit
 
 ```
-feat(context): add context controller layer
+feat(context): add context controller layer (Phase 19)
 ```
 
 ---

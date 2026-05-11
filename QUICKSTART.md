@@ -898,7 +898,52 @@ schema-derived relationship graph and missing expected concepts.
 
 ---
 
-## 7. Query the System
+## 6l. Context Controller UI (Phase 19)
+
+The **Controller** page (`/app/controller`) provides a real-time deterministic snapshot of your vault's state and a prioritised action plan.
+
+> **Important:** The controller does not call an LLM or make semantic judgements.
+> All output is derived from the current state of your vault.
+
+**Opening the Controller page:**
+1. Start the backend server: `py mcp/server/mcp_server.py`
+2. Start the Astro UI: `cd ui && npm run dev`
+3. Click **Controller** in the sidebar.
+
+**Vault and intent selection:**
+- Use the **Vault** dropdown to choose a registered vault.
+- Use the **Planning Intent** dropdown to select one of five intents:
+  - `Review` — general vault health and completeness.
+  - `Export` — readiness for context bundle export.
+  - `Agent Context` — readiness for LLM agent use.
+  - `Quality` — content quality and coverage gaps.
+  - `Security` — security findings and risks.
+- Click **Refresh** to reload both the state snapshot and the plan.
+
+**Readiness cards:**
+- Seven boolean flags derived from validation and security status.
+- `ready_to_export` and `ready_for_agent_context` are `true` only when validation passes and the security scan is `pass` or `warning`.
+
+**Recommendations:**
+- Ranked list of actions for the selected intent.
+- Each recommendation shows its severity (`critical`, `high`, `medium`, `low`, `info`), title, reason, and links to the relevant UI page.
+- The top recommendation is highlighted as the **Next Best Action**.
+
+**API equivalents:**
+
+```bash
+# State snapshot
+curl "http://127.0.0.1:8000/context/state?vault=demo-vault"
+
+# Recommendation plan
+curl -X POST http://127.0.0.1:8000/context/plan \
+  -H "Content-Type: application/json" \
+  -d '{"vault": "demo-vault", "intent": "review"}'
+```
+
+---
+
+
 
 **Vault overview**
 * http://127.0.0.1:8000/summary
