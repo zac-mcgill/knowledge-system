@@ -1,6 +1,6 @@
 # Context Vault Engine — Testing
 
-All tests live in `mcp/test_verify.py`. There are 284 test functions covering all implemented phases.
+All tests live in `mcp/test_verify.py`. There are 294 test functions covering all implemented phases.
 
 ---
 
@@ -556,6 +556,44 @@ git status --short         # no dist/ or ui/dist/ entries
 - `mcp/test_verify.py` — 7 new Phase 18 tests.
 - `TESTING.md` — added Phase 18 section (this entry); test count updated to 272.
 - `ROADMAP.md` — Phase 18 marked Complete; active phase updated to Phase 19.
+
+### Phase 18B-U — Schema Builder UX Hardening
+
+Bootstrap usability pass before Phase 19. Expected concepts are now written into generated `vault_schema.py` so that `GET /missing` works immediately after vault creation. 10 backend tests added.
+
+**Verification steps:**
+
+```bash
+py mcp/test_verify.py      # 294 tests — all must pass (10 new P18BU tests added)
+py run.py validate         # 19/19 valid
+py run.py security         # status: pass
+py run.py feedback         # exits 0, valid JSON
+py run.py export --overwrite   # status: ok; 7 files including context.html
+cd ui && npm run build     # must complete with 0 errors
+```
+
+**Tests added (10 total, P18BU-1 through P18BU-10):**
+
+- `test_p18bu_expected_concepts_written_to_schema` — bootstrap with expected_concepts produces a `vault_schema.py` whose `EXPECTED_CONCEPTS` block contains the normalised slugs; result dict includes `expected_concepts.written`.
+- `test_p18bu_expected_concepts_safe_repr` — malicious concept strings (shell injection, quote injection, null bytes, newlines) are safely escaped via `repr()`; generated schema compiles without syntax error.
+- `test_p18bu_expected_concepts_deduplication` — duplicate concepts that produce the same slug after normalisation appear only once in the generated schema.
+- `test_p18bu_schema_importable_with_concepts` — generated schema can be dynamically imported and exposes a `EXPECTED_CONCEPTS` dict with correct slug keys.
+- `test_p18bu_no_concepts_still_works` — bootstrap without `expected_concepts` still generates a valid schema with `EXPECTED_CONCEPTS = {}`.
+- `test_p18bu_api_response_reflects_concepts` — `POST /vault/bootstrap` API response includes `expected_concepts: {requested: N, written: N}`; no stale "not yet written" warning in response.
+- `test_p18bu_missing_uses_bootstrapped_concepts` — `GET /missing?vault=<new-vault>` returns `total_expected=N, total_missing=N` immediately after bootstrap with expected concepts; no manual schema editing required.
+- `test_p18bu_ui_no_stale_limitation_text` — `VaultSetup.svelte` source does not contain the stale "not yet written into" or "Backend limitation" warning text.
+- `test_p18bu_generate_schema_deterministic` — identical inputs to `generate_schema_content()` produce byte-for-byte identical output across two calls.
+- `test_p18bu_concepts_sorted_in_schema` — slugs appear in alphabetical order in the generated `EXPECTED_CONCEPTS` block.
+
+**What was fixed:**
+
+- `core/generate_schema.py` — added `_normalise_concept_slug()` and `_render_expected_concepts()` helpers; added `expected_concepts` parameter to `generate_schema_content()`; replaced hardcoded `EXPECTED_CONCEPTS = {}` template placeholder with `%EXPECTED_CONCEPTS%`.
+- `core/shared/bootstrap_service.py` — `bootstrap_vault_noninteractive()` passes `expected_concepts_clean` to `generate_schema_content()`; removed stale "accepted but not written" warning; added `expected_concepts: {requested, written}` to result dict.
+- `mcp/server/mcp_server.py` — updated `VaultBootstrapRequest.expected_concepts` description; updated `endpoint_vault_bootstrap` docstring; passes `expected_concepts` count through API response.
+- `ui/src/components/VaultSetup.svelte` — removed amber "Backend limitation" warning box; updated helper text to explain concepts are written to schema; added success-panel info showing how many concepts were written.
+- `ui/src/lib/api.ts` — added `expected_concepts?: {requested, written}` to `VaultBootstrapResponse`.
+- `mcp/test_verify.py` — fixed `test_p11a_api_bootstrap_success_envelope` to remove stale assertion about "expected_concepts limitation" warning; added 10 new P18BU tests.
+- `QUICKSTART.md`, `API.md`, `TESTING.md`, `ROADMAP.md` — updated to reflect new behaviour.
 
 ### Phase QAS — UI QA Stabilisation
 

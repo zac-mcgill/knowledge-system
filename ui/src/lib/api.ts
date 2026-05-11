@@ -561,6 +561,7 @@ export interface VaultBootstrapResponse {
   vault: string;
   created: string[];
   warnings: string[];
+  expected_concepts?: { requested: number; written: number };
 }
 
 /** POST /vault/bootstrap — create a new vault from structured inputs. */

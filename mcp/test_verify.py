@@ -6023,14 +6023,20 @@ def test_p11a_api_bootstrap_success_envelope():
         assert isinstance(data["created"], list), "created must be a list"
         assert len(data["created"]) > 0, "created must be non-empty on success"
         assert isinstance(data["warnings"], list), "warnings must be a list"
-        # expected_concepts warning must be present
-        assert any("expected_concepts" in w for w in data["warnings"]), (
-            "warnings must mention expected_concepts limitation"
-        )
+        # expected_concepts are now written to schema — no limitation warning expected
+        assert not any(
+            "not yet written" in w or "not written" in w
+            for w in data["warnings"]
+        ), "stale expected_concepts limitation warning must not appear in warnings"
+        # expected_concepts count must be present
+        assert "expected_concepts" in data, "data missing 'expected_concepts'"
+        ec = data["expected_concepts"]
+        assert ec.get("requested") == 2, f"expected_concepts.requested should be 2, got {ec}"
+        assert ec.get("written") == 2, f"expected_concepts.written should be 2, got {ec}"
         print(f"  POST /vault/bootstrap: 200 OK ✓")
         print(f"  data.vault={data['vault']!r}")
         print(f"  data.created={data['created']}")
-        print(f"  data.warnings count={len(data['warnings'])}")
+        print(f"  data.expected_concepts={data['expected_concepts']}")
 
 
 def test_p11a_api_bootstrap_invalid_input_errors():
@@ -6136,6 +6142,409 @@ def test_p11a_api_bootstrap_invalid_input_errors():
         print(f"  Invalid note_type: {resp.status_code} structured error ✓")
 
     print(f"  All invalid input scenarios return structured errors ✓")
+
+
+# ============================================================
+# Phase 18B-U — Schema Builder UX Hardening
+# ============================================================
+
+
+def test_p18bu_expected_concepts_written_to_schema():
+    """P18BU-1: expected_concepts are written into generated vault_schema.py."""
+    print("\n=== Test P18BU-1: Expected Concepts Written To Schema ===")
+    import tempfile
+    from core.shared.bootstrap_service import bootstrap_vault_noninteractive
+
+    with tempfile.TemporaryDirectory(prefix="kv_p18bu_1_") as tmp_str:
+        repo_root = Path(tmp_str)
+        (repo_root / "config").mkdir()
+        (repo_root / "config" / "config.yaml").write_text(
+            "vault_root: ./demo-vault\n", encoding="utf-8"
+        )
+
+        result = bootstrap_vault_noninteractive(
+            repo_root=repo_root,
+            vault_name="law-vault",
+            domain="Patent Law",
+            note_type="legal-topic",
+            sections=["Overview", "Legal Basis", "Arguments", "Risks"],
+            expected_concepts=[
+                "patent licensing",
+                "open licensing",
+                "royalty exemption",
+                "royalty pricing",
+                "information disclosure",
+            ],
+        )
+
+        schema_path = (
+            repo_root / "law-vault" / "Vault Files" / "Scripts" / "vault_schema.py"
+        )
+        assert schema_path.is_file(), "vault_schema.py not found"
+        content = schema_path.read_text(encoding="utf-8")
+
+        assert "EXPECTED_CONCEPTS" in content, "Schema missing EXPECTED_CONCEPTS"
+        assert "patent-licensing" in content, "Schema missing 'patent-licensing' concept"
+        assert "open-licensing" in content, "Schema missing 'open-licensing' concept"
+        assert "royalty-exemption" in content, "Schema missing 'royalty-exemption' concept"
+        assert "frozenset" in content, "Schema EXPECTED_CONCEPTS must use frozenset"
+        assert "patent-law" in content, "Schema EXPECTED_CONCEPTS must use domain slug as key"
+
+        # Verify expected_concepts count in result
+        assert "expected_concepts" in result, "result missing 'expected_concepts'"
+        assert result["expected_concepts"]["written"] == 5, (
+            f"expected_concepts.written should be 5: {result['expected_concepts']}"
+        )
+
+        print(f"  vault_schema.py contains EXPECTED_CONCEPTS ✓")
+        print(f"  expected_concepts.written={result['expected_concepts']['written']} ✓")
+
+
+def test_p18bu_expected_concepts_safe_repr():
+    """P18BU-2: Malicious expected concept strings cannot inject Python code."""
+    print("\n=== Test P18BU-2: Expected Concepts Safe Repr ===")
+    from core.generate_schema import generate_schema_content
+
+    # These strings would be dangerous if naively interpolated into Python source
+    malicious_inputs = [
+        "concept'); import os; os.system('rm -rf /')",
+        "concept\"); print('injected')",
+        "normal concept with \\backslash",
+        "concept with 'single' quotes",
+        'concept with "double" quotes',
+        "concept\nwith\nnewlines",
+        "concept\x00with\x01control",
+    ]
+
+    content = generate_schema_content(
+        domain_folder="Test Domain",
+        domain_slug="test-domain",
+        note_type="test-type",
+        sections=["Overview", "Details"],
+        expected_concepts=malicious_inputs,
+    )
+
+    # The generated schema must be importable (no syntax errors)
+    import types
+    mod = types.ModuleType("_test_schema")
+    # Provide __file__ so the schema's Path(__file__) line does not raise NameError
+    mod.__file__ = "<test_schema>"
+    try:
+        exec(compile(content, "<test_schema>", "exec"), mod.__dict__)
+    except SyntaxError as exc:
+        raise AssertionError(
+            f"Generated schema has syntax error (possible injection): {exc}"
+        ) from exc
+
+    assert hasattr(mod, "EXPECTED_CONCEPTS"), "Generated schema must have EXPECTED_CONCEPTS"
+    # The exec must not have run any system commands (if injection worked, this test
+    # itself would fail catastrophically rather than raise an assert)
+    print(f"  Malicious inputs safely escaped — schema compiles without errors ✓")
+
+
+def test_p18bu_expected_concepts_deduplication():
+    """P18BU-3: Duplicate expected concepts are deduplicated case-insensitively after slugifying."""
+    print("\n=== Test P18BU-3: Expected Concepts Deduplication ===")
+    from core.generate_schema import generate_schema_content, _normalise_concept_slug
+
+    # After slug normalisation "Patent Licensing" and "patent licensing" both become
+    # "patent-licensing" — only one entry should appear in the schema
+    content = generate_schema_content(
+        domain_folder="Dogs",
+        domain_slug="dogs",
+        note_type="breed-profile",
+        sections=["Overview", "Health"],
+        expected_concepts=[
+            "Labrador Retriever",
+            "labrador retriever",   # duplicate after lower-casing
+            "German Shepherd",
+        ],
+    )
+
+    # Count occurrences of the slug
+    labrador_count = content.count("labrador-retriever")
+    assert labrador_count == 1, (
+        f"'labrador-retriever' appears {labrador_count} times; expected 1 after deduplication"
+    )
+    print(f"  Duplicates deduplicated — 'labrador-retriever' appears once ✓")
+
+
+def test_p18bu_schema_importable_with_concepts():
+    """P18BU-4: Generated schema with expected concepts is importable and valid."""
+    print("\n=== Test P18BU-4: Schema Importable With Concepts ===")
+    import tempfile
+    import importlib.util
+    from core.shared.bootstrap_service import bootstrap_vault_noninteractive
+
+    with tempfile.TemporaryDirectory(prefix="kv_p18bu_4_") as tmp_str:
+        repo_root = Path(tmp_str)
+        (repo_root / "config").mkdir()
+        (repo_root / "config" / "config.yaml").write_text(
+            "vault_root: ./demo-vault\n", encoding="utf-8"
+        )
+
+        bootstrap_vault_noninteractive(
+            repo_root=repo_root,
+            vault_name="dogs-vault",
+            domain="Dogs",
+            note_type="breed-profile",
+            sections=["Overview", "Health Risks"],
+            expected_concepts=["Labrador Retriever", "German Shepherd", "Beagle"],
+        )
+
+        schema_path = (
+            repo_root / "dogs-vault" / "Vault Files" / "Scripts" / "vault_schema.py"
+        )
+        spec = importlib.util.spec_from_file_location("_test_vault_schema", schema_path)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+
+        assert hasattr(mod, "EXPECTED_CONCEPTS"), "Imported schema missing EXPECTED_CONCEPTS"
+        assert isinstance(mod.EXPECTED_CONCEPTS, dict), "EXPECTED_CONCEPTS must be a dict"
+        assert "dogs" in mod.EXPECTED_CONCEPTS, "EXPECTED_CONCEPTS must have 'dogs' key"
+        concepts = mod.EXPECTED_CONCEPTS["dogs"]
+        assert isinstance(concepts, frozenset), "EXPECTED_CONCEPTS values must be frozensets"
+        assert "labrador-retriever" in concepts, "Missing 'labrador-retriever' in EXPECTED_CONCEPTS"
+        assert "german-shepherd" in concepts, "Missing 'german-shepherd' in EXPECTED_CONCEPTS"
+        assert "beagle" in concepts, "Missing 'beagle' in EXPECTED_CONCEPTS"
+        print(f"  Schema imports successfully ✓")
+        print(f"  EXPECTED_CONCEPTS = {dict(mod.EXPECTED_CONCEPTS)!r} ✓")
+
+
+def test_p18bu_no_concepts_still_works():
+    """P18BU-5: Bootstrap without expected_concepts produces a valid schema with empty EXPECTED_CONCEPTS."""
+    print("\n=== Test P18BU-5: Bootstrap Without Concepts Still Works ===")
+    import tempfile
+    from core.shared.bootstrap_service import bootstrap_vault_noninteractive
+
+    with tempfile.TemporaryDirectory(prefix="kv_p18bu_5_") as tmp_str:
+        repo_root = Path(tmp_str)
+        (repo_root / "config").mkdir()
+        (repo_root / "config" / "config.yaml").write_text(
+            "vault_root: ./demo-vault\n", encoding="utf-8"
+        )
+
+        result = bootstrap_vault_noninteractive(
+            repo_root=repo_root,
+            vault_name="empty-vault",
+            domain="Empty",
+            note_type="bare-note",
+            sections=["Overview", "Details"],
+            # no expected_concepts
+        )
+
+        schema_path = (
+            repo_root / "empty-vault" / "Vault Files" / "Scripts" / "vault_schema.py"
+        )
+        assert schema_path.is_file(), "vault_schema.py not found"
+        content = schema_path.read_text(encoding="utf-8")
+        assert "EXPECTED_CONCEPTS: dict[str, frozenset[str]] = {}" in content, (
+            "Empty expected_concepts must produce empty dict in schema"
+        )
+        assert result["expected_concepts"]["written"] == 0, (
+            "expected_concepts.written should be 0 when not provided"
+        )
+        print(f"  Empty EXPECTED_CONCEPTS generated correctly ✓")
+        print(f"  expected_concepts.written=0 ✓")
+
+
+def test_p18bu_api_response_reflects_concepts():
+    """P18BU-6: POST /vault/bootstrap API response includes expected_concepts counts."""
+    print("\n=== Test P18BU-6: API Response Reflects Concepts ===")
+    import tempfile
+
+    try:
+        from fastapi.testclient import TestClient
+    except RuntimeError as exc:
+        print(f"  SKIP: TestClient unavailable — {exc}")
+        return
+
+    import mcp.server.mcp_server as srv
+    from mcp.server.mcp_server import app
+
+    with tempfile.TemporaryDirectory(prefix="kv_p18bu_6_") as tmp_str:
+        repo_root = Path(tmp_str)
+        (repo_root / "config").mkdir()
+        (repo_root / "config" / "config.yaml").write_text(
+            "vault_root: ./demo-vault\n", encoding="utf-8"
+        )
+
+        original_override = srv._BOOTSTRAP_REPO_ROOT
+        srv._BOOTSTRAP_REPO_ROOT = repo_root
+        try:
+            with TestClient(app, raise_server_exceptions=True) as client:
+                resp = client.post(
+                    "/vault/bootstrap",
+                    json={
+                        "vault_name": "cats-vault",
+                        "domain": "Cats",
+                        "note_type": "cat-profile",
+                        "sections": ["Overview", "Behaviour"],
+                        "expected_concepts": ["Persian", "Siamese", "Maine Coon"],
+                    },
+                )
+        finally:
+            srv._BOOTSTRAP_REPO_ROOT = original_override
+
+        assert resp.status_code == 200, f"Expected 200, got {resp.status_code}: {resp.text[:400]}"
+        body = resp.json()
+        assert body["status"] == "ok"
+        data = body["data"]
+        assert "expected_concepts" in data, "API response data missing 'expected_concepts'"
+        ec = data["expected_concepts"]
+        assert ec.get("requested") == 3, f"expected_concepts.requested should be 3: {ec}"
+        assert ec.get("written") == 3, f"expected_concepts.written should be 3: {ec}"
+        # No stale limitation warning
+        assert not any(
+            "not yet written" in w or "not written" in w
+            for w in data.get("warnings", [])
+        ), "Stale limitation warning must not appear in API response"
+        print(f"  API response includes expected_concepts counts ✓")
+        print(f"  expected_concepts={ec} ✓")
+
+
+def test_p18bu_missing_uses_bootstrapped_concepts():
+    """P18BU-7: GET /missing returns concept gaps for a bootstrapped vault with expected_concepts."""
+    print("\n=== Test P18BU-7: Missing Uses Bootstrapped Concepts ===")
+    import tempfile
+
+    try:
+        from fastapi.testclient import TestClient
+    except RuntimeError as exc:
+        print(f"  SKIP: TestClient unavailable — {exc}")
+        return
+
+    import mcp.server.mcp_server as srv
+    from mcp.server.mcp_server import app
+
+    with tempfile.TemporaryDirectory(prefix="kv_p18bu_7_") as tmp_str:
+        repo_root = Path(tmp_str)
+        (repo_root / "config").mkdir()
+        (repo_root / "config" / "config.yaml").write_text(
+            "vault_root: ./demo-vault\n", encoding="utf-8"
+        )
+
+        original_override = srv._BOOTSTRAP_REPO_ROOT
+        srv._BOOTSTRAP_REPO_ROOT = repo_root
+        try:
+            with TestClient(app, raise_server_exceptions=True) as client:
+                # Bootstrap a vault with expected concepts
+                bootstrap_resp = client.post(
+                    "/vault/bootstrap",
+                    json={
+                        "vault_name": "concepts-vault",
+                        "domain": "Science",
+                        "note_type": "science-topic",
+                        "sections": ["Overview", "Principles"],
+                        "expected_concepts": [
+                            "quantum mechanics",
+                            "thermodynamics",
+                            "electromagnetism",
+                        ],
+                    },
+                )
+                assert bootstrap_resp.status_code == 200, (
+                    f"Bootstrap failed: {bootstrap_resp.text[:400]}"
+                )
+
+                # Manually register the new vault so the TestClient can find it
+                # (bootstrap writes to repo_root, but vault_registry loads from the
+                # real config.yaml; we inject the vault path directly)
+                import mcp.core.vault_registry as _vr
+                _vr._vaults["concepts-vault"] = repo_root / "concepts-vault"
+                _vr._schemas.pop("concepts-vault", None)
+
+                # GET /missing must return concept gaps (vault has no notes yet)
+                missing_resp = client.get("/missing?vault=concepts-vault")
+        finally:
+            srv._BOOTSTRAP_REPO_ROOT = original_override
+            # Clean up injected vault from registry to avoid polluting other tests
+            import mcp.core.vault_registry as _vr
+            _vr._vaults.pop("concepts-vault", None)
+            _vr._schemas.pop("concepts-vault", None)
+
+        assert missing_resp.status_code == 200, (
+            f"GET /missing returned {missing_resp.status_code}: {missing_resp.text[:400]}"
+        )
+        body = missing_resp.json()
+        assert body["status"] == "ok", f"Expected ok: {body}"
+        data = body["data"]
+        assert data.get("total_expected", 0) == 3, (
+            f"Expected 3 concepts tracked, got: {data.get('total_expected')}"
+        )
+        assert data.get("total_missing", 0) == 3, (
+            f"All 3 concepts should be missing (no notes): {data.get('total_missing')}"
+        )
+        print(f"  GET /missing works for bootstrapped vault ✓")
+        print(f"  total_expected={data['total_expected']}, total_missing={data['total_missing']} ✓")
+
+
+def test_p18bu_ui_no_stale_limitation_text():
+    """P18BU-8: VaultSetup.svelte does not contain stale 'not yet written' limitation text."""
+    print("\n=== Test P18BU-8: UI No Stale Limitation Text ===")
+    ui_path = Path(__file__).resolve().parent.parent / "ui" / "src" / "components" / "VaultSetup.svelte"
+    assert ui_path.is_file(), f"VaultSetup.svelte not found: {ui_path}"
+    content = ui_path.read_text(encoding="utf-8")
+    stale_phrases = [
+        "not yet written into",
+        "not written into",
+        "Backend limitation",
+        "backend will return a warning if any are provided",
+        "Add them manually to vault_schema.py after bootstrap",
+    ]
+    for phrase in stale_phrases:
+        assert phrase not in content, (
+            f"Stale limitation text found in VaultSetup.svelte: {phrase!r}"
+        )
+    print(f"  No stale limitation text in VaultSetup.svelte ✓")
+
+
+def test_p18bu_generate_schema_deterministic():
+    """P18BU-9: generate_schema_content produces identical output for same inputs."""
+    print("\n=== Test P18BU-9: Generate Schema Deterministic ===")
+    from core.generate_schema import generate_schema_content
+
+    kwargs = dict(
+        domain_folder="Dogs",
+        domain_slug="dogs",
+        note_type="breed-profile",
+        sections=["Overview", "Health"],
+        expected_concepts=["Beagle", "Poodle", "Labrador"],
+    )
+
+    result1 = generate_schema_content(**kwargs)
+    result2 = generate_schema_content(**kwargs)
+    assert result1 == result2, "generate_schema_content is not deterministic"
+    print(f"  Output is deterministic across two calls ✓")
+
+
+def test_p18bu_concepts_sorted_in_schema():
+    """P18BU-10: Expected concepts appear in sorted order in generated schema."""
+    print("\n=== Test P18BU-10: Concepts Sorted In Schema ===")
+    from core.generate_schema import generate_schema_content
+
+    content = generate_schema_content(
+        domain_folder="Dogs",
+        domain_slug="dogs",
+        note_type="breed-profile",
+        sections=["Overview", "Health"],
+        expected_concepts=["poodle", "beagle", "labrador"],
+    )
+
+    # Find the EXPECTED_CONCEPTS block and verify alphabetical slug order
+    start = content.find("EXPECTED_CONCEPTS")
+    assert start != -1, "EXPECTED_CONCEPTS not found in schema"
+    block = content[start:content.find("PRIORITY_DOMAINS", start)]
+
+    beagle_pos = block.find("'beagle'")
+    labrador_pos = block.find("'labrador'")
+    poodle_pos = block.find("'poodle'")
+
+    assert beagle_pos < labrador_pos < poodle_pos, (
+        f"Concepts not sorted alphabetically: beagle={beagle_pos}, "
+        f"labrador={labrador_pos}, poodle={poodle_pos}"
+    )
+    print(f"  Concepts sorted alphabetically in schema ✓")
 
 
 # ============================================================
@@ -9063,6 +9472,21 @@ def main():
     test_p11a_cli_bootstrap_still_importable()
     test_p11a_api_bootstrap_success_envelope()
     test_p11a_api_bootstrap_invalid_input_errors()
+
+    # ---- Phase 18B-U: Schema Builder UX Hardening ----
+    print("\n" + "=" * 60)
+    print("Phase 18B-U — Schema Builder UX Hardening")
+    print("=" * 60)
+    test_p18bu_expected_concepts_written_to_schema()
+    test_p18bu_expected_concepts_safe_repr()
+    test_p18bu_expected_concepts_deduplication()
+    test_p18bu_schema_importable_with_concepts()
+    test_p18bu_no_concepts_still_works()
+    test_p18bu_api_response_reflects_concepts()
+    test_p18bu_missing_uses_bootstrapped_concepts()
+    test_p18bu_ui_no_stale_limitation_text()
+    test_p18bu_generate_schema_deterministic()
+    test_p18bu_concepts_sorted_in_schema()
 
     # ---- Phase 14A: Feedback Write API ----
     print("\n" + "=" * 60)

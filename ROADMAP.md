@@ -278,6 +278,30 @@ ci: add verification workflow
 
 ---
 
+### Phase 18B-U - Schema Builder UX Hardening — **Complete**
+
+#### Purpose
+
+Close the usability gap where users had to manually edit `vault_schema.py` to add expected concepts after bootstrap. Bootstrap now writes expected concepts directly into the generated schema so that Missing Concepts works immediately after vault creation.
+
+#### Delivered
+
+- `generate_schema_content()` accepts `expected_concepts` list; renders it as `EXPECTED_CONCEPTS` using `repr()` (injection-safe, deterministic).
+- `bootstrap_vault_noninteractive()` passes cleaned concepts to schema generator; removed stale warning; returns `expected_concepts: {requested, written}` count in result.
+- `POST /vault/bootstrap` API response includes `expected_concepts` counts.
+- `VaultSetup.svelte` — removed "Backend limitation" amber warning; updated helper text; success panel shows concept count.
+- `api.ts` — `VaultBootstrapResponse` includes optional `expected_concepts` field.
+- 10 new P18BU tests covering generation, deduplication, injection safety, importability, API response, and `GET /missing`.
+- Docs updated: QUICKSTART.md, API.md, TESTING.md, ROADMAP.md.
+
+#### Suggested Commit
+
+```
+feat(bootstrap): write expected concepts into generated schemas
+```
+
+---
+
 ### Phase 19 - Context Controller Layer
 
 #### Purpose

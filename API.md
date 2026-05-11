@@ -821,7 +821,14 @@ remains supported and is unaffected.
 | `domain` | string | yes | Primary domain display name (e.g. `"Dogs"`). |
 | `note_type` | string | yes | Note type slug (e.g. `"breed-profile"`). Pattern: `^[a-z0-9]+(?:-[a-z0-9]+)*$`. |
 | `sections` | list[string] | yes | Canonical section names (minimum 2, no duplicates). |
-| `expected_concepts` | list[string] | no | Expected concept names. Accepted but not yet written to schema (see limitations). |
+| `expected_concepts` | list[string] | no | Optional expected concept names. Each entry is normalised to a lowercase slug and written into `EXPECTED_CONCEPTS` in the generated `vault_schema.py`. `GET /missing` works immediately after bootstrap. |
+
+**Expected concepts validation rules:**
+- Optional; omit or provide an empty list to skip.
+- Each entry: trimmed, non-empty, no control characters.
+- Duplicate entries (case-insensitive) are rejected by validation.
+- After slug normalisation, duplicate slugs are silently deduplicated.
+- Each slug is rendered with `repr()` in the generated file — no Python code injection is possible.
 
 **Example request:**
 ```json
@@ -844,9 +851,11 @@ remains supported and is unaffected.
       "dogs-vault/Vault Files/Scripts/vault_schema.py",
       "dogs-vault/Vault Files/Templates/breed-profile.md"
     ],
-    "warnings": [
-      "expected_concepts were accepted but not written into vault_schema.py. ...",
-    ]
+    "warnings": [],
+    "expected_concepts": {
+      "requested": 2,
+      "written": 2
+    }
   }
 }
 ```
@@ -866,9 +875,6 @@ remains supported and is unaffected.
 - Resolved vault path must remain within the repository root
 - No overwrite of existing directories
 - `config/config.yaml` is updated atomically (temp-file + replace)
-
-**Limitation — `expected_concepts`:**  
-`expected_concepts` are validated and echoed in the response `warnings` list, but are not yet written into `vault_schema.py`. The schema generator does not currently support `EXPECTED_CONCEPTS` injection via the bootstrap API. Add them manually to `vault_schema.py` after bootstrap.
 
 **Registry behaviour:**  
 The in-process vault registry is refreshed automatically after a successful bootstrap so the new vault is immediately queryable without a server restart.

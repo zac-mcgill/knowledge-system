@@ -1,175 +1,6 @@
 """
-generate_schema.py — Vault schema generator for the bootstrap command.
-
-Produces a complete, standalone vault_schema.py that is fully compatible
-with every pipeline module (validate_vault, inject_frontmatter,
-analyse_vault, generate_report, upgrade_vault, generate_templates).
-
-Public API
-----------
-generate_schema_content(domain_folder, domain_slug, note_type, sections,
-                        expected_concepts) -> str
-write_schema(vault_path, content) -> Path
-"""
-
-from __future__ import annotations
-
-import re
-from pathlib import Path
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-def _to_constant_name(note_type: str) -> str:
-    """Convert a note-type slug to a Python constant stem.
-
-    e.g. 'breed-profile' -> 'BREED_PROFILE'
-    """
-    return note_type.upper().replace("-", "_")
-
-
-def _render_dict(entries: list[str]) -> str:
-    """Render a Python dict literal from a list of pre-formatted entry lines.
-
-    Returns ``{}`` when *entries* is empty, otherwise a multi-line dict.
-    """
-    if not entries:
-        return "{}"
-    inner = "\n".join(f"    {e}" for e in entries)
-    return "{\n" + inner + "\n}"
-
-
-def _normalise_concept_slug(name: str) -> str:
-    """Normalise a concept name to a lowercase hyphenated slug.
-
-    Matches the normalise_filename logic used by discover_missing so that
-    expected concept slugs can be compared against actual vault filenames.
-    """
-    s = name.strip().lower()
-    s = re.sub(r"[^\w\s-]", "", s)
-    s = re.sub(r"[\s_]+", "-", s)
-    s = re.sub(r"-+", "-", s)
-    return s.strip("-")
-
-
-def _render_expected_concepts(domain_slug: str, concepts: list[str]) -> str:
-    """Render the EXPECTED_CONCEPTS dict body for the schema template.
-
-    Uses ``repr()`` for each slug string so that the generated Python code
-    cannot contain arbitrary injected content — repr() always produces a
-    safe quoted string literal.
-
-    Returns ``{}`` when *concepts* is empty.
-    """
-    if not concepts:
-        return "{}"
-    slugs = sorted({_normalise_concept_slug(c) for c in concepts if c.strip()})
-    if not slugs:
-        return "{}"
-    inner = "\n".join(f"        {repr(slug)}," for slug in slugs)
-    domain_repr = repr(domain_slug)
-    return "{\n    " + domain_repr + ": frozenset({\n" + inner + "\n    }),\n}"
-
-
-# ---------------------------------------------------------------------------
-# Public API
-# ---------------------------------------------------------------------------
-
-def generate_schema_content(
-    domain_folder: str,
-    domain_slug: str,
-    note_type: str,
-    sections: list[str],
-    *,
-    expected_concepts: list[str] | None = None,
-    extra_domains: list[tuple[str, str]] | None = None,
-    subdomains: list[tuple[str, str, str]] | None = None,
-    topics: list[tuple[str, str, str]] | None = None,
-) -> str:
-    """Return the full text of a vault_schema.py for the given parameters.
-
-    Args:
-        domain_folder:     Display name of the primary domain folder, e.g. ``"Dogs"``
-        domain_slug:       Lowercase slug for the primary domain, e.g. ``"dogs"``
-        note_type:         Note-type slug, e.g. ``"breed-profile"``
-        sections:          Section display names, e.g. ``["Characteristics", "Trade-offs"]``
-        expected_concepts: Optional list of expected concept names.  Each entry is
-                           normalised to a lowercase slug and written into the
-                           generated ``EXPECTED_CONCEPTS`` dict.  User-supplied
-                           strings are rendered with ``repr()`` so no raw Python
-                           code can be injected.
-        extra_domains:     Additional ``(folder, slug)`` domain pairs beyond the primary.
-        subdomains:        ``(folder, slug, parent_domain_slug)`` entries.
-        topics:            ``(folder, slug, parent_subdomain_slug)`` entries.
-
-    Returns:
-        String contents of a valid ``vault_schema.py``.
-    """
-    extra_domains = extra_domains or []
-    subdomains = subdomains or []
-    topics = topics or []
-
-    # --- DOMAIN_MAP ---
-    all_domains = [(domain_folder, domain_slug)] + extra_domains
-    domain_entries = [f'"{folder}": "{slug}",' for folder, slug in all_domains]
-
-    # --- SUBDOMAIN_MAP ---
-    subdomain_entries = [
-        f'"{folder}": ("{slug}", "{parent}"),'
-        for folder, slug, parent in subdomains
-    ]
-
-    # --- TOPIC_MAP ---
-    topic_entries = [
-        f'"{folder}": ("{slug}", "{parent}"),'
-        for folder, slug, parent in topics
-    ]
-
-    sections_const = _to_constant_name(note_type) + "_SECTIONS"
-    section_lines = "\n".join(f'    "## {s}",' for s in sections)
-
-    concepts_body = _render_expected_concepts(
-        domain_slug, expected_concepts or []
-    )
-
-    return (
-        _SCHEMA_TEMPLATE
-        .replace("%VAULT_TITLE%", domain_folder)
-        .replace("%DOMAIN_MAP%", _render_dict(domain_entries))
-        .replace("%SUBDOMAIN_MAP%", _render_dict(subdomain_entries))
-        .replace("%TOPIC_MAP%", _render_dict(topic_entries))
-        .replace("%NOTE_TYPE%", note_type)
-        .replace("%SECTIONS_CONST%", sections_const)
-        .replace("%SECTION_LINES%", section_lines)
-        .replace("%EXPECTED_CONCEPTS%", concepts_body)
-    )
-
-
-def write_schema(vault_path: Path, content: str) -> Path:
-    """Write *content* to ``<vault_path>/Vault Files/Scripts/vault_schema.py``."""
-    scripts_dir = vault_path / "Vault Files" / "Scripts"
-    scripts_dir.mkdir(parents=True, exist_ok=True)
-    schema_path = scripts_dir / "vault_schema.py"
-    schema_path.write_text(content, encoding="utf-8")
-    return schema_path
-
-
-# ---------------------------------------------------------------------------
-# Schema template
-# ---------------------------------------------------------------------------
-# Uses %MARKER% placeholders so that the template can be a raw string —
-# backslash sequences (e.g. \xef, \r\n) are preserved verbatim and become
-# valid Python escape sequences in the generated file.
-#
-# Curly braces that are Python dict / set / f-string syntax in the *generated*
-# file need no escaping here because this template is NOT an f-string.
-# ---------------------------------------------------------------------------
-
-_SCHEMA_TEMPLATE = r'''"""
 vault_schema.py — Single Source of Truth
-%VAULT_TITLE% Vault
+Animals Vault
 
 Schema: v1.0.0
 Python: 3.10+ (requires PyYAML)
@@ -218,17 +49,19 @@ TYPE_REGISTRY: dict[str, str] = {}
 # FROZEN LOOKUP TABLES — domain / subdomain / topic
 # ============================================================================
 
-DOMAIN_MAP: dict[str, str] = %DOMAIN_MAP%
+DOMAIN_MAP: dict[str, str] = {
+    "Animals": "animals",
+}
 
-SUBDOMAIN_MAP: dict[str, tuple[str, str]] = %SUBDOMAIN_MAP%
-TOPIC_MAP: dict[str, tuple[str, str]] = %TOPIC_MAP%
+SUBDOMAIN_MAP: dict[str, tuple[str, str]] = {}
+TOPIC_MAP: dict[str, tuple[str, str]] = {}
 
 # ============================================================================
 # DERIVED ENUM SETS
 # ============================================================================
 
 VALID_TYPES: frozenset[str] = frozenset({
-    "%NOTE_TYPE%",
+    "breed-profile",
 })
 
 VALID_DOMAINS: frozenset[str] = frozenset(DOMAIN_MAP.values())
@@ -270,12 +103,15 @@ _HEADING_L2 = re.compile(r"^## [^#]")
 # SECTION DEFINITIONS — canonical sections per note type
 # ============================================================================
 
-%SECTIONS_CONST%: tuple[str, ...] = (
-%SECTION_LINES%
+BREED_PROFILE_SECTIONS: tuple[str, ...] = (
+    "## Overview",
+    "## Breed Characteristics",
+    "## Common Health Issues",
+    "## Catchy Names",
 )
 
 SECTION_MAP: dict[str, tuple[str, ...]] = {
-    "%NOTE_TYPE%": %SECTIONS_CONST%,
+    "breed-profile": BREED_PROFILE_SECTIONS,
 }
 
 OPTIONAL_SECTION_MAP: dict[str, tuple[str, ...]] = {}
@@ -286,7 +122,7 @@ OPTIONAL_SECTION_MAP: dict[str, tuple[str, ...]] = {}
 
 DOMAIN_PRIORITY_WEIGHT: dict[str, float] = {}
 SUBDOMAIN_DIFFICULTY: dict[str, str] = {}
-EXPECTED_CONCEPTS: dict[str, frozenset[str]] = %EXPECTED_CONCEPTS%
+EXPECTED_CONCEPTS: dict[str, frozenset[str]] = {}
 PRIORITY_DOMAINS: frozenset[str] = frozenset()
 CONCEPT_PRIORITY: dict[str, float] = {}
 
@@ -443,7 +279,7 @@ def find_headings(content: str) -> list[str]:
 def derive_type(filename: str, existing_type: str | None = None) -> str:
     if existing_type is not None and existing_type in VALID_TYPES:
         return existing_type
-    return TYPE_REGISTRY.get(filename, "%NOTE_TYPE%")
+    return TYPE_REGISTRY.get(filename, "breed-profile")
 
 
 def derive_domain(path_parts: list[str]) -> str:
@@ -517,7 +353,7 @@ def validate_section_registry_against_files(
             continue
         if fields is None:
             continue
-        note_type = fields.get("type", "%NOTE_TYPE%")
+        note_type = fields.get("type", "breed-profile")
         canonical = set(SECTION_MAP.get(note_type, ()))
         optional = set(OPTIONAL_SECTION_MAP.get(note_type, ()))
         allowed = canonical | optional
@@ -526,4 +362,3 @@ def validate_section_registry_against_files(
             if heading not in allowed:
                 mismatches.append((rel, heading))
     return mismatches
-'''

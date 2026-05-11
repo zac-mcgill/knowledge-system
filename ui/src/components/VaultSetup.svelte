@@ -195,6 +195,16 @@
           </div>
         {/if}
 
+        {#if successData.expected_concepts && successData.expected_concepts.written > 0}
+          <div class="mt-3 bg-sky-950/40 border border-sky-800/60 rounded p-3">
+            <p class="text-xs text-sky-300">
+              <strong>{successData.expected_concepts.written}</strong> expected concept{successData.expected_concepts.written === 1 ? '' : 's'} written into
+              <span class="font-mono">EXPECTED_CONCEPTS</span> in <span class="font-mono">vault_schema.py</span>.
+              <strong>Missing Concepts</strong> is ready to use.
+            </p>
+          </div>
+        {/if}
+
         {#if successData.warnings.length > 0}
           <div class="mt-3 bg-amber-950/60 border border-amber-800 rounded p-3">
             <p class="text-xs font-medium text-amber-400 mb-1.5">Backend warnings:</p>
@@ -385,16 +395,11 @@
           {/if}
         </div>
         <p class="text-xs text-zinc-500 mb-2">
-          Named concepts expected in this vault's knowledge base.
+          Named concepts expected in this vault's knowledge base. Each concept will be written
+          into <span class="font-mono">EXPECTED_CONCEPTS</span> in <span class="font-mono">vault_schema.py</span>
+          so that <strong>Missing Concepts</strong> works immediately after bootstrap.
+          One concept per line, or add them one at a time.
         </p>
-
-        <div class="mb-3 bg-amber-950/40 border border-amber-800/60 rounded px-3 py-2">
-          <p class="text-xs text-amber-400">
-            <strong>Backend limitation:</strong> Expected concepts are accepted and echoed in the response,
-            but are not yet written into <span class="font-mono">vault_schema.py</span>.
-            The backend will return a warning if any are provided.
-          </p>
-        </div>
 
         {#if expectedConcepts.length > 0}
           <ul class="space-y-1.5 mb-3">

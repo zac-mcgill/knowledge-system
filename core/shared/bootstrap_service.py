@@ -374,6 +374,7 @@ def bootstrap_vault_noninteractive(
             domain_slug,
             note_type,
             sections,
+            expected_concepts=expected_concepts_clean if expected_concepts_clean else None,
         )
         schema_path = write_schema(vault_path, schema_content)
         try:
@@ -407,14 +408,8 @@ def bootstrap_vault_noninteractive(
             # Template generation is best-effort; warn rather than fail hard
             warnings.append(f"Template generation warning: {exc}")
 
-        # 7. expected_concepts: accepted but not yet written into schema
-        if expected_concepts_clean:
-            warnings.append(
-                "expected_concepts were accepted but not written into "
-                "vault_schema.py. The schema generator does not currently "
-                "support EXPECTED_CONCEPTS injection via the bootstrap API. "
-                "Add them manually to vault_schema.py after bootstrap."
-            )
+        # 7. expected_concepts: written into schema
+        # (No warning needed — concepts are included in the generated vault_schema.py)
 
         # 8. Registry cache notice
         warnings.append(
@@ -428,6 +423,10 @@ def bootstrap_vault_noninteractive(
             "vault_path": str(vault_path),
             "created": created_files,
             "warnings": warnings,
+            "expected_concepts": {
+                "requested": len(expected_concepts_clean),
+                "written": len(expected_concepts_clean),
+            },
         }
 
     except Exception:

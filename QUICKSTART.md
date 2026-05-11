@@ -520,12 +520,38 @@ A browser-based guided setup form is available in the local web UI.
    - **Expected Concepts** — optional named concepts (accepted with a backend warning; not yet written to schema)
 4. The live validation panel and preview update as you type.
 5. Click **Create Vault** to call `POST /vault/bootstrap`.
-6. On success the page shows created file paths and any backend warnings.
+6. On success the page shows created file paths, expected concepts written, and any backend warnings.
 7. Use **Go to Dashboard** to return to the vault overview.
 
 The CLI flow `py run.py bootstrap` remains unchanged and is still the recommended path for automation.
 
-**Expected concepts limitation:** The backend accepts `expected_concepts` in the request and echoes them in the response warnings, but does not yet write them into `vault_schema.py`. This is a known limitation noted in the UI.
+**Expected concepts:**  
+Enter concept names in the **Expected Concepts** field during vault setup — one per line or one at a time.
+Each concept is normalised to a lowercase slug (e.g. `"Patent Licensing"` → `"patent-licensing"`)
+and written into `EXPECTED_CONCEPTS` in the generated `vault_schema.py`.
+The **Missing Concepts** page (`/app/missing`) can use them immediately after bootstrap,
+without any manual schema editing.
+
+Example:
+```json
+{
+  "expected_concepts": [
+    "patent licensing",
+    "open licensing",
+    "royalty exemption"
+  ]
+}
+```
+Generated schema will contain:
+```python
+EXPECTED_CONCEPTS: dict[str, frozenset[str]] = {
+    "patent-law": frozenset({
+        "open-licensing",
+        "patent-licensing",
+        "royalty-exemption",
+    }),
+}
+```
 
 ---
 
@@ -959,7 +985,7 @@ pip install -r mcp/requirements.txt
 
 **/missing returns MISSING_CONCEPTS_EMPTY (HTTP 422)**
 
-The endpoint returns this error only when `EXPECTED_CONCEPTS` is not defined or is empty in `vault_schema.py`. The demo vault defines `EXPECTED_CONCEPTS` with example gap data for the Fundamentals domain, so `/missing` returns real results. If your vault schema does not yet define `EXPECTED_CONCEPTS`, use `bootstrap` to generate a schema that includes this field.
+The endpoint returns this error only when `EXPECTED_CONCEPTS` is not defined or is empty in `vault_schema.py`. The demo vault defines `EXPECTED_CONCEPTS` with example gap data for the Fundamentals domain, so `/missing` returns real results. When bootstrapping a new vault, supply `expected_concepts` in the bootstrap request so that `EXPECTED_CONCEPTS` is written into the generated schema automatically — no manual editing required.
 
 **Security scan warns on URLs or code blocks**
 

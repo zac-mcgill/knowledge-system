@@ -584,7 +584,7 @@ class VaultBootstrapRequest(BaseModel):
     sections: list[str] = Field(..., description="Canonical section names (minimum 2)")
     expected_concepts: list[str] = Field(
         default_factory=list,
-        description="Optional expected concept names (accepted but not yet written to schema)",
+        description="Optional expected concept names. Written into EXPECTED_CONCEPTS in vault_schema.py.",
     )
 
 
@@ -2051,13 +2051,15 @@ def endpoint_vault_bootstrap(req: VaultBootstrapRequest):
         sections (list[str], required): Canonical section names (min 2,
             no duplicates).
         expected_concepts (list[str]): Optional expected concept names.
-            Accepted and echoed in warnings; not yet written to schema.
+            Each entry is normalised to a lowercase slug and written into
+            EXPECTED_CONCEPTS in the generated vault_schema.py.
+            GET /missing works immediately for the new vault.
 
     Response data on success:
         vault (str): Created vault name.
         created (list[str]): Relative paths of files written.
-        warnings (list[str]): Non-fatal notices (e.g. expected_concepts,
-            registry refresh advisory).
+        warnings (list[str]): Non-fatal notices (e.g. registry refresh advisory).
+        expected_concepts (dict): ``{"requested": N, "written": N}``.
 
     Error codes:
         INVALID_INPUT:       Request body fails Pydantic validation.
@@ -2149,6 +2151,7 @@ def endpoint_vault_bootstrap(req: VaultBootstrapRequest):
             "vault": result["vault"],
             "created": result["created"],
             "warnings": result["warnings"],
+            "expected_concepts": result.get("expected_concepts", {"requested": 0, "written": 0}),
         },
     }
 
