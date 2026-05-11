@@ -701,22 +701,31 @@ Generate a context bundle and write it to disk as a portable package.
 
 ### POST /context/security
 
-Scan selected vault notes for security issues using deterministic regex rules.
+Scan vault notes for security issues using deterministic regex rules.
+
+**Default behaviour:** Scans all content notes in the vault (generated/system files under `Vault Files/` are automatically excluded by the vault index). Use `filters`, `max_notes`, and `max_chars` to restrict the scan to a subset.
 
 **Request body:**
 ```json
 {
   "vault": "demo-vault",
-  "filters": {"status": "complete"},
+  "filters": {},
   "include_sections": ["Key Principles", "How It Works", "Trade-offs"],
   "include_body": true,
-  "max_notes": 10,
-  "max_chars": 20000,
-  "allow_partial": false
+  "max_notes": 200,
+  "max_chars": 10000000,
+  "allow_partial": true
 }
 ```
 
 All fields except `vault` are optional.
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `filters` | `{}` | Frontmatter filters (e.g. `{"status":"complete"}`). Empty = no filter (all notes). |
+| `max_notes` | `200` | Maximum notes to include (up to 1000). |
+| `max_chars` | `10000000` | Maximum total characters (up to 50,000,000). |
+| `allow_partial` | `true` | Include notes with `status=partial`. |
 
 **Response:**
 ```json
@@ -727,12 +736,22 @@ All fields except `vault` are optional.
     "findings": [],
     "summary": {"fail": 0, "warning": 0, "info": 0},
     "scanned": {
-      "note_count": 8,
-      "source_paths": ["Fundamentals/Algorithms.md", "..."]
+      "note_count": 19,
+      "source_paths": ["Fundamentals/Algorithms.md", "..."],
+      "total_notes": 19,
+      "coverage": 100,
+      "truncated": false
     }
   }
 }
 ```
+
+**Coverage fields in `scanned`:**
+| Field | Description |
+|-------|-------------|
+| `total_notes` | Total content notes in the vault (before filters/limits). |
+| `coverage` | Percentage of vault content notes that were scanned (0–100). |
+| `truncated` | `true` if `max_notes` or `max_chars` limits cut the scan short. |
 
 **Scan status levels:**
 

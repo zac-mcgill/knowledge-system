@@ -4490,11 +4490,253 @@ def test_p5_export_require_security_pass_blocks_fail():
 
 
 # ============================================================
+# Phase 5 Coverage — Security Scan Coverage Regression Tests
+# ============================================================
+
+def test_p5_cov_default_scan_covers_all_vault_notes():
+    """P5-COV1: Default scan_vault_context covers all content notes in the demo vault."""
+    print("\n=== Test P5-COV1: Default scan covers all vault notes ===")
+    from core.shared.context_security import scan_vault_context
+
+    vault = list_vaults()[0]
+    build_index(vault)
+    total = len(get_index(vault))
+    assert total > 0, "Vault must have notes"
+
+    result = scan_vault_context(vault_name=vault)
+    assert result["status"] in ("pass", "warning", "fail")
+    scanned_count = result["scanned"]["note_count"]
+    assert scanned_count == total, (
+        f"Default scan should cover all {total} notes, but only scanned {scanned_count}"
+    )
+    print(f"  Default scan: {scanned_count} of {total} notes scanned ✓")
+
+
+def test_p5_cov_default_scan_includes_partial_notes():
+    """P5-COV2: Default scan includes notes with status=partial (does not silently skip them)."""
+    print("\n=== Test P5-COV2: Default scan includes partial notes ===")
+    from core.shared.context_security import scan_vault_context
+
+    vault = list_vaults()[0]
+    build_index(vault)
+    idx = get_index(vault)
+    partial_paths = {n["path"] for n in idx if n["fields"].get("status") == "partial"}
+
+    result = scan_vault_context(vault_name=vault)
+    scanned_paths = set(result["scanned"]["source_paths"])
+
+    for p in partial_paths:
+        assert p in scanned_paths, (
+            f"Partial note {p!r} was excluded from default vault security scan"
+        )
+    if partial_paths:
+        print(f"  {len(partial_paths)} partial note(s) all present in scanned paths ✓")
+    else:
+        print("  No partial notes in vault (all complete) — default scan covers all ✓")
+
+
+def test_p5_cov_vault_files_excluded():
+    """P5-COV3: Generated/system files under Vault Files/ are not scanned."""
+    print("\n=== Test P5-COV3: Vault Files/ excluded from scan ===")
+    from core.shared.context_security import scan_vault_context
+
+    vault = list_vaults()[0]
+    result = scan_vault_context(vault_name=vault)
+    source_paths = result["scanned"]["source_paths"]
+
+    vault_files = [p for p in source_paths if "Vault Files" in p or "vault files" in p.lower()]
+    assert vault_files == [], (
+        f"Vault Files/ system files must not be scanned, found: {vault_files}"
+    )
+    print(f"  No Vault Files/ paths in scan output ✓")
+
+
+def test_p5_cov_coverage_metadata_present():
+    """P5-COV4: scan_vault_context result includes total_notes, coverage, truncated metadata."""
+    print("\n=== Test P5-COV4: Coverage metadata present ===")
+    from core.shared.context_security import scan_vault_context
+
+    vault = list_vaults()[0]
+    result = scan_vault_context(vault_name=vault)
+    scanned = result["scanned"]
+
+    assert "total_notes" in scanned, "scanned must include total_notes"
+    assert "coverage" in scanned, "scanned must include coverage"
+    assert "truncated" in scanned, "scanned must include truncated"
+    assert isinstance(scanned["total_notes"], int) and scanned["total_notes"] > 0
+    assert isinstance(scanned["coverage"], int)
+    assert 0 <= scanned["coverage"] <= 100
+    assert isinstance(scanned["truncated"], bool)
+    print(
+        f"  total_notes={scanned['total_notes']}, coverage={scanned['coverage']}%, "
+        f"truncated={scanned['truncated']} ✓"
+    )
+
+
+def test_p5_cov_filtered_scan_still_works():
+    """P5-COV5: Explicit filter narrows scan correctly (filtered scan still supported)."""
+    print("\n=== Test P5-COV5: Filtered scan still works ===")
+    from core.shared.context_security import scan_vault_context
+
+    vault = list_vaults()[0]
+    build_index(vault)
+    idx = get_index(vault)
+    complete_count = sum(1 for n in idx if n["fields"].get("status") == "complete")
+
+    if complete_count == 0:
+        print("  SKIP: no complete notes to filter on")
+        return
+
+    result = scan_vault_context(
+        vault_name=vault,
+        filters={"status": "complete"},
+        allow_partial=False,
+    )
+    assert result["status"] in ("pass", "warning", "fail")
+    scanned_count = result["scanned"]["note_count"]
+    assert scanned_count == complete_count, (
+        f"Filtered scan with status=complete should scan {complete_count} notes, got {scanned_count}"
+    )
+    print(f"  Filtered scan (status=complete): {scanned_count} notes ✓")
+
+
+def test_p5_cov_api_default_scan_covers_all_notes():
+    """P5-COV6: POST /context/security default request covers all vault content notes."""
+    print("\n=== Test P5-COV6: API default request covers all vault notes ===")
+    try:
+        from fastapi.testclient import TestClient
+    except RuntimeError as exc:
+        print(f"  SKIP: TestClient unavailable — {exc}")
+        return
+
+    from mcp.server.mcp_server import app
+
+    vault = list_vaults()[0]
+    build_index(vault)
+    total = len(get_index(vault))
+
+    with TestClient(app, raise_server_exceptions=True) as client:
+        resp = client.post("/context/security", json={"vault": vault})
+        assert resp.status_code == 200, f"POST /context/security status {resp.status_code}: {resp.text}"
+        body = resp.json()
+        assert body["status"] == "ok"
+        data = body["data"]
+        scanned_count = data["scanned"]["note_count"]
+        assert scanned_count == total, (
+            f"API default scan should cover all {total} notes, scanned {scanned_count}"
+        )
+        print(f"  API default scan: {scanned_count} of {total} notes ✓")
+
+
+def test_p5_cov_cli_security_covers_all_notes():
+    """P5-COV7: py run.py security default scan covers all demo-vault content notes."""
+    print("\n=== Test P5-COV7: CLI security covers all vault notes ===")
+    import json
+    import subprocess
+
+    vault = list_vaults()[0]
+    build_index(vault)
+    total = len(get_index(vault))
+
+    result = subprocess.run(
+        [sys.executable, "run.py", "security"],
+        capture_output=True,
+        text=True,
+        cwd=str(Path(__file__).resolve().parent.parent),
+        timeout=60,
+    )
+    assert result.returncode in (0, 1), (
+        f"CLI security unexpected exit {result.returncode}\n{result.stderr[:300]}"
+    )
+    output = json.loads(result.stdout)
+    assert output["status"] in ("pass", "warning", "fail")
+    scanned_count = output["scanned"]["note_count"]
+    assert scanned_count == total, (
+        f"CLI security should scan all {total} notes, scanned {scanned_count}"
+    )
+    print(f"  CLI security: {scanned_count} of {total} notes scanned ✓")
+
+
+def test_p5_cov_api_response_includes_coverage_metadata():
+    """P5-COV8: POST /context/security response includes total_notes, coverage, truncated."""
+    print("\n=== Test P5-COV8: API response includes coverage metadata ===")
+    try:
+        from fastapi.testclient import TestClient
+    except RuntimeError as exc:
+        print(f"  SKIP: TestClient unavailable — {exc}")
+        return
+
+    from mcp.server.mcp_server import app
+
+    vault = list_vaults()[0]
+
+    with TestClient(app, raise_server_exceptions=True) as client:
+        resp = client.post("/context/security", json={"vault": vault})
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        scanned = data["scanned"]
+        assert "total_notes" in scanned, "scanned must include total_notes"
+        assert "coverage" in scanned, "scanned must include coverage"
+        assert "truncated" in scanned, "scanned must include truncated"
+        assert isinstance(scanned["total_notes"], int)
+        assert scanned["coverage"] == 100 or scanned["note_count"] < scanned["total_notes"]
+        print(
+            f"  Coverage metadata: total_notes={scanned['total_notes']}, "
+            f"coverage={scanned['coverage']}%, truncated={scanned['truncated']} ✓"
+        )
+
+
+def test_p5_cov_allow_partial_false_no_partial_in_scan():
+    """P5-COV9: allow_partial=False still excludes partial notes (existing behaviour unchanged)."""
+    print("\n=== Test P5-COV9: allow_partial=False still excludes partial notes ===")
+    from core.shared.context_security import scan_vault_context
+
+    vault = list_vaults()[0]
+    build_index(vault)
+    idx = get_index(vault)
+    partial_paths = {n["path"] for n in idx if n["fields"].get("status") == "partial"}
+
+    if not partial_paths:
+        print("  No partial notes in vault — skipping (all complete)")
+        return
+
+    result = scan_vault_context(vault_name=vault, allow_partial=False)
+    scanned_paths = set(result["scanned"]["source_paths"])
+
+    for p in partial_paths:
+        assert p not in scanned_paths, (
+            f"Partial note {p!r} should be excluded when allow_partial=False"
+        )
+    print(f"  {len(partial_paths)} partial note(s) correctly excluded with allow_partial=False ✓")
+
+
+def test_p5_cov_existing_response_fields_preserved():
+    """P5-COV10: Existing response fields (status, findings, summary, scanned.note_count,
+    scanned.source_paths) are all still present after the coverage fix."""
+    print("\n=== Test P5-COV10: Existing response fields preserved ===")
+    from core.shared.context_security import scan_vault_context
+
+    vault = list_vaults()[0]
+    result = scan_vault_context(vault_name=vault)
+
+    assert "status" in result
+    assert result["status"] in ("pass", "warning", "fail")
+    assert "findings" in result and isinstance(result["findings"], list)
+    assert "summary" in result
+    for key in ("fail", "warning", "info"):
+        assert key in result["summary"], f"summary missing key {key!r}"
+    assert "scanned" in result
+    assert "note_count" in result["scanned"]
+    assert "source_paths" in result["scanned"]
+    assert isinstance(result["scanned"]["source_paths"], list)
+    print("  All existing response fields present and correctly typed ✓")
+
+
+# ============================================================
 # Phase 6 — Documentation Consistency
 # ============================================================
 
 def test_p6_docs_consistency():
-    """P6-DOCS: Required doc files exist, no stale naming, API.md covers all routes."""
     print("\n=== Test P6-DOCS: Documentation consistency ===")
     from pathlib import Path as _Path
 
@@ -8731,6 +8973,21 @@ def main():
     test_p5_export_require_security_pass_false_unchanged()
     test_p5_export_require_security_pass_clean_bundle()
     test_p5_export_require_security_pass_blocks_fail()
+
+    # ---- Phase 5 Coverage: Security Scan Coverage Regression ----
+    print("\n" + "=" * 60)
+    print("Phase 5 Coverage — Security Scan Coverage Regression Tests")
+    print("=" * 60)
+    test_p5_cov_default_scan_covers_all_vault_notes()
+    test_p5_cov_default_scan_includes_partial_notes()
+    test_p5_cov_vault_files_excluded()
+    test_p5_cov_coverage_metadata_present()
+    test_p5_cov_filtered_scan_still_works()
+    test_p5_cov_api_default_scan_covers_all_notes()
+    test_p5_cov_cli_security_covers_all_notes()
+    test_p5_cov_api_response_includes_coverage_metadata()
+    test_p5_cov_allow_partial_false_no_partial_in_scan()
+    test_p5_cov_existing_response_fields_preserved()
 
     # ---- Phase 6: Documentation Consistency ----
     print("\n" + "=" * 60)

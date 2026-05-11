@@ -200,7 +200,7 @@ Regression tests for correctness fixes:
 
 ### Phase 5 — Security Scan Tests
 
-39 tests:
+49 tests (39 original + 10 coverage regression):
 
 - Safe text → no findings.
 - Private key pattern → detected as `fail`.
@@ -235,6 +235,18 @@ Regression tests for correctness fixes:
 - `require_security_pass=false` → export unchanged.
 - `require_security_pass=true` + clean bundle → export succeeds.
 - `require_security_pass=true` + fail bundle → export blocked with 400.
+
+**Coverage regression tests (P5-COV):**
+- `test_p5_cov_default_scan_covers_all_vault_notes` — default scan covers all content notes (note_count == total vault notes).
+- `test_p5_cov_default_scan_includes_partial_notes` — notes with `status=partial` are included in default scan.
+- `test_p5_cov_vault_files_excluded` — generated/system files under `Vault Files/` are never in `source_paths`.
+- `test_p5_cov_coverage_metadata_present` — response `scanned` block includes `total_notes`, `coverage`, `truncated`.
+- `test_p5_cov_filtered_scan_still_works` — explicit `filters={"status":"complete"}` still scans only complete notes.
+- `test_p5_cov_api_default_scan_covers_all_notes` — `POST /context/security` with default args scans all vault notes.
+- `test_p5_cov_cli_security_covers_all_notes` — `py run.py security` default scan covers all demo-vault content notes.
+- `test_p5_cov_api_response_includes_coverage_metadata` — API response includes coverage metadata fields.
+- `test_p5_cov_allow_partial_false_no_partial_in_scan` — `allow_partial=False` correctly excludes partial notes.
+- `test_p5_cov_existing_response_fields_preserved` — `status`, `findings`, `summary`, `scanned.note_count`, `scanned.source_paths` all still present.
 
 ### Phase 6 — Documentation Consistency Test
 

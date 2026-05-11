@@ -44,6 +44,7 @@ from __future__ import annotations
 import re
 
 from core.shared.context_bundle import generate_bundle
+from mcp.core.note_index import build_index, get_index
 
 
 # ---------------------------------------------------------------------------
@@ -525,14 +526,19 @@ def scan_vault_context(
     filters: dict | None = None,
     include_sections: list[str] | None = None,
     include_body: bool = True,
-    max_notes: int = 10,
-    max_chars: int = 20000,
-    allow_partial: bool = False,
+    max_notes: int = 1000,
+    max_chars: int = 10_000_000,
+    allow_partial: bool = True,
 ) -> dict:
     """Generate a context bundle and scan it for security issues.
 
     Uses the same note selection logic as ``generate_bundle()``.
     Does not write files or modify the vault.
+
+    By default this is a vault-level scan: all content notes are included
+    (partial notes included, no status filter, high budget limits).  Pass
+    explicit ``filters``, ``max_notes``, or ``allow_partial=False`` to
+    narrow the scope to a bundle-style subset.
 
     Args:
         vault_name:       Registered vault name.
@@ -542,15 +548,27 @@ def scan_vault_context(
                           "Trade-offs"]`` when ``None``.
         include_body:     If ``True``, scan full note body text.
         max_notes:        Maximum number of notes to include in scan scope.
+                          Defaults to 1000 (effectively unlimited for typical vaults).
         max_chars:        Character budget for the underlying bundle.
+                          Defaults to 10 000 000 (effectively unlimited).
         allow_partial:    If ``True``, include notes with ``status=partial``.
+                          Defaults to ``True`` so partial notes are scanned by default.
 
     Returns:
         Security scan result dict (same shape as ``scan_context_bundle``),
-        or a structured error dict if vault lookup fails.
+        extended with ``total_notes``, ``coverage``, and ``truncated`` inside
+        the ``scanned`` block, or a structured error dict if vault lookup fails.
     """
     if include_sections is None:
         include_sections = ["Key Principles", "How It Works", "Trade-offs"]
+
+    # Capture total content-note count before applying filters/budget.
+    total_vault_notes: int | None = None
+    try:
+        build_index(vault_name)
+        total_vault_notes = len(get_index(vault_name))
+    except Exception:  # noqa: BLE001
+        pass  # best-effort; coverage metadata will be omitted on failure
 
     bundle = generate_bundle(
         vault_name=vault_name,
@@ -566,7 +584,23 @@ def scan_vault_context(
     if bundle.get("status") == "error":
         return bundle
 
-    return scan_context_bundle(bundle)
+    result = scan_context_bundle(bundle)
+
+    # Augment scanned block with coverage metadata (backwards-compatible).
+    scanned = result.get("scanned", {})
+    note_count = scanned.get("note_count", 0)
+    truncated = bundle.get("budget", {}).get("truncated", False)
+    scanned["truncated"] = truncated
+    if total_vault_notes is not None:
+        scanned["total_notes"] = total_vault_notes
+        scanned["coverage"] = (
+            round(note_count / total_vault_notes * 100)
+            if total_vault_notes > 0
+            else 100
+        )
+    result["scanned"] = scanned
+
+    return result
 
 
 # ---------------------------------------------------------------------------

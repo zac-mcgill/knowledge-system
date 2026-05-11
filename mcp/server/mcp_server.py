@@ -532,20 +532,24 @@ class SecurityRequest(BaseModel):
         description="Include full note body text in scan scope",
     )
     max_notes: int = Field(
-        default=10,
+        default=200,
         ge=1,
-        le=100,
-        description="Maximum notes to include (1–100)",
+        le=1000,
+        description="Maximum notes to include (1–1000). Default 200 covers typical full-vault scans.",
     )
     max_chars: int = Field(
-        default=20000,
+        default=10_000_000,
         ge=100,
-        le=500000,
-        description="Character budget (100–500000)",
+        le=50_000_000,
+        description="Character budget (100–50000000). Default 10 000 000 covers typical full-vault scans.",
     )
     allow_partial: bool = Field(
-        default=False,
-        description="Include notes with status=partial",
+        default=True,
+        description=(
+            "Include notes with status=partial. Defaults to True so that a "
+            "vault-level security scan does not silently exclude partial notes, "
+            "which can still contain secrets or injection phrases."
+        ),
     )
 
 
@@ -1946,21 +1950,29 @@ def endpoint_context_security(req: SecurityRequest):
     Runs deterministic, local, rule-based checks against note body text and
     section content.  No LLM.  No network calls.  All rules are regex-based.
 
+    By default this is a vault-level scan: all content notes are included
+    (``allow_partial=True``, high ``max_notes``/``max_chars`` limits, no
+    status filter).  Generated/system files under ``Vault Files/`` are always
+    excluded by the vault index.
+
+    To run a bundle-style filtered scan, pass explicit ``filters``,
+    ``allow_partial=False``, or reduced ``max_notes``/``max_chars``.
+
     Request body:
         vault (str, required): Vault name.
         filters (dict): Equality filters on frontmatter fields.
         include_sections (list[str]): Section names to scan.
             Defaults to [\'Key Principles\', \'How It Works\', \'Trade-offs\'].
         include_body (bool): Include full note body text in scan. Default True.
-        max_notes (int): Maximum notes (1–100). Default 10.
-        max_chars (int): Character budget (100–500000). Default 20000.
-        allow_partial (bool): Include status=partial notes. Default False.
+        max_notes (int): Maximum notes (1–1000). Default 200.
+        max_chars (int): Character budget (100–50000000). Default 10000000.
+        allow_partial (bool): Include status=partial notes. Default True.
 
     Response data:
         status (str): ``"pass"``, ``"warning"``, or ``"fail"``.
         findings (list): Per-finding objects with path, severity, rule, field, detail.
         summary (dict): Counts by severity group: fail, warning, info.
-        scanned (dict): note_count and source_paths.
+        scanned (dict): note_count, source_paths, total_notes, coverage, truncated.
 
     Status levels:
         pass     No findings.

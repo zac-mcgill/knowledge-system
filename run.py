@@ -278,27 +278,25 @@ def main():
         sys.path.insert(0, str(repo_root))
         try:
             from mcp.core.vault_registry import list_vaults
-            from mcp.core.note_index import build_index, get_index
+            from mcp.core.note_index import build_index
             from core.shared.context_security import scan_vault_context
 
             vault_name = list_vaults()[0]
             build_index(vault_name)
-            index = get_index(vault_name)
 
-            has_complete = any(
-                n["fields"].get("status") == "complete" for n in index
-            )
-            bundle_filters: dict = {"status": "complete"} if has_complete else {}
-            allow_partial = not has_complete
-
+            # Vault-level security scan: include all content notes by default.
+            # Partial notes are included because they can still contain secrets,
+            # prompt-injection phrases, or unsafe links.
+            # Generated/system files under Vault Files/ are excluded by the
+            # vault index (discover_files) and are never passed to the scanner.
             result = scan_vault_context(
                 vault_name=vault_name,
-                filters=bundle_filters,
+                filters={},
                 include_sections=["Key Principles", "How It Works", "Trade-offs"],
                 include_body=True,
-                max_notes=10,
-                max_chars=20000,
-                allow_partial=allow_partial,
+                max_notes=1000,
+                max_chars=10_000_000,
+                allow_partial=True,
             )
 
             print(json.dumps(result, indent=2, ensure_ascii=False))

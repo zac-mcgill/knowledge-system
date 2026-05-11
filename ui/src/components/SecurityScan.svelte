@@ -614,7 +614,12 @@
           {#if scanResult.status === 'pass' && (scanResult.findings ?? []).length === 0}
             <div class="bg-emerald-950 border border-emerald-800 rounded-md p-3 mb-3">
               <p class="text-sm font-medium text-emerald-300">All checks passed. No findings.</p>
-              <p class="text-xs text-emerald-500 mt-0.5">No credential leaks, injection patterns, or policy violations detected.</p>
+              <p class="text-xs text-emerald-500 mt-0.5">
+                No credential leaks, injection patterns, or policy violations detected.
+                {#if scanResult.scanned?.total_notes !== undefined}
+                  {scanResult.scanned.note_count} of {scanResult.scanned.total_notes} notes scanned.
+                {/if}
+              </p>
             </div>
           {/if}
 
@@ -625,7 +630,12 @@
             </div>
             <div class="bg-zinc-800 rounded-md p-3">
               <p class="text-xs text-zinc-500 mb-1">Notes scanned</p>
-              <p class="text-lg font-semibold text-zinc-100">{scanResult.scanned?.note_count ?? 0}</p>
+              <p class="text-lg font-semibold text-zinc-100">{scanResult.scanned?.note_count ?? 0}{scanResult.scanned?.total_notes !== undefined ? ` of ${scanResult.scanned.total_notes}` : ''}</p>
+              {#if scanResult.scanned?.truncated}
+                <p class="text-xs text-amber-400 mt-0.5">Scan truncated by request limits</p>
+              {:else if scanResult.scanned?.total_notes !== undefined && scanResult.scanned.note_count < scanResult.scanned.total_notes}
+                <p class="text-xs text-amber-400 mt-0.5">Filtered scan — not all vault notes scanned</p>
+              {/if}
             </div>
             <div class="bg-red-950 border border-red-900 rounded-md p-3">
               <p class="text-xs text-red-500 mb-1">Fail</p>

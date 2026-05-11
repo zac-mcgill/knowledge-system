@@ -377,6 +377,16 @@
               ? `${securityData.summary.warning} warning${securityData.summary.warning !== 1 ? 's' : ''}`
               : `${securityData.summary.fail} failure${securityData.summary.fail !== 1 ? 's' : ''}`}
           </div>
+          <div class="text-xs text-zinc-500 mt-0.5">
+            {#if securityData.scanned.total_notes !== undefined}
+              {securityData.scanned.note_count} of {securityData.scanned.total_notes} notes scanned
+              {#if securityData.scanned.truncated}
+                — scan truncated by request limits
+              {/if}
+            {:else}
+              {securityData.scanned.note_count} note{securityData.scanned.note_count !== 1 ? 's' : ''} scanned
+            {/if}
+          </div>
         {:else if securityState === 'idle'}
           <div class="text-sm text-zinc-600">—</div>
         {:else}

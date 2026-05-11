@@ -105,6 +105,9 @@ export interface SecuritySummary {
 export interface SecurityScanned {
   note_count: number;
   source_paths: string[];
+  total_notes?: number;
+  coverage?: number;
+  truncated?: boolean;
 }
 
 export interface SecurityData {
@@ -194,16 +197,17 @@ export function fetchValidation(vault: string): Promise<ApiResult<ValidationData
 }
 
 /**
- * POST /context/security — scan vault notes for credential leaks and
- * injection patterns. Uses status=complete filter with max 10 notes.
+ * POST /context/security — vault-level security scan covering all content notes.
+ * Partial notes are included by default because they can still contain secrets
+ * or injection phrases. Generated/system files under Vault Files/ are excluded
+ * by the vault index and are never scanned.
  */
 export function fetchSecurity(vault: string): Promise<ApiResult<SecurityData>> {
   return post<SecurityData>('/context/security', {
     vault,
-    filters: { status: 'complete' },
-    max_notes: 10,
     include_body: true,
-    allow_partial: false,
+    allow_partial: true,
+    max_notes: 200,
   });
 }
 
