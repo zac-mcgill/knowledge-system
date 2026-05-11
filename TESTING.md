@@ -1,6 +1,6 @@
 # Context Vault Engine — Testing
 
-All tests live in `mcp/test_verify.py`. There are 396 test functions covering all implemented phases.
+All tests live in `mcp/test_verify.py`. There are 429 test functions covering all implemented phases.
 
 ---
 
@@ -733,6 +733,88 @@ cd ui && npm run build     # must complete with 0 errors
 - `/health` and `/private/status` are always accessible without authentication.
 - Read-only enforcement is applied before route-level validation.
 - Local mode (all env vars unset) is completely unchanged.
+
+---
+
+### Phase 22 — Session and Project State
+
+File-backed session tracking and project state layer. Local LLMs can answer "where was I?" deterministically from stored state. No database, no cloud sync, no embeddings. 33 tests added.
+
+**Verification steps:**
+
+```bash
+py mcp/test_verify.py      # 429 tests — all must pass (33 new P22 tests added)
+py run.py validate         # 19/19 valid
+py run.py security         # status: pass
+py run.py session          # prints session summary as JSON
+py run.py project-state    # prints project state as JSON
+py run.py feedback         # exits 0, valid JSON
+py run.py export --overwrite   # status: ok
+cd ui && npm run build     # must complete with 0 errors
+```
+
+**Tests added (33 total, P22-1 through P22-33):**
+
+*Service layer (P22-1 to P22-15):*
+- `test_p22_start_session_returns_active` — `start_session` returns `status=active` with valid session_id.
+- `test_p22_session_file_written` — session file written at `Vault Files/State/sessions/<id>.json` with correct content.
+- `test_p22_resume_session_returns_latest_active` — `resume_session` (no ID) returns the most-recent active session.
+- `test_p22_resume_session_by_id` — `resume_session` with explicit `session_id` returns the correct session.
+- `test_p22_summarise_session_shape` — `summarise_session` returns compact dict with all required keys.
+- `test_p22_attach_note_adds_to_recent_notes` — `attach_note_to_session` adds note to `recent_notes`.
+- `test_p22_attach_note_deduplicates` — duplicate attach calls result in single entry in `recent_notes`.
+- `test_p22_close_session_marks_closed` — `close_session` sets `status=closed` and writes `closed_at`.
+- `test_p22_resume_no_active_after_close` — `resume_session` returns `SESSION_NOT_FOUND` when all sessions are closed.
+- `test_p22_list_sessions_ordering` — `list_sessions` returns sessions most-recent-first.
+- `test_p22_get_project_state_defaults` — `get_project_state` returns default dict with all required keys when no file exists.
+- `test_p22_update_project_state_writes` — `update_project_state` persists and can be read back.
+- `test_p22_update_project_state_rejects_unknown_fields` — unknown/forbidden fields return `INVALID_PROJECT_STATE`.
+- `test_p22_session_id_format` — session_id matches `YYYYMMDDTHHMMSS-xxxxxxxx` regex.
+- `test_p22_atomic_write_valid_json` — session file contains valid JSON with sorted keys.
+
+*HTTP layer (P22-16 to P22-25):*
+- `test_p22_http_start_session` — `POST /session/start` returns 200 with `session_id`.
+- `test_p22_http_session_resume` — `GET /session/resume` returns active session.
+- `test_p22_http_session_summary` — `GET /session/summary` returns compact summary.
+- `test_p22_http_attach_note` — `POST /session/attach-note` attaches a note.
+- `test_p22_http_close_session` — `POST /session/close` closes session with `status=closed`.
+- `test_p22_http_get_project_state` — `GET /project/state` returns project state with required keys.
+- `test_p22_http_update_project_state` — `PUT /project/state` updates and persists `current_phase`.
+- `test_p22_http_update_project_state_rejects_bad_fields` — unknown fields return 400/422.
+- `test_p22_http_write_routes_blocked_read_only` — `POST /session/start` returns 403 `REMOTE_READ_ONLY` in read-only mode.
+- `test_p22_http_read_routes_allowed_read_only` — `GET /project/state` not blocked in read-only mode.
+
+*MCP layer (P22-26 to P22-28):*
+- `test_p22_mcp_session_tools_registered` — all 7 session/project-state tools listed by `tools/list`.
+- `test_p22_mcp_resume_work_prompt_registered` — `cve.resume_work` listed by `prompts/list`.
+- `test_p22_mcp_session_resources_registered` — `session/current` and `project-state` resource URIs listed by `resources/list`.
+
+*Documentation tests (P22-29 to P22-32):*
+- `test_p22_readme_mentions_session` — `README.md` mentions session state.
+- `test_p22_quickstart_mentions_session` — `QUICKSTART.md` mentions session/project state.
+- `test_p22_api_md_documents_session_endpoints` — `API.md` documents all 4 main session/project-state endpoints.
+- `test_p22_testing_md_updated_count` — `TESTING.md` contains test count 429.
+
+*Regression test (P22-33):*
+- `test_p22_existing_tests_unaffected` — all original tools, prompts, and session_state API remain present.
+
+**Files created:**
+
+- `mcp/core/session_state.py` — session and project state service: `start_session`, `resume_session`, `summarise_session`, `attach_note_to_session`, `close_session`, `list_sessions`, `get_project_state`, `update_project_state`, `_atomic_write_json`. Pure stdlib. All functions accept `_vault_path` for test isolation.
+
+**Files modified:**
+
+- `mcp/server/mcp_server.py` — 4 new entries in `_WRITE_PATH_PREFIXES`; 4 new Pydantic request models; 7 new HTTP endpoints.
+- `mcp/core/mcp_tools.py` — 7 new tools in `TOOLS` catalogue; tool implementations; `_check_remote_read_only()` helper.
+- `mcp/core/mcp_resources.py` — 2 new resource templates; `_read_session_current` and `_read_project_state` handlers.
+- `mcp/core/mcp_prompts.py` — `cve.resume_work` prompt added.
+- `run.py` — `session` and `project-state` CLI commands; updated USAGE string.
+- `README.md` — session/project state capability bullet; updated test count to 429.
+- `QUICKSTART.md` — Phase 22 section added.
+- `API.md` — Session and Project State section with all 7 endpoints; new error codes table entries.
+- `TESTING.md` — added Phase 22 section (this entry); updated test count to 429.
+- `ROADMAP.md` — Phase 22 marked Complete.
+- `mcp/test_verify.py` — 33 new Phase 22 tests.
 
 
 

@@ -54,6 +54,8 @@ _VAULT_RESOURCE_TEMPLATES = [
     ("cve://vault/{vault}/missing", "Missing Concepts", "Missing expected concepts."),
     ("cve://vault/{vault}/security", "Security Scan", "Security scan results."),
     ("cve://vault/{vault}/graph", "Vault Graph", "Knowledge graph nodes and edges."),
+    ("cve://vault/{vault}/session/current", "Current Session", "Latest active session summary."),
+    ("cve://vault/{vault}/project-state", "Project State", "Project phase, tasks, blockers, and decisions."),
 ]
 
 
@@ -199,6 +201,10 @@ def _read_vault_resource(uri: str, vault_name: str, resource_path: str) -> dict:
         return _read_security(uri, vault_name)
     if resource_path == "graph":
         return _read_graph(uri, vault_name)
+    if resource_path == "session/current":
+        return _read_session_current(uri, vault_name)
+    if resource_path == "project-state":
+        return _read_project_state(uri, vault_name)
 
     return _resource_error(uri, f"Unknown vault resource path: {resource_path!r}")
 
@@ -281,4 +287,24 @@ def _read_graph(uri: str, vault_name: str) -> dict:
     result = build_graph(vault_name=vault_name)
     if "error" in result:
         return _resource_error(uri, f"GRAPH_ERROR: {result['error']}")
+    return _resource_ok(uri, result)
+
+
+def _read_session_current(uri: str, vault_name: str) -> dict:
+    """Read the latest active session summary for a vault."""
+    from mcp.core import session_state as _ss  # noqa: PLC0415
+    result = _ss.summarise_session(vault_name)
+    if result.get("status") == "error":
+        err = result["error"]
+        return _resource_error(uri, f"{err['code']}: {err['message']}")
+    return _resource_ok(uri, result)
+
+
+def _read_project_state(uri: str, vault_name: str) -> dict:
+    """Read the project state for a vault."""
+    from mcp.core import session_state as _ss  # noqa: PLC0415
+    result = _ss.get_project_state(vault_name)
+    if result.get("status") == "error":
+        err = result["error"]
+        return _resource_error(uri, f"{err['code']}: {err['message']}")
     return _resource_ok(uri, result)

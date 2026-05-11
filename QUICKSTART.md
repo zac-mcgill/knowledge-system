@@ -1132,6 +1132,54 @@ For full VPS deployment instructions, systemd service example, reverse proxy con
 
 ---
 
+## 6o. Session and Project State (Phase 22)
+
+Context Vault Engine tracks where you are in a project via two complementary stores:
+
+- **Session state** — a per-session JSON file recording the current topic, goal, and recently worked-on notes.
+- **Project state** — a single JSON file recording the current phase, completed work, next actions, blockers, decisions, and risks.
+
+All state is stored as human-readable JSON inside `<vault>/Vault Files/State/`. Writes are atomic (temp-file + replace). No database, no cloud sync.
+
+### CLI commands
+
+```bash
+# Print current session summary (or list recent sessions if none is active)
+py run.py session
+
+# Print project state (returns defaults if no state file exists)
+py run.py project-state
+```
+
+### HTTP API (summary)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/session/start` | Start a new session |
+| GET | `/session/resume` | Fetch latest active session (or by `session_id`) |
+| GET | `/session/summary` | Compact LLM-ready session summary |
+| POST | `/session/attach-note` | Record a recently-accessed note |
+| POST | `/session/close` | Close the current session |
+| GET | `/project/state` | Read project state |
+| PUT | `/project/state` | Update project state fields |
+
+Write routes (`POST /session/start`, `POST /session/attach-note`, `POST /session/close`, `PUT /project/state`) are blocked when `CVE_REMOTE_READ_ONLY=true`.
+
+### MCP tools
+
+The MCP stdio server exposes 7 new tools: `cve.start_session`, `cve.resume_session`, `cve.summarise_session`, `cve.attach_note_to_session`, `cve.close_session`, `cve.get_project_state`, `cve.update_project_state`.
+
+A new `cve.resume_work` prompt guides an LLM through reading the current session summary and project state to answer "where was I up to?".
+
+### Session file location
+
+```
+<vault>/Vault Files/State/sessions/<YYYYMMDDTHHMMSS-xxxxxxxx>.json
+<vault>/Vault Files/State/project-state.json
+```
+
+---
+
 ## 8. Run Verification Tests (Optional)
 
 Core tests (requires only `requirements.txt`):

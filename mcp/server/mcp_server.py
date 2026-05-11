@@ -78,6 +78,7 @@ from mcp.core.private_cloud import (
     is_remote_read_only,
     verify_token,
 )
+from mcp.core import session_state as _session_state
 
 
 # ---------- Structured Logging (Phase 7) ----------
@@ -315,6 +316,11 @@ _WRITE_PATH_PREFIXES: tuple[tuple[str, str], ...] = (
     ("POST", "/vault/bootstrap"),
     ("DELETE", "/vault/"),
     ("POST", "/context/export"),
+    # Phase 22: session and project state mutating routes
+    ("POST", "/session/start"),
+    ("POST", "/session/attach-note"),
+    ("POST", "/session/close"),
+    ("PUT", "/project/state"),
 )
 
 # Paths always allowed without auth (even when CVE_REQUIRE_AUTH=true).
@@ -2568,6 +2574,304 @@ def endpoint_app(ui_path: str = ""):
     content = candidate.read_bytes()
     media_type, _ = mimetypes.guess_type(str(candidate))
     return Response(content=content, media_type=media_type or "application/octet-stream")
+
+
+# ---------- Phase 22: Session and Project State ----------
+
+
+class SessionStartRequest(BaseModel):
+    """Request body for POST /session/start."""
+
+    vault: str = Field(..., description="Vault name")
+    current_project: str | None = Field(None, description="Current project name (optional)")
+    current_topic: str | None = Field(None, description="Current topic (optional)")
+    user_goal: str | None = Field(None, description="User goal for this session (optional, max 1000 chars)")
+    active_vault: str | None = Field(None, description="Active vault override (defaults to vault)")
+
+
+class SessionAttachNoteRequest(BaseModel):
+    """Request body for POST /session/attach-note."""
+
+    vault: str = Field(..., description="Vault name")
+    session_id: str = Field(..., description="Session ID to attach note to")
+    note_path: str = Field(..., description="Vault-relative POSIX path of the note")
+
+
+class SessionCloseRequest(BaseModel):
+    """Request body for POST /session/close."""
+
+    vault: str = Field(..., description="Vault name")
+    session_id: str = Field(..., description="Session ID to close")
+
+
+class ProjectStateUpdateRequest(BaseModel):
+    """Request body for PUT /project/state."""
+
+    vault: str = Field(..., description="Vault name")
+    updates: dict[str, Any] = Field(
+        ...,
+        description=(
+            "Project state fields to update. "
+            "Allowed: current_phase, completed_work, next_actions, blockers, decisions, risks."
+        ),
+    )
+
+
+@app.post("/session/start")
+def endpoint_session_start(req: SessionStartRequest):
+    """Create and persist a new active session for the given vault.
+
+    Request body:
+        vault (str, required): Vault name.
+        current_project (str, optional): Current project name.
+        current_topic (str, optional): Current topic.
+        user_goal (str, optional): User goal description (max 1000 chars).
+        active_vault (str, optional): Override for the active vault name.
+
+    Response data:
+        session (dict): The newly created session record.
+
+    Error codes:
+        INVALID_VAULT:  Vault is not registered (HTTP 404).
+        WRITE_FAILED:   Failed to write session file (HTTP 500).
+        REMOTE_READ_ONLY: Server is in remote read-only mode (HTTP 403).
+    """
+    err = _validate_vault(req.vault)
+    if err:
+        return err
+    try:
+        result = _session_state.start_session(
+            req.vault,
+            current_project=req.current_project,
+            current_topic=req.current_topic,
+            user_goal=req.user_goal,
+            active_vault=req.active_vault,
+        )
+        if result.get("status") == "error":
+            err_info = result["error"]
+            return _error(err_info["code"], err_info["message"], 400)
+        return {"status": "ok", "data": {"session": result["session"]}}
+    except OSError as exc:
+        return _error("WRITE_FAILED", f"Failed to write session: {exc}", 500)
+    except Exception as exc:
+        return _error("WRITE_FAILED", f"Session start failed: {exc}", 500)
+
+
+@app.get("/session/resume")
+def endpoint_session_resume(
+    vault: str = Query(..., description="Vault name"),
+    session_id: str | None = Query(None, description="Session ID (omit to get latest active)"),
+):
+    """Return the most recent active session or a session by explicit ID.
+
+    Query parameters:
+        vault (str, required): Vault name.
+        session_id (str, optional): Specific session ID. Omit for latest active.
+
+    Response data:
+        session (dict): Session record.
+
+    Error codes:
+        INVALID_VAULT:    Vault is not registered (HTTP 404).
+        INVALID_SESSION:  Session ID format is invalid (HTTP 400).
+        SESSION_NOT_FOUND: No matching session found (HTTP 404).
+    """
+    err = _validate_vault(vault)
+    if err:
+        return err
+    try:
+        result = _session_state.resume_session(vault, session_id=session_id)
+        if result.get("status") == "error":
+            err_data = result["error"]
+            code = err_data["code"]
+            status_code = 404 if code == "SESSION_NOT_FOUND" else 400
+            return _error(code, err_data["message"], status_code)
+        return {"status": "ok", "data": result}
+    except Exception as exc:
+        return _error("SESSION_FAILED", f"Session resume failed: {exc}", 500)
+
+
+@app.get("/session/summary")
+def endpoint_session_summary(
+    vault: str = Query(..., description="Vault name"),
+    session_id: str | None = Query(None, description="Session ID (omit for latest active)"),
+):
+    """Return a compact deterministic summary of a session.
+
+    Suitable for local LLM context injection ("where was I up to?").
+
+    Query parameters:
+        vault (str, required): Vault name.
+        session_id (str, optional): Specific session ID. Omit for latest active.
+
+    Response data:
+        summary (dict): Compact session summary with key fields.
+
+    Error codes:
+        INVALID_VAULT:    Vault is not registered (HTTP 404).
+        SESSION_NOT_FOUND: No matching session found (HTTP 404).
+    """
+    err = _validate_vault(vault)
+    if err:
+        return err
+    try:
+        result = _session_state.summarise_session(vault, session_id=session_id)
+        if result.get("status") == "error":
+            err_data = result["error"]
+            code = err_data["code"]
+            status_code = 404 if code == "SESSION_NOT_FOUND" else 400
+            return _error(code, err_data["message"], status_code)
+        return {"status": "ok", "data": result}
+    except Exception as exc:
+        return _error("SESSION_FAILED", f"Session summary failed: {exc}", 500)
+
+
+@app.post("/session/attach-note")
+def endpoint_session_attach_note(req: SessionAttachNoteRequest):
+    """Attach a vault note to a session's recent_notes list.
+
+    Validates that the note exists and is inside the vault.
+    Stores the vault-relative POSIX path.  De-duplicates recent_notes.
+
+    Request body:
+        vault (str, required): Vault name.
+        session_id (str, required): Session ID.
+        note_path (str, required): Vault-relative POSIX path of the note.
+
+    Response data:
+        session (dict): Updated session record.
+
+    Error codes:
+        INVALID_VAULT:     Vault is not registered (HTTP 404).
+        INVALID_SESSION:   Session ID format is invalid (HTTP 400).
+        SESSION_NOT_FOUND: Session not found (HTTP 404).
+        INVALID_NOTE_PATH: Path is empty, absolute, or traverses outside vault (HTTP 400).
+        NOTE_NOT_FOUND:    Note does not exist in the vault (HTTP 404).
+        WRITE_FAILED:      Failed to write updated session (HTTP 500).
+        REMOTE_READ_ONLY:  Server is in remote read-only mode (HTTP 403).
+    """
+    err = _validate_vault(req.vault)
+    if err:
+        return err
+    try:
+        result = _session_state.attach_note_to_session(
+            req.vault, req.session_id, req.note_path
+        )
+        if result.get("status") == "error":
+            err_data = result["error"]
+            code = err_data["code"]
+            if code in ("SESSION_NOT_FOUND", "NOTE_NOT_FOUND"):
+                status_code = 404
+            else:
+                status_code = 400
+            return _error(code, err_data["message"], status_code)
+        return {"status": "ok", "data": result}
+    except OSError as exc:
+        return _error("WRITE_FAILED", f"Failed to write session: {exc}", 500)
+    except Exception as exc:
+        return _error("SESSION_FAILED", f"Attach note failed: {exc}", 500)
+
+
+@app.post("/session/close")
+def endpoint_session_close(req: SessionCloseRequest):
+    """Mark a session as closed without deleting it.
+
+    Request body:
+        vault (str, required): Vault name.
+        session_id (str, required): Session ID to close.
+
+    Response data:
+        session (dict): Updated session record with status=closed.
+
+    Error codes:
+        INVALID_VAULT:    Vault is not registered (HTTP 404).
+        INVALID_SESSION:  Session ID format is invalid (HTTP 400).
+        SESSION_NOT_FOUND: Session not found (HTTP 404).
+        WRITE_FAILED:     Failed to write updated session (HTTP 500).
+        REMOTE_READ_ONLY: Server is in remote read-only mode (HTTP 403).
+    """
+    err = _validate_vault(req.vault)
+    if err:
+        return err
+    try:
+        result = _session_state.close_session(req.vault, req.session_id)
+        if result.get("status") == "error":
+            err_data = result["error"]
+            code = err_data["code"]
+            status_code = 404 if code == "SESSION_NOT_FOUND" else 400
+            return _error(code, err_data["message"], status_code)
+        return {"status": "ok", "data": result}
+    except OSError as exc:
+        return _error("WRITE_FAILED", f"Failed to write session: {exc}", 500)
+    except Exception as exc:
+        return _error("SESSION_FAILED", f"Session close failed: {exc}", 500)
+
+
+@app.get("/project/state")
+def endpoint_project_state_get(
+    vault: str = Query(..., description="Vault name"),
+):
+    """Return the project state for the given vault.
+
+    Returns default state if no project-state.json exists yet.
+
+    Query parameters:
+        vault (str, required): Vault name.
+
+    Response data:
+        project_state (dict): Project state record (vault, current_phase,
+            completed_work, next_actions, blockers, decisions, risks, updated_at).
+
+    Error codes:
+        INVALID_VAULT: Vault is not registered (HTTP 404).
+    """
+    err = _validate_vault(vault)
+    if err:
+        return err
+    try:
+        result = _session_state.get_project_state(vault)
+        return {"status": "ok", "data": result}
+    except Exception as exc:
+        return _error("PROJECT_STATE_FAILED", f"Project state retrieval failed: {exc}", 500)
+
+
+@app.put("/project/state")
+def endpoint_project_state_update(req: ProjectStateUpdateRequest):
+    """Merge updates into the vault's project state.
+
+    Only the following fields are accepted in ``updates``:
+        current_phase, completed_work, next_actions,
+        blockers, decisions, risks.
+
+    Unknown fields cause the request to be rejected.
+    List fields are normalised to lists of strings.
+
+    Request body:
+        vault (str, required): Vault name.
+        updates (dict, required): Fields to update.
+
+    Response data:
+        project_state (dict): Updated project state record.
+
+    Error codes:
+        INVALID_VAULT:          Vault is not registered (HTTP 404).
+        INVALID_PROJECT_STATE:  Unknown fields or invalid update format (HTTP 400).
+        WRITE_FAILED:           Failed to write project state (HTTP 500).
+        REMOTE_READ_ONLY:       Server is in remote read-only mode (HTTP 403).
+    """
+    err = _validate_vault(req.vault)
+    if err:
+        return err
+    try:
+        result = _session_state.update_project_state(req.vault, req.updates)
+        if result.get("status") == "error":
+            err_data = result["error"]
+            return _error(err_data["code"], err_data["message"], 400)
+        return {"status": "ok", "data": result}
+    except OSError as exc:
+        return _error("WRITE_FAILED", f"Failed to write project state: {exc}", 500)
+    except Exception as exc:
+        return _error("PROJECT_STATE_FAILED", f"Project state update failed: {exc}", 500)
 
 
 # ---------- Run ----------

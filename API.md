@@ -1156,6 +1156,211 @@ Permanently delete a non-demo vault. Requires explicit typed confirmation. Remov
 
 ---
 
+## Session and Project State (Phase 22)
+
+File-backed session and project state layer. All state is stored as pretty-printed, sorted-key JSON inside `<vault>/Vault Files/State/`. Writes are atomic (temp-file + replace). No database, no cloud sync, no embeddings.
+
+Write endpoints are blocked when `CVE_REMOTE_READ_ONLY=true`.
+
+### POST /session/start
+
+Start a new work session.
+
+**Request body:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `vault` | string | yes | Registered vault name |
+| `current_project` | string | no | Project name for this session |
+| `current_topic` | string | no | Topic being worked on |
+| `user_goal` | string | no | Freeform goal description |
+| `active_vault` | string | no | Active vault name (defaults to `vault`) |
+
+**Success response (HTTP 200):**
+```json
+{
+  "status": "ok",
+  "data": {
+    "session": {
+      "session_id": "20240115T143022-a1b2c3d4",
+      "status": "active",
+      "active_vault": "demo-vault",
+      "current_project": "Phase 22",
+      "current_topic": "Testing",
+      "user_goal": "Verify session state",
+      "recent_notes": [],
+      "created_at": "2024-01-15T14:30:22Z",
+      "last_activity": "2024-01-15T14:30:22Z"
+    }
+  }
+}
+```
+
+**Error responses:**
+
+| Code | HTTP Status | Trigger |
+|------|-------------|---------|
+| `INVALID_VAULT` | 404 | Vault name is not registered |
+| `REMOTE_READ_ONLY` | 403 | `CVE_REMOTE_READ_ONLY=true` |
+| `WRITE_FAILED` | 500 | Atomic file write failed |
+
+---
+
+### GET /session/resume
+
+Fetch the most-recent active session. Optionally specify a session_id to resume a specific session.
+
+**Query parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `vault` | string | yes | Registered vault name |
+| `session_id` | string | no | Specific session ID to resume |
+
+**Success response (HTTP 200):**
+```json
+{
+  "status": "ok",
+  "data": {
+    "session": { "session_id": "...", "status": "active", ... }
+  }
+}
+```
+
+**Error responses:**
+
+| Code | HTTP Status | Trigger |
+|------|-------------|---------|
+| `INVALID_VAULT` | 404 | Vault name is not registered |
+| `SESSION_NOT_FOUND` | 404 | No active session found (or specified ID not found) |
+
+---
+
+### GET /session/summary
+
+Return a compact LLM-ready summary of the most-recent active session.
+
+**Query parameters:** same as `/session/resume`
+
+**Success response (HTTP 200):**
+```json
+{
+  "status": "ok",
+  "data": {
+    "summary": {
+      "session_id": "...",
+      "status": "active",
+      "current_project": "...",
+      "user_goal": "...",
+      "recent_notes": [...],
+      "created_at": "...",
+      "last_activity": "..."
+    }
+  }
+}
+```
+
+---
+
+### POST /session/attach-note
+
+Record a recently-accessed note in the current session. De-duplicates; most-recent entry moves to the front.
+
+**Request body:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `vault` | string | yes | Registered vault name |
+| `session_id` | string | yes | Session ID to attach the note to |
+| `note_path` | string | yes | Vault-relative path to the note (e.g. `Fundamentals/Algorithms.md`) |
+
+**Error responses:**
+
+| Code | HTTP Status | Trigger |
+|------|-------------|---------|
+| `INVALID_VAULT` | 404 | Vault name is not registered |
+| `SESSION_NOT_FOUND` | 404 | Session ID not found |
+| `INVALID_SESSION` | 400 | Session is closed |
+| `INVALID_NOTE_PATH` | 400 | Path contains `..` or is absolute |
+| `NOTE_NOT_FOUND` | 404 | Note file does not exist in vault |
+| `REMOTE_READ_ONLY` | 403 | `CVE_REMOTE_READ_ONLY=true` |
+
+---
+
+### POST /session/close
+
+Close an active session. The session file is preserved with `status: closed` and `closed_at` timestamp.
+
+**Request body:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `vault` | string | yes | Registered vault name |
+| `session_id` | string | yes | Session ID to close |
+
+**Error responses:**
+
+| Code | HTTP Status | Trigger |
+|------|-------------|---------|
+| `INVALID_VAULT` | 404 | Vault name is not registered |
+| `SESSION_NOT_FOUND` | 404 | Session ID not found |
+| `REMOTE_READ_ONLY` | 403 | `CVE_REMOTE_READ_ONLY=true` |
+
+---
+
+### GET /project/state
+
+Read the current project state. Returns default values if no state file exists.
+
+**Query parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `vault` | string | yes | Registered vault name |
+
+**Success response (HTTP 200):**
+```json
+{
+  "status": "ok",
+  "data": {
+    "project_state": {
+      "vault": "demo-vault",
+      "current_phase": "",
+      "completed_work": [],
+      "next_actions": [],
+      "blockers": [],
+      "decisions": [],
+      "risks": [],
+      "updated_at": "2024-01-15T14:30:22Z"
+    }
+  }
+}
+```
+
+---
+
+### PUT /project/state
+
+Update one or more project state fields. Only the following fields may be updated: `current_phase`, `completed_work`, `next_actions`, `blockers`, `decisions`, `risks`.
+
+**Request body:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `vault` | string | yes | Registered vault name |
+| `updates` | object | yes | Map of allowed field names to new values |
+
+**Error responses:**
+
+| Code | HTTP Status | Trigger |
+|------|-------------|---------|
+| `INVALID_VAULT` | 404 | Vault name is not registered |
+| `INVALID_PROJECT_STATE` | 400 | `updates` contains unknown or forbidden fields |
+| `REMOTE_READ_ONLY` | 403 | `CVE_REMOTE_READ_ONLY=true` |
+| `WRITE_FAILED` | 500 | Atomic file write failed |
+
+---
+
 ## Error Reference
 
 | Code | HTTP Status | Meaning |
@@ -1182,6 +1387,12 @@ Permanently delete a non-demo vault. Requires explicit typed confirmation. Remov
 | `CONFIRMATION_MISMATCH` | 400 | Delete confirm phrase does not match exactly |
 | `DELETE_FAILED` | 500 | Vault directory deletion failed (filesystem error) |
 | `INTERNAL` | 500 | Unexpected server error |
+| `INVALID_SESSION` | 400 | Session is closed and cannot be modified |
+| `SESSION_NOT_FOUND` | 404 | Session ID not found or no active sessions |
+| `INVALID_NOTE_PATH` | 400 | Note path contains `..` or is absolute |
+| `NOTE_NOT_FOUND` | 404 | Note file does not exist in vault |
+| `INVALID_PROJECT_STATE` | 400 | Project state update contains unknown or forbidden fields |
+| `WRITE_FAILED` | 500 | Atomic session/project-state file write failed |
 
 ---
 

@@ -1,12 +1,16 @@
 """MCP Tool definitions and dispatch for Context Vault Engine.
 
-All tools are read-only and deterministic.
-No destructive, write, or mutation tools are exposed.
+Read-only tools are prefixed first; controlled write tools (Phase 22 session
+and project state) are clearly marked in their descriptions.
+
+No destructive, vault-content-write, or arbitrary file-write tools are exposed.
+Session and project state tools write only to <vault>/Vault Files/State/.
+Path traversal is blocked in the service module.
 
 Tool naming convention: cve.<action>
 Tool ordering: alphabetical by name (deterministic listing).
 
-Excluded tools (not exposed in Phase 20):
+Excluded tools (not exposed):
   - vault delete
   - vault bootstrap
   - note edit
@@ -14,6 +18,7 @@ Excluded tools (not exposed in Phase 20):
   - export package write
   - schema mutation
   - template mutation
+  - direct file write outside state directory
 """
 
 from __future__ import annotations
@@ -28,6 +33,26 @@ logger = logging.getLogger("mcp.tools")
 # ---------------------------------------------------------------------------
 
 TOOLS = [
+    {
+        "name": "cve.attach_note_to_session",
+        "description": (
+            "[WRITE] Attach a vault note to the current session's recent_notes list. "
+            "Validates that the note exists and is inside the vault. "
+            "Stores a vault-relative POSIX path only. "
+            "Path traversal is blocked. "
+            "Writes only to <vault>/Vault Files/State/."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "vault": {"type": "string"},
+                "session_id": {"type": "string"},
+                "note_path": {"type": "string"},
+            },
+            "required": ["vault", "session_id", "note_path"],
+            "additionalProperties": False,
+        },
+    },
     {
         "name": "cve.build_context_bundle",
         "description": (
@@ -47,6 +72,23 @@ TOOLS = [
                 "allow_partial": {"type": "boolean"},
             },
             "required": ["vault"],
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "cve.close_session",
+        "description": (
+            "[WRITE] Mark a session as closed (status=closed). "
+            "Does not delete the session file. "
+            "Writes only to <vault>/Vault Files/State/."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "vault": {"type": "string"},
+                "session_id": {"type": "string"},
+            },
+            "required": ["vault", "session_id"],
             "additionalProperties": False,
         },
     },
@@ -104,6 +146,22 @@ TOOLS = [
         },
     },
     {
+        "name": "cve.get_project_state",
+        "description": (
+            "Get the project state for a vault (current_phase, completed_work, "
+            "next_actions, blockers, decisions, risks). "
+            "Returns default state if none exists."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "vault": {"type": "string"},
+            },
+            "required": ["vault"],
+            "additionalProperties": False,
+        },
+    },
+    {
         "name": "cve.get_tasks",
         "description": "Get deterministic improvement tasks.",
         "inputSchema": {
@@ -147,6 +205,22 @@ TOOLS = [
         },
     },
     {
+        "name": "cve.resume_session",
+        "description": (
+            "Return the most recent active session or a session by explicit ID. "
+            "Use this to answer 'where was I up to?' for a vault."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "vault": {"type": "string"},
+                "session_id": {"type": "string"},
+            },
+            "required": ["vault"],
+            "additionalProperties": False,
+        },
+    },
+    {
         "name": "cve.security_scan",
         "description": "Run deterministic security scan over vault notes.",
         "inputSchema": {
@@ -155,6 +229,66 @@ TOOLS = [
                 "vault": {"type": "string"},
             },
             "required": ["vault"],
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "cve.start_session",
+        "description": (
+            "[WRITE] Create a new active session for a vault. "
+            "Records active_vault, current_project, current_topic, and user_goal. "
+            "Writes only to <vault>/Vault Files/State/."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "vault": {"type": "string"},
+                "current_project": {"type": "string"},
+                "current_topic": {"type": "string"},
+                "user_goal": {"type": "string"},
+                "active_vault": {"type": "string"},
+            },
+            "required": ["vault"],
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "cve.summarise_session",
+        "description": (
+            "Return a compact deterministic session summary suitable for LLM context. "
+            "Answers 'where was I up to?' with session ID, vault, project, topic, goal, "
+            "recent notes, and status."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "vault": {"type": "string"},
+                "session_id": {"type": "string"},
+            },
+            "required": ["vault"],
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "cve.update_project_state",
+        "description": (
+            "[WRITE] Update project state fields for a vault. "
+            "Allowed fields only: current_phase, completed_work, next_actions, "
+            "blockers, decisions, risks. "
+            "Unknown fields are rejected. "
+            "Writes only to <vault>/Vault Files/State/."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "vault": {"type": "string"},
+                "updates": {
+                    "type": "object",
+                    "description": "Allowed keys: current_phase, completed_work, next_actions, blockers, decisions, risks.",
+                    "additionalProperties": True,
+                },
+            },
+            "required": ["vault", "updates"],
             "additionalProperties": False,
         },
     },
@@ -252,16 +386,23 @@ def dispatch_tool_call(tool_name: str, args: dict) -> dict:
 def _execute_tool(tool_name: str, args: dict) -> dict:
     """Execute a named tool with pre-validated args."""
     dispatch = {
-        "cve.list_vaults": _tool_list_vaults,
-        "cve.get_context_state": _tool_get_context_state,
-        "cve.get_context_plan": _tool_get_context_plan,
-        "cve.query_notes": _tool_query_notes,
-        "cve.get_note": _tool_get_note,
-        "cve.validate_vault": _tool_validate_vault,
-        "cve.get_tasks": _tool_get_tasks,
-        "cve.get_missing_concepts": _tool_get_missing_concepts,
-        "cve.security_scan": _tool_security_scan,
+        "cve.attach_note_to_session": _tool_attach_note_to_session,
         "cve.build_context_bundle": _tool_build_context_bundle,
+        "cve.close_session": _tool_close_session,
+        "cve.get_context_plan": _tool_get_context_plan,
+        "cve.get_context_state": _tool_get_context_state,
+        "cve.get_missing_concepts": _tool_get_missing_concepts,
+        "cve.get_note": _tool_get_note,
+        "cve.get_project_state": _tool_get_project_state,
+        "cve.get_tasks": _tool_get_tasks,
+        "cve.list_vaults": _tool_list_vaults,
+        "cve.query_notes": _tool_query_notes,
+        "cve.resume_session": _tool_resume_session,
+        "cve.security_scan": _tool_security_scan,
+        "cve.start_session": _tool_start_session,
+        "cve.summarise_session": _tool_summarise_session,
+        "cve.update_project_state": _tool_update_project_state,
+        "cve.validate_vault": _tool_validate_vault,
     }
     fn = dispatch.get(tool_name)
     if fn is None:
@@ -413,6 +554,118 @@ def _tool_build_context_bundle(args: dict) -> dict:
         max_chars=max_chars,
         allow_partial=allow_partial,
     )
+    if result.get("status") == "error":
+        err = result["error"]
+        return _tool_error(f"{err['code']}: {err['message']}")
+    return _tool_ok(result)
+
+
+# ---------------------------------------------------------------------------
+# Phase 22: Session and Project State tool implementations
+# ---------------------------------------------------------------------------
+
+def _check_remote_read_only() -> dict | None:
+    """Return a tool error if private cloud read-only mode is active."""
+    try:
+        from mcp.core.private_cloud import is_remote_read_only  # noqa: PLC0415
+        if is_remote_read_only():
+            return _tool_error("REMOTE_READ_ONLY: Remote read-only mode blocks this write operation.")
+    except Exception:
+        pass
+    return None
+
+
+def _tool_start_session(args: dict) -> dict:
+    guard = _check_remote_read_only()
+    if guard:
+        return guard
+    from mcp.core import session_state as _ss  # noqa: PLC0415
+    vault = args["vault"]
+    result = _ss.start_session(
+        vault,
+        current_project=args.get("current_project"),
+        current_topic=args.get("current_topic"),
+        user_goal=args.get("user_goal"),
+        active_vault=args.get("active_vault"),
+    )
+    if result.get("status") == "error":
+        err = result["error"]
+        return _tool_error(f"{err['code']}: {err['message']}")
+    session = result["session"]
+    return _tool_ok({"session": session}, f"Session started: {session.get('session_id')}")
+
+
+def _tool_resume_session(args: dict) -> dict:
+    from mcp.core import session_state as _ss  # noqa: PLC0415
+    vault = args["vault"]
+    session_id = args.get("session_id")
+    result = _ss.resume_session(vault, session_id=session_id)
+    if result.get("status") == "error":
+        err = result["error"]
+        return _tool_error(f"{err['code']}: {err['message']}")
+    return _tool_ok(result)
+
+
+def _tool_summarise_session(args: dict) -> dict:
+    from mcp.core import session_state as _ss  # noqa: PLC0415
+    vault = args["vault"]
+    session_id = args.get("session_id")
+    result = _ss.summarise_session(vault, session_id=session_id)
+    if result.get("status") == "error":
+        err = result["error"]
+        return _tool_error(f"{err['code']}: {err['message']}")
+    return _tool_ok(result)
+
+
+def _tool_attach_note_to_session(args: dict) -> dict:
+    guard = _check_remote_read_only()
+    if guard:
+        return guard
+    from mcp.core import session_state as _ss  # noqa: PLC0415
+    vault = args["vault"]
+    session_id = args["session_id"]
+    note_path = args["note_path"]
+    result = _ss.attach_note_to_session(vault, session_id, note_path)
+    if result.get("status") == "error":
+        err = result["error"]
+        return _tool_error(f"{err['code']}: {err['message']}")
+    return _tool_ok(result)
+
+
+def _tool_close_session(args: dict) -> dict:
+    guard = _check_remote_read_only()
+    if guard:
+        return guard
+    from mcp.core import session_state as _ss  # noqa: PLC0415
+    vault = args["vault"]
+    session_id = args["session_id"]
+    result = _ss.close_session(vault, session_id)
+    if result.get("status") == "error":
+        err = result["error"]
+        return _tool_error(f"{err['code']}: {err['message']}")
+    return _tool_ok(result, f"Session closed: {session_id}")
+
+
+def _tool_get_project_state(args: dict) -> dict:
+    from mcp.core import session_state as _ss  # noqa: PLC0415
+    vault = args["vault"]
+    result = _ss.get_project_state(vault)
+    if result.get("status") == "error":
+        err = result["error"]
+        return _tool_error(f"{err['code']}: {err['message']}")
+    return _tool_ok(result)
+
+
+def _tool_update_project_state(args: dict) -> dict:
+    guard = _check_remote_read_only()
+    if guard:
+        return guard
+    from mcp.core import session_state as _ss  # noqa: PLC0415
+    vault = args["vault"]
+    updates = args.get("updates", {})
+    if not isinstance(updates, dict):
+        return _tool_error("INVALID_PARAMS: 'updates' must be an object")
+    result = _ss.update_project_state(vault, updates)
     if result.get("status") == "error":
         err = result["error"]
         return _tool_error(f"{err['code']}: {err['message']}")

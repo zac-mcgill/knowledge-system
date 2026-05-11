@@ -92,7 +92,7 @@ The backend is strong. The local UI has reached a usable application baseline. T
 
 ## Current Active Phase
 
-**Phase 21 - Private Cloud Mode**
+**Phase 22 - Session and Project State Layer**
 
 ## Phase Status Overview
 
@@ -121,8 +121,8 @@ The backend is strong. The local UI has reached a usable application baseline. T
 | 19    | Context Controller Layer                | Complete |
 | 20    | MCP Compatibility Layer                 | Complete |
 | 21    | Private Cloud Mode                      | Complete |
-| 22    | Session and Project State Layer         | Planned  |
-| 23    | Safe Memory Write Queue                 | Planned  |
+| 22    | Session and Project State Layer         | Complete |
+| 23    | Safe Memory Write Queue                 | Active   |
 | 24    | Device Profiles and Context Budgets     | Planned  |
 | 25    | Trust, Staleness, and Evidence Metadata | Planned  |
 | 26    | Import Pipelines                        | Planned  |
@@ -463,53 +463,49 @@ feat(deploy): add private cloud mode
 
 ### Phase 22 - Session and Project State Layer
 
+**Status:** Complete
+
+**Backend tests:** 429 (33 new Phase 22 tests; all pass)
+**UI build:** PASS (no frontend changes in this phase)
+
 #### Purpose
 
-Give weak local LLMs durable continuity without relying on chat history.
+Give weak local LLMs durable continuity without relying on chat history. Deterministic, human-readable, file-backed session/project state so CVE can answer "where was I?" and local LLMs can resume work.
 
-#### Deliver
+#### Delivered
 
-Session records:
+- `mcp/core/session_state.py` (NEW) — session and project state service. Functions: `start_session`, `resume_session`, `summarise_session`, `attach_note_to_session`, `close_session`, `list_sessions`, `get_project_state`, `update_project_state`, `_atomic_write_json`. Pure stdlib. All writes atomic via temp-file + replace. All functions accept `_vault_path` for test isolation.
+- Session records: `session_id`, `status`, `active_vault`, `current_project`, `current_topic`, `recent_notes`, `user_goal`, `created_at`, `last_activity`, `closed_at`, `summary`.
+- Project state: `vault`, `current_phase`, `completed_work`, `next_actions`, `blockers`, `decisions`, `risks`, `updated_at`.
+- 7 new HTTP endpoints: `POST /session/start`, `GET /session/resume`, `GET /session/summary`, `POST /session/attach-note`, `POST /session/close`, `GET /project/state`, `PUT /project/state`.
+- 7 new MCP tools: `cve.start_session`, `cve.resume_session`, `cve.summarise_session`, `cve.attach_note_to_session`, `cve.close_session`, `cve.get_project_state`, `cve.update_project_state`.
+- 2 new MCP resource templates: `cve://vault/{vault}/session/current`, `cve://vault/{vault}/project-state`.
+- `cve.resume_work` MCP prompt for guided "where was I?" workflow.
+- 2 new CLI commands: `py run.py session`, `py run.py project-state`.
+- Write routes blocked when `CVE_REMOTE_READ_ONLY=true`.
 
-- `active_vault`
-- `current_project`
-- `current_topic`
-- `recent_notes`
-- `recent_bundle_ids`
-- `open_tasks`
-- `user_goal`
-- `last_activity`
+#### Storage layout
 
-Project state files:
+```
+<vault>/Vault Files/State/sessions/<YYYYMMDDTHHMMSS-xxxxxxxx>.json
+<vault>/Vault Files/State/project-state.json
+```
 
-- `current_phase`
-- `completed_work`
-- `next_actions`
-- `blockers`
-- `decisions`
-- `risks`
+#### Acceptance Criteria — Met
 
-Tools/API:
-
-- `start_session`
-- `resume_session`
-- `summarise_session`
-- `attach_note_to_session`
-- `close_session`
-- `get_project_state`
-- `update_project_state`
-
-#### Acceptance Criteria
-
-- User can ask "where was I up to?"
-- Local LLM can resume with explicit state.
+- User can ask "where was I up to?" — answered from stored state.
+- Local LLM can resume with explicit state via `cve.resume_work` prompt.
 - Project state is stored outside model memory.
-- State files remain human-readable and versionable.
+- State files are human-readable and versionable.
+- Atomic writes prevent partial state corruption.
+- Path traversal blocked for all note-path inputs.
+- Write routes blocked under `CVE_REMOTE_READ_ONLY=true`.
+- 33 new tests; all 429 tests pass.
 
 #### Suggested Commit
 
 ```
-feat(state): add sessions and project state
+feat(state): add sessions and project state (Phase 22)
 ```
 
 ---

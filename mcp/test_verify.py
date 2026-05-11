@@ -11153,6 +11153,44 @@ def main():
     test_p21_deployment_md_complete()
     test_p21_existing_tests_unaffected()
 
+    # ---- Phase 22: Session and Project State ----
+    print("\n" + "=" * 60)
+    print("Phase 22 — Session and Project State")
+    print("=" * 60)
+    test_p22_start_session_returns_active()
+    test_p22_session_file_written()
+    test_p22_resume_session_returns_latest_active()
+    test_p22_resume_session_by_id()
+    test_p22_summarise_session_shape()
+    test_p22_attach_note_adds_to_recent_notes()
+    test_p22_attach_note_deduplicates()
+    test_p22_close_session_marks_closed()
+    test_p22_resume_no_active_after_close()
+    test_p22_list_sessions_ordering()
+    test_p22_get_project_state_defaults()
+    test_p22_update_project_state_writes()
+    test_p22_update_project_state_rejects_unknown_fields()
+    test_p22_session_id_format()
+    test_p22_atomic_write_valid_json()
+    test_p22_http_start_session()
+    test_p22_http_session_resume()
+    test_p22_http_session_summary()
+    test_p22_http_attach_note()
+    test_p22_http_close_session()
+    test_p22_http_get_project_state()
+    test_p22_http_update_project_state()
+    test_p22_http_update_project_state_rejects_bad_fields()
+    test_p22_http_write_routes_blocked_read_only()
+    test_p22_http_read_routes_allowed_read_only()
+    test_p22_mcp_session_tools_registered()
+    test_p22_mcp_resume_work_prompt_registered()
+    test_p22_mcp_session_resources_registered()
+    test_p22_readme_mentions_session()
+    test_p22_quickstart_mentions_session()
+    test_p22_api_md_documents_session_endpoints()
+    test_p22_testing_md_updated_count()
+    test_p22_existing_tests_unaffected()
+
     print()
     print("=" * 60)
     print("ALL VERIFICATION TESTS PASSED")
@@ -11692,11 +11730,17 @@ def test_p20_no_destructive_tools():
         "delete", "edit", "create", "update", "write", "remove", "bootstrap",
         "export_package", "schema_mutation", "template_mutation",
     ]
+    # Phase 22 write tools are intentionally exposed (state-only, not note-mutation)
+    _state_write_tools = {
+        "cve.start_session", "cve.close_session", "cve.attach_note_to_session",
+        "cve.update_project_state",
+    }
     for pattern in forbidden_patterns:
         matching = [n for n in tool_names if pattern in n.lower()
                     and n not in {"cve.get_context_state", "cve.get_context_plan",
                                   "cve.get_tasks", "cve.get_note",
-                                  "cve.get_missing_concepts"}]
+                                  "cve.get_missing_concepts"}
+                    and n not in _state_write_tools]
         assert not matching, (
             f"Destructive tool pattern {pattern!r} found in: {matching}"
         )
@@ -12173,6 +12217,824 @@ def test_p21_existing_tests_unaffected():
         assert is_remote_read_only() is False, "Local mode must not block write routes"
 
     print(f"  Local mode: private cloud disabled, no auth, no read-only enforcement ✓")
+
+
+# ============================================================
+# Phase 22 — Session and Project State Tests
+# ============================================================
+
+def _p22_temp_vault():
+    """Context manager: return a TemporaryDirectory and its Path.
+
+    Creates the required Vault Files/State/ subdirectory structure.
+    """
+    import tempfile
+    import contextlib
+
+    @contextlib.contextmanager
+    def _ctx():
+        with tempfile.TemporaryDirectory() as tmpdir:
+            from pathlib import Path as _P
+            state_dir = _P(tmpdir) / "Vault Files" / "State" / "sessions"
+            state_dir.mkdir(parents=True, exist_ok=True)
+            yield _P(tmpdir)
+
+    return _ctx()
+
+
+def _p22_cleanup_demo_state():
+    """Remove demo-vault State directory created by HTTP tests."""
+    import shutil
+    demo_state = Path(__file__).resolve().parent.parent / "demo-vault" / "Vault Files" / "State"
+    if demo_state.exists():
+        shutil.rmtree(demo_state)
+
+
+def test_p22_start_session_returns_active():
+    """P22-1: start_session returns a session dict with status=active and valid ID."""
+    print("\n=== Test P22-1: start_session returns active session ===")
+    import re
+    from mcp.core.session_state import start_session
+
+    with _p22_temp_vault() as tmpdir:
+        result = start_session(
+            "test-vault",
+            current_project="Phase 22",
+            current_topic="Testing",
+            user_goal="Verify session state",
+            active_vault="test-vault",
+            _vault_path=tmpdir,
+        )
+
+    assert result["status"] == "ok", f"Expected ok: {result}"
+    session = result["session"]
+    assert session["status"] == "active", f"Expected active: {session}"
+    assert re.match(r"^\d{8}T\d{6}-[0-9a-f]{8}$", session["session_id"]), (
+        f"session_id format invalid: {session['session_id']!r}"
+    )
+    assert session["current_project"] == "Phase 22"
+    assert session["current_topic"] == "Testing"
+    assert session["user_goal"] == "Verify session state"
+    print(f"  start_session: status=active, id={session['session_id']} ✓")
+
+
+def test_p22_session_file_written():
+    """P22-2: start_session writes a JSON file at the expected path."""
+    print("\n=== Test P22-2: session file written at expected path ===")
+    import json as _json
+    from mcp.core.session_state import start_session
+
+    with _p22_temp_vault() as tmpdir:
+        result = start_session(
+            "test-vault",
+            _vault_path=tmpdir,
+        )
+        assert result["status"] == "ok", f"Expected ok: {result}"
+        session_id = result["session"]["session_id"]
+        expected_path = tmpdir / "Vault Files" / "State" / "sessions" / f"{session_id}.json"
+        assert expected_path.exists(), f"Session file not found: {expected_path}"
+
+        with open(expected_path) as f:
+            data = _json.load(f)
+        assert data["session_id"] == session_id
+        assert data["status"] == "active"
+
+    print(f"  session file written and contains correct session_id ✓")
+
+
+def test_p22_resume_session_returns_latest_active():
+    """P22-3: resume_session (no ID) returns the most-recent active session."""
+    print("\n=== Test P22-3: resume_session returns latest active ===")
+    import time
+    from mcp.core.session_state import start_session, resume_session
+
+    with _p22_temp_vault() as tmpdir:
+        r1 = start_session("tv", current_project="First", _vault_path=tmpdir)
+        time.sleep(1.1)  # ensure different second-level timestamps in session IDs
+        r2 = start_session("tv", current_project="Second", _vault_path=tmpdir)
+
+        assert r1["status"] == "ok"
+        assert r2["status"] == "ok"
+
+        resumed = resume_session("tv", _vault_path=tmpdir)
+        assert resumed["status"] == "ok", f"Expected ok: {resumed}"
+        # Should get the second (most recent) session
+        assert resumed["session"]["current_project"] == "Second", (
+            "resume_session should return the most-recent active session"
+        )
+
+    print(f"  resume_session returns most-recent active session ✓")
+
+
+def test_p22_resume_session_by_id():
+    """P22-4: resume_session with explicit session_id returns the correct session."""
+    print("\n=== Test P22-4: resume_session by explicit ID ===")
+    import time
+    from mcp.core.session_state import start_session, resume_session
+
+    with _p22_temp_vault() as tmpdir:
+        r1 = start_session("tv", current_project="First", _vault_path=tmpdir)
+        time.sleep(0.01)
+        r2 = start_session("tv", current_project="Second", _vault_path=tmpdir)
+        assert r1["status"] == "ok"
+        assert r2["status"] == "ok"
+        first_id = r1["session"]["session_id"]
+
+        resumed = resume_session("tv", session_id=first_id, _vault_path=tmpdir)
+        assert resumed["status"] == "ok", f"Expected ok: {resumed}"
+        assert resumed["session"]["session_id"] == first_id, (
+            "resume_session by ID should return the requested session"
+        )
+        assert resumed["session"]["current_project"] == "First"
+
+    print(f"  resume_session by explicit ID returns correct session ✓")
+
+
+def test_p22_summarise_session_shape():
+    """P22-5: summarise_session returns a compact summary dict."""
+    print("\n=== Test P22-5: summarise_session returns summary dict ===")
+    from mcp.core.session_state import start_session, summarise_session
+
+    with _p22_temp_vault() as tmpdir:
+        r = start_session(
+            "tv",
+            current_project="SummaryTest",
+            user_goal="Check shape",
+            _vault_path=tmpdir,
+        )
+        assert r["status"] == "ok"
+
+        summary = summarise_session("tv", _vault_path=tmpdir)
+        assert summary["status"] == "ok", f"Expected ok: {summary}"
+        s = summary["summary"]
+        for key in ("session_id", "status", "current_project", "user_goal",
+                    "recent_notes", "created_at", "last_activity"):
+            assert key in s, f"Missing key in summary: {key!r}"
+
+    print(f"  summarise_session returns expected keys ✓")
+
+
+def test_p22_attach_note_adds_to_recent_notes():
+    """P22-6: attach_note_to_session adds the note path to recent_notes."""
+    print("\n=== Test P22-6: attach_note adds to recent_notes ===")
+    from mcp.core.session_state import start_session, attach_note_to_session, resume_session
+
+    with _p22_temp_vault() as tmpdir:
+        # Create a fake note file
+        note_dir = tmpdir / "Fundamentals"
+        note_dir.mkdir(exist_ok=True)
+        note_file = note_dir / "Test.md"
+        note_file.write_text("# Test")
+
+        r = start_session("tv", _vault_path=tmpdir)
+        assert r["status"] == "ok"
+        sid = r["session"]["session_id"]
+
+        attach = attach_note_to_session(
+            "tv", session_id=sid, note_path="Fundamentals/Test.md", _vault_path=tmpdir
+        )
+        assert attach["status"] == "ok", f"Expected ok: {attach}"
+
+        resumed = resume_session("tv", session_id=sid, _vault_path=tmpdir)
+        assert "Fundamentals/Test.md" in resumed["session"]["recent_notes"], (
+            f"Note not in recent_notes: {resumed['session']['recent_notes']}"
+        )
+
+    print(f"  attach_note adds to recent_notes ✓")
+
+
+def test_p22_attach_note_deduplicates():
+    """P22-7: attach_note_to_session de-duplicates — same path only appears once."""
+    print("\n=== Test P22-7: attach_note de-duplicates ===")
+    from mcp.core.session_state import start_session, attach_note_to_session, resume_session
+
+    with _p22_temp_vault() as tmpdir:
+        note_dir = tmpdir / "Fundamentals"
+        note_dir.mkdir(exist_ok=True)
+        note_file = note_dir / "Dup.md"
+        note_file.write_text("# Dup")
+
+        r = start_session("tv", _vault_path=tmpdir)
+        assert r["status"] == "ok"
+        sid = r["session"]["session_id"]
+
+        for _ in range(3):
+            attach_note_to_session(
+                "tv", session_id=sid, note_path="Fundamentals/Dup.md", _vault_path=tmpdir
+            )
+
+        resumed = resume_session("tv", session_id=sid, _vault_path=tmpdir)
+        notes = resumed["session"]["recent_notes"]
+        assert notes.count("Fundamentals/Dup.md") == 1, (
+            f"Duplicate note found in recent_notes: {notes}"
+        )
+
+    print(f"  attach_note de-duplicates correctly ✓")
+
+
+def test_p22_close_session_marks_closed():
+    """P22-8: close_session sets status=closed on the session file."""
+    print("\n=== Test P22-8: close_session marks closed ===")
+    from mcp.core.session_state import start_session, close_session, resume_session
+
+    with _p22_temp_vault() as tmpdir:
+        r = start_session("tv", _vault_path=tmpdir)
+        assert r["status"] == "ok"
+        sid = r["session"]["session_id"]
+
+        closed = close_session("tv", session_id=sid, _vault_path=tmpdir)
+        assert closed["status"] == "ok", f"Expected ok: {closed}"
+
+        resumed = resume_session("tv", session_id=sid, _vault_path=tmpdir)
+        assert resumed["status"] == "ok", f"Should still be readable by ID: {resumed}"
+        assert resumed["session"]["status"] == "closed", (
+            f"Expected closed: {resumed['session']['status']}"
+        )
+        assert resumed["session"]["closed_at"] is not None, "closed_at should be set"
+
+    print(f"  close_session marks session as closed ✓")
+
+
+def test_p22_resume_no_active_after_close():
+    """P22-9: resume_session (no ID) fails when all sessions are closed."""
+    print("\n=== Test P22-9: no active session after close ===")
+    from mcp.core.session_state import start_session, close_session, resume_session
+
+    with _p22_temp_vault() as tmpdir:
+        r = start_session("tv", _vault_path=tmpdir)
+        assert r["status"] == "ok"
+        sid = r["session"]["session_id"]
+        close_session("tv", session_id=sid, _vault_path=tmpdir)
+
+        resumed = resume_session("tv", _vault_path=tmpdir)
+        assert resumed["status"] == "error", (
+            f"Expected error when no active sessions: {resumed}"
+        )
+        assert resumed["error"]["code"] == "SESSION_NOT_FOUND"
+
+    print(f"  resume_session returns SESSION_NOT_FOUND when all sessions closed ✓")
+
+
+def test_p22_list_sessions_ordering():
+    """P22-10: list_sessions returns sessions most-recent-first."""
+    print("\n=== Test P22-10: list_sessions ordering ===")
+    import time
+    from mcp.core.session_state import start_session, list_sessions
+
+    with _p22_temp_vault() as tmpdir:
+        ids = []
+        for i in range(3):
+            r = start_session("tv", current_project=f"Project{i}", _vault_path=tmpdir)
+            assert r["status"] == "ok"
+            ids.append(r["session"]["session_id"])
+            time.sleep(1.1)  # ensure different second-level timestamps
+
+        result = list_sessions("tv", _vault_path=tmpdir)
+        assert result["status"] == "ok", f"Expected ok: {result}"
+        listed_ids = [s["session_id"] for s in result["sessions"]]
+        # Most-recent (last created) should be first
+        assert listed_ids[0] == ids[-1], (
+            f"Expected most-recent first; got {listed_ids}"
+        )
+
+    print(f"  list_sessions returns sessions most-recent-first ✓")
+
+
+def test_p22_get_project_state_defaults():
+    """P22-11: get_project_state returns a default dict when no file exists."""
+    print("\n=== Test P22-11: get_project_state returns defaults ===")
+    from mcp.core.session_state import get_project_state
+
+    with _p22_temp_vault() as tmpdir:
+        result = get_project_state("tv", _vault_path=tmpdir)
+
+    assert result["status"] == "ok", f"Expected ok: {result}"
+    ps = result["project_state"]
+    for key in ("vault", "current_phase", "completed_work", "next_actions",
+                "blockers", "decisions", "risks", "updated_at"):
+        assert key in ps, f"Missing key in project_state: {key!r}"
+
+    print(f"  get_project_state returns defaults with all required keys ✓")
+
+
+def test_p22_update_project_state_writes():
+    """P22-12: update_project_state persists the updated fields."""
+    print("\n=== Test P22-12: update_project_state persists ===")
+    import json as _json
+    from mcp.core.session_state import update_project_state, get_project_state
+
+    with _p22_temp_vault() as tmpdir:
+        upd = update_project_state(
+            "tv",
+            updates={
+                "current_phase": "Phase 22 Testing",
+                "next_actions": ["Run tests", "Update docs"],
+                "blockers": [],
+            },
+            _vault_path=tmpdir,
+        )
+        assert upd["status"] == "ok", f"Expected ok: {upd}"
+
+        fetched = get_project_state("tv", _vault_path=tmpdir)
+        assert fetched["status"] == "ok"
+        ps = fetched["project_state"]
+        assert ps["current_phase"] == "Phase 22 Testing"
+        assert ps["next_actions"] == ["Run tests", "Update docs"]
+        assert ps["blockers"] == []
+
+    print(f"  update_project_state persists and can be read back ✓")
+
+
+def test_p22_update_project_state_rejects_unknown_fields():
+    """P22-13: update_project_state rejects fields not in _ALLOWED_PROJECT_FIELDS."""
+    print("\n=== Test P22-13: update_project_state rejects unknown fields ===")
+    from mcp.core.session_state import update_project_state
+
+    with _p22_temp_vault() as tmpdir:
+        result = update_project_state(
+            "tv",
+            updates={"vault": "override", "__proto__": "inject"},
+            _vault_path=tmpdir,
+        )
+
+    assert result["status"] == "error", (
+        f"Expected error for unknown fields: {result}"
+    )
+    assert result["error"]["code"] == "INVALID_PROJECT_STATE"
+
+    print(f"  update_project_state rejects unknown fields with INVALID_PROJECT_STATE ✓")
+
+
+def test_p22_session_id_format():
+    """P22-14: session_id matches YYYYMMDDTHHMMSS-<8hexchars> format."""
+    print("\n=== Test P22-14: session_id format ===")
+    import re
+    from mcp.core.session_state import start_session
+
+    with _p22_temp_vault() as tmpdir:
+        r = start_session("tv", _vault_path=tmpdir)
+
+    assert r["status"] == "ok"
+    sid = r["session"]["session_id"]
+    assert re.match(r"^\d{8}T\d{6}-[0-9a-f]{8}$", sid), (
+        f"session_id does not match expected format: {sid!r}"
+    )
+
+    print(f"  session_id format valid: {sid} ✓")
+
+
+def test_p22_atomic_write_valid_json():
+    """P22-15: session file is valid JSON with sorted keys after atomic write."""
+    print("\n=== Test P22-15: atomic write produces valid sorted-key JSON ===")
+    import json as _json
+    from mcp.core.session_state import start_session
+
+    with _p22_temp_vault() as tmpdir:
+        r = start_session("tv", current_project="AtomicTest", _vault_path=tmpdir)
+        assert r["status"] == "ok"
+        sid = r["session"]["session_id"]
+        file_path = tmpdir / "Vault Files" / "State" / "sessions" / f"{sid}.json"
+        raw = file_path.read_text(encoding="utf-8")
+        data = _json.loads(raw)
+
+        keys = list(data.keys())
+        assert keys == sorted(keys), (
+            f"Keys not sorted in session file: {keys}"
+        )
+
+    print(f"  atomic write produces valid JSON with sorted keys ✓")
+
+
+def test_p22_http_start_session():
+    """P22-16: POST /session/start returns 200 with session_id."""
+    print("\n=== Test P22-16: POST /session/start returns 200 ===")
+    try:
+        from fastapi.testclient import TestClient
+    except RuntimeError as exc:
+        print(f"  SKIP: TestClient unavailable — {exc}")
+        return
+
+    try:
+        vault = list_vaults()[0]
+        from mcp.server.mcp_server import app
+        with TestClient(app, raise_server_exceptions=True) as client:
+            resp = client.post("/session/start", json={
+                "vault": vault,
+                "current_project": "HTTP Test",
+                "user_goal": "Test HTTP API",
+            })
+
+        assert resp.status_code == 200, f"Expected 200: {resp.status_code} {resp.text}"
+        body = resp.json()
+        assert body["status"] == "ok", f"Expected ok: {body}"
+        assert "session_id" in body["data"]["session"], f"Missing session_id: {body}"
+        print(f"  POST /session/start: 200 ok, session_id present ✓")
+    finally:
+        _p22_cleanup_demo_state()
+
+
+def test_p22_http_session_resume():
+    """P22-17: GET /session/resume returns the active session."""
+    print("\n=== Test P22-17: GET /session/resume returns active session ===")
+    try:
+        from fastapi.testclient import TestClient
+    except RuntimeError as exc:
+        print(f"  SKIP: TestClient unavailable — {exc}")
+        return
+
+    try:
+        vault = list_vaults()[0]
+        from mcp.server.mcp_server import app
+        with TestClient(app, raise_server_exceptions=True) as client:
+            # Start a session first
+            client.post("/session/start", json={"vault": vault, "current_project": "ResumeTest"})
+            resp = client.get("/session/resume", params={"vault": vault})
+
+        assert resp.status_code == 200, f"Expected 200: {resp.status_code} {resp.text}"
+        body = resp.json()
+        assert body["status"] == "ok", f"Expected ok: {body}"
+        assert "session" in body["data"], f"Missing session key: {body}"
+        print(f"  GET /session/resume: 200 ok, session present ✓")
+    finally:
+        _p22_cleanup_demo_state()
+
+
+def test_p22_http_session_summary():
+    """P22-18: GET /session/summary returns a compact summary."""
+    print("\n=== Test P22-18: GET /session/summary returns summary ===")
+    try:
+        from fastapi.testclient import TestClient
+    except RuntimeError as exc:
+        print(f"  SKIP: TestClient unavailable — {exc}")
+        return
+
+    try:
+        vault = list_vaults()[0]
+        from mcp.server.mcp_server import app
+        with TestClient(app, raise_server_exceptions=True) as client:
+            client.post("/session/start", json={"vault": vault, "current_project": "SummaryTest"})
+            resp = client.get("/session/summary", params={"vault": vault})
+
+        assert resp.status_code == 200, f"Expected 200: {resp.status_code} {resp.text}"
+        body = resp.json()
+        assert body["status"] == "ok", f"Expected ok: {body}"
+        assert "summary" in body["data"], f"Missing summary key: {body}"
+        print(f"  GET /session/summary: 200 ok, summary present ✓")
+    finally:
+        _p22_cleanup_demo_state()
+
+
+def test_p22_http_attach_note():
+    """P22-19: POST /session/attach-note attaches a note to the session."""
+    print("\n=== Test P22-19: POST /session/attach-note ===")
+    try:
+        from fastapi.testclient import TestClient
+    except RuntimeError as exc:
+        print(f"  SKIP: TestClient unavailable — {exc}")
+        return
+
+    try:
+        vault = list_vaults()[0]
+        from mcp.server.mcp_server import app
+        with TestClient(app, raise_server_exceptions=True) as client:
+            r = client.post("/session/start", json={"vault": vault})
+            assert r.status_code == 200, f"start failed: {r.text}"
+            sid = r.json()["data"]["session"]["session_id"]
+
+            resp = client.post("/session/attach-note", json={
+                "vault": vault,
+                "session_id": sid,
+                "note_path": "Fundamentals/Algorithms.md",
+            })
+
+        assert resp.status_code == 200, f"Expected 200: {resp.status_code} {resp.text}"
+        body = resp.json()
+        assert body["status"] == "ok", f"Expected ok: {body}"
+        print(f"  POST /session/attach-note: 200 ok ✓")
+    finally:
+        _p22_cleanup_demo_state()
+
+
+def test_p22_http_close_session():
+    """P22-20: POST /session/close closes the session."""
+    print("\n=== Test P22-20: POST /session/close ===")
+    try:
+        from fastapi.testclient import TestClient
+    except RuntimeError as exc:
+        print(f"  SKIP: TestClient unavailable — {exc}")
+        return
+
+    try:
+        vault = list_vaults()[0]
+        from mcp.server.mcp_server import app
+        with TestClient(app, raise_server_exceptions=True) as client:
+            r = client.post("/session/start", json={"vault": vault})
+            assert r.status_code == 200
+            sid = r.json()["data"]["session"]["session_id"]
+
+            resp = client.post("/session/close", json={"vault": vault, "session_id": sid})
+
+        assert resp.status_code == 200, f"Expected 200: {resp.status_code} {resp.text}"
+        body = resp.json()
+        assert body["status"] == "ok"
+        assert body["data"]["session"]["status"] == "closed"
+        print(f"  POST /session/close: 200 ok, status=closed ✓")
+    finally:
+        _p22_cleanup_demo_state()
+
+
+def test_p22_http_get_project_state():
+    """P22-21: GET /project/state returns project state."""
+    print("\n=== Test P22-21: GET /project/state ===")
+    try:
+        from fastapi.testclient import TestClient
+    except RuntimeError as exc:
+        print(f"  SKIP: TestClient unavailable — {exc}")
+        return
+
+    try:
+        vault = list_vaults()[0]
+        from mcp.server.mcp_server import app
+        with TestClient(app, raise_server_exceptions=True) as client:
+            resp = client.get("/project/state", params={"vault": vault})
+
+        assert resp.status_code == 200, f"Expected 200: {resp.status_code} {resp.text}"
+        body = resp.json()
+        assert body["status"] == "ok"
+        ps = body["data"]["project_state"]
+        assert "current_phase" in ps
+        assert "next_actions" in ps
+        print(f"  GET /project/state: 200 ok, required keys present ✓")
+    finally:
+        _p22_cleanup_demo_state()
+
+
+def test_p22_http_update_project_state():
+    """P22-22: PUT /project/state updates and persists project state."""
+    print("\n=== Test P22-22: PUT /project/state ===")
+    try:
+        from fastapi.testclient import TestClient
+    except RuntimeError as exc:
+        print(f"  SKIP: TestClient unavailable — {exc}")
+        return
+
+    try:
+        vault = list_vaults()[0]
+        from mcp.server.mcp_server import app
+        with TestClient(app, raise_server_exceptions=True) as client:
+            resp = client.put("/project/state", json={
+                "vault": vault,
+                "updates": {"current_phase": "Phase 22 HTTP Test"},
+            })
+
+        assert resp.status_code == 200, f"Expected 200: {resp.status_code} {resp.text}"
+        body = resp.json()
+        assert body["status"] == "ok"
+        assert body["data"]["project_state"]["current_phase"] == "Phase 22 HTTP Test"
+        print(f"  PUT /project/state: 200 ok, current_phase updated ✓")
+    finally:
+        _p22_cleanup_demo_state()
+
+
+def test_p22_http_update_project_state_rejects_bad_fields():
+    """P22-23: PUT /project/state returns error for unknown/forbidden fields."""
+    print("\n=== Test P22-23: PUT /project/state rejects unknown fields ===")
+    try:
+        from fastapi.testclient import TestClient
+    except RuntimeError as exc:
+        print(f"  SKIP: TestClient unavailable — {exc}")
+        return
+
+    try:
+        vault = list_vaults()[0]
+        from mcp.server.mcp_server import app
+        with TestClient(app, raise_server_exceptions=True) as client:
+            resp = client.put("/project/state", json={
+                "vault": vault,
+                "updates": {"vault": "hacker", "unknown_field": "value"},
+            })
+
+        # Should be 4xx (400 or 422 depending on implementation)
+        assert resp.status_code in (400, 422), (
+            f"Expected 400/422 for unknown fields: {resp.status_code} {resp.text}"
+        )
+        print(f"  PUT /project/state rejects unknown fields: {resp.status_code} ✓")
+    finally:
+        _p22_cleanup_demo_state()
+
+
+def test_p22_http_write_routes_blocked_read_only():
+    """P22-24: Session write routes return 403 REMOTE_READ_ONLY in read-only mode."""
+    print("\n=== Test P22-24: write routes blocked in REMOTE_READ_ONLY mode ===")
+    try:
+        from fastapi.testclient import TestClient
+    except RuntimeError as exc:
+        print(f"  SKIP: TestClient unavailable — {exc}")
+        return
+
+    _TOKEN = "read-only-p22-token"
+    vault = list_vaults()[0]
+
+    with _p21_env(
+        CVE_PRIVATE_CLOUD_ENABLED="true",
+        CVE_AUTH_TOKEN=_TOKEN,
+        CVE_REQUIRE_AUTH="true",
+        CVE_REMOTE_READ_ONLY="true",
+        CVE_DEPLOYMENT_MODE=None,
+    ):
+        from mcp.server.mcp_server import app
+        with TestClient(app, raise_server_exceptions=True) as client:
+            resp = client.post(
+                "/session/start",
+                json={"vault": vault},
+                headers={"Authorization": f"Bearer {_TOKEN}"},
+            )
+
+    assert resp.status_code == 403, (
+        f"Expected 403 REMOTE_READ_ONLY: {resp.status_code} {resp.text}"
+    )
+    body = resp.json()
+    assert body["error"]["code"] == "REMOTE_READ_ONLY"
+    print(f"  POST /session/start in read-only mode: 403 REMOTE_READ_ONLY ✓")
+
+
+def test_p22_http_read_routes_allowed_read_only():
+    """P22-25: GET /session/resume is allowed in read-only mode (no active session is ok)."""
+    print("\n=== Test P22-25: read routes allowed in REMOTE_READ_ONLY mode ===")
+    try:
+        from fastapi.testclient import TestClient
+    except RuntimeError as exc:
+        print(f"  SKIP: TestClient unavailable — {exc}")
+        return
+
+    _TOKEN = "read-only-p22-read-token"
+    vault = list_vaults()[0]
+
+    with _p21_env(
+        CVE_PRIVATE_CLOUD_ENABLED="true",
+        CVE_AUTH_TOKEN=_TOKEN,
+        CVE_REQUIRE_AUTH="true",
+        CVE_REMOTE_READ_ONLY="true",
+        CVE_DEPLOYMENT_MODE=None,
+    ):
+        from mcp.server.mcp_server import app
+        with TestClient(app, raise_server_exceptions=True) as client:
+            resp = client.get(
+                "/project/state",
+                params={"vault": vault},
+                headers={"Authorization": f"Bearer {_TOKEN}"},
+            )
+
+    # Should not be 403 — read routes should pass through
+    assert resp.status_code != 403 or (
+        resp.json().get("error", {}).get("code") != "REMOTE_READ_ONLY"
+    ), f"Read route blocked by REMOTE_READ_ONLY: {resp.text}"
+    print(f"  GET /project/state in read-only mode: {resp.status_code} (not blocked) ✓")
+
+
+def test_p22_mcp_session_tools_registered():
+    """P22-26: MCP stdio server lists cve.start_session and cve.get_project_state tools."""
+    print("\n=== Test P22-26: MCP session tools registered ===")
+    import json as _json
+
+    responses, stderr = _mcp_call([
+        {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
+            "protocolVersion": "2025-11-25", "capabilities": {},
+            "clientInfo": {"name": "test-p22", "version": "0.0.1"},
+        }},
+        {"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}},
+    ])
+
+    tools_resp = next((r for r in responses if r.get("id") == 2), None)
+    assert tools_resp is not None, f"No tools/list response; stderr: {stderr}"
+    tool_names = {t["name"] for t in tools_resp["result"]["tools"]}
+    for expected in ("cve.start_session", "cve.get_project_state", "cve.resume_session",
+                     "cve.summarise_session", "cve.close_session",
+                     "cve.attach_note_to_session", "cve.update_project_state"):
+        assert expected in tool_names, (
+            f"Tool {expected!r} not registered; available: {sorted(tool_names)}"
+        )
+    print(f"  All 7 session/project-state tools registered in MCP server ✓")
+
+
+def test_p22_mcp_resume_work_prompt_registered():
+    """P22-27: MCP stdio server lists cve.resume_work prompt."""
+    print("\n=== Test P22-27: cve.resume_work prompt registered ===")
+
+    responses, stderr = _mcp_call([
+        {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
+            "protocolVersion": "2025-11-25", "capabilities": {},
+            "clientInfo": {"name": "test-p22-prompts", "version": "0.0.1"},
+        }},
+        {"jsonrpc": "2.0", "id": 2, "method": "prompts/list", "params": {}},
+    ])
+
+    prompts_resp = next((r for r in responses if r.get("id") == 2), None)
+    assert prompts_resp is not None, f"No prompts/list response; stderr: {stderr}"
+    prompt_names = {p["name"] for p in prompts_resp["result"]["prompts"]}
+    assert "cve.resume_work" in prompt_names, (
+        f"cve.resume_work not registered; available: {sorted(prompt_names)}"
+    )
+    print(f"  cve.resume_work prompt registered in MCP server ✓")
+
+
+def test_p22_mcp_session_resources_registered():
+    """P22-28: MCP stdio server lists session/current and project-state resource templates."""
+    print("\n=== Test P22-28: session/project-state resources registered ===")
+
+    responses, stderr = _mcp_call([
+        {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
+            "protocolVersion": "2025-11-25", "capabilities": {},
+            "clientInfo": {"name": "test-p22-res", "version": "0.0.1"},
+        }},
+        {"jsonrpc": "2.0", "id": 2, "method": "resources/list", "params": {}},
+    ])
+
+    resources_resp = next((r for r in responses if r.get("id") == 2), None)
+    assert resources_resp is not None, f"No resources/list response; stderr: {stderr}"
+    uris = {r["uri"] for r in resources_resp["result"]["resources"]}
+    # Check for patterns in registered URIs (may use {vault} placeholder)
+    # The demo vault should have both URIs registered
+    session_found = any("session/current" in uri for uri in uris)
+    project_found = any("project-state" in uri for uri in uris)
+    assert session_found, f"session/current resource not registered; uris: {uris}"
+    assert project_found, f"project-state resource not registered; uris: {uris}"
+    print(f"  session/current and project-state resources registered ✓")
+
+
+def test_p22_readme_mentions_session():
+    """P22-29: README.md mentions session state capability."""
+    print("\n=== Test P22-29: README.md mentions session state ===")
+    readme = Path(__file__).resolve().parent.parent / "README.md"
+    text = readme.read_text(encoding="utf-8")
+    assert "session" in text.lower(), "README.md should mention session state"
+    print(f"  README.md mentions session state ✓")
+
+
+def test_p22_quickstart_mentions_session():
+    """P22-30: QUICKSTART.md mentions session or project state."""
+    print("\n=== Test P22-30: QUICKSTART.md mentions session/project state ===")
+    quickstart = Path(__file__).resolve().parent.parent / "QUICKSTART.md"
+    text = quickstart.read_text(encoding="utf-8")
+    assert "session" in text.lower() or "project" in text.lower(), (
+        "QUICKSTART.md should mention session or project state"
+    )
+    print(f"  QUICKSTART.md mentions session/project state ✓")
+
+
+def test_p22_api_md_documents_session_endpoints():
+    """P22-31: API.md documents the session endpoints."""
+    print("\n=== Test P22-31: API.md documents session endpoints ===")
+    api_md = Path(__file__).resolve().parent.parent / "API.md"
+    text = api_md.read_text(encoding="utf-8")
+    for endpoint in ("/session/start", "/session/resume", "/session/close",
+                     "/project/state"):
+        assert endpoint in text, f"API.md missing endpoint documentation: {endpoint!r}"
+    print(f"  API.md documents all session/project-state endpoints ✓")
+
+
+def test_p22_testing_md_updated_count():
+    """P22-32: TESTING.md reflects 429 tests."""
+    print("\n=== Test P22-32: TESTING.md reflects updated test count ===")
+    testing_md = Path(__file__).resolve().parent.parent / "TESTING.md"
+    text = testing_md.read_text(encoding="utf-8")
+    assert "429" in text, (
+        "TESTING.md should document 429 tests after Phase 22"
+    )
+    print(f"  TESTING.md contains test count 429 ✓")
+
+
+def test_p22_existing_tests_unaffected():
+    """P22-33: Phase 22 additions do not break existing imports or session_state module shape."""
+    print("\n=== Test P22-33: existing tests unaffected by Phase 22 ===")
+    # Verify session_state module is importable and has expected public API
+    from mcp.core import session_state as _ss
+    for fn_name in ("start_session", "resume_session", "summarise_session",
+                    "attach_note_to_session", "close_session", "list_sessions",
+                    "get_project_state", "update_project_state"):
+        assert hasattr(_ss, fn_name), f"session_state missing function: {fn_name!r}"
+
+    # Verify mcp_tools still has all original tools
+    from mcp.core.mcp_tools import TOOLS
+    original_tool_names = {
+        "cve.get_context_state", "cve.build_context_bundle", "cve.get_tasks",
+        "cve.get_missing_concepts", "cve.security_scan", "cve.validate_vault",
+        "cve.get_context_plan",
+    }
+    registered = {t["name"] for t in TOOLS}
+    for name in original_tool_names:
+        assert name in registered, f"Original tool {name!r} missing from TOOLS"
+
+    # Verify mcp_prompts still has original prompts
+    from mcp.core.mcp_prompts import PROMPTS
+    original_prompts = {"cve.vault_review", "cve.security_review",
+                        "cve.context_handoff", "cve.quality_plan"}
+    registered_prompts = {p["name"] for p in PROMPTS}
+    for name in original_prompts:
+        assert name in registered_prompts, f"Original prompt {name!r} missing"
+
+    print(f"  All original tools and prompts still present ✓")
+    print(f"  session_state module has expected public API ✓")
 
 
 if __name__ == "__main__":

@@ -4,7 +4,7 @@
 
 Context Vault Engine is a local-first Python pipeline for validating, scanning, and securely packaging structured Markdown content. It enforces a schema contract on every note, scans content for credential leaks, prompt-injection patterns, and suspicious executable/script blocks, then exports integrity-verified packages with SHA-256 manifests. All security rules are deterministic and regex-based, so every finding is explainable, reproducible, and auditable without an LLM or cloud dependency.
 
-**Local-first Python pipeline: credential leak scanning, prompt-injection detection, schema enforcement, rate-limited API, path-traversal blocking, SHA-256 artefact integrity, MCP stdio compatibility layer, private cloud mode. 396 tests.**
+**Local-first Python pipeline: credential leak scanning, prompt-injection detection, schema enforcement, rate-limited API, path-traversal blocking, SHA-256 artefact integrity, MCP stdio compatibility layer, private cloud mode, session and project state. 429 tests.**
 
 ---
 
@@ -21,7 +21,8 @@ Context Vault Engine is a local-first Python pipeline for validating, scanning, 
 - Relationship graph, quality audit, missing-concept detection
 - MCP stdio compatibility for read-only vault inspection and deterministic context planning
 - Private Cloud Mode: token-authenticated, read-only remote API access — self-hosted, no cloud accounts required
-- 396 deterministic tests
+- Session and Project State: file-backed session tracking and project state so local LLMs can answer "where was I?" — local-first, no DB, no cloud sync
+- 429 deterministic tests
 
 ---
 
@@ -135,6 +136,10 @@ py run.py security --fail-on-warning  # exit 1 for warning results too
 
 # MCP stdio server (Phase 20)
 py run.py mcp                     # start MCP JSON-RPC stdio server
+
+# Session and Project State (Phase 22)
+py run.py session                 # print current session summary as JSON
+py run.py project-state           # print project state as JSON
 
 # Private Cloud Mode (Phase 21) — opt-in, local mode unchanged
 # See DEPLOYMENT.md for full setup

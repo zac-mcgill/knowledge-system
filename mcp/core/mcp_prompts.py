@@ -59,6 +59,20 @@ PROMPTS = [
         ],
     },
     {
+        "name": "cve.resume_work",
+        "description": (
+            "Resume work by reading the current session summary and project state. "
+            "Answers 'where was I up to?' deterministically from stored state."
+        ),
+        "arguments": [
+            {
+                "name": "vault",
+                "description": "The vault name to use.",
+                "required": True,
+            },
+        ],
+    },
+    {
         "name": "cve.security_review",
         "description": (
             "Guide an agent through reviewing deterministic security findings."
@@ -124,6 +138,8 @@ def get_prompt(name: str, arguments: dict | None = None) -> dict | None:
         return _prompt_context_handoff(vault, intent)
     if name == "cve.quality_plan":
         return _prompt_quality_plan(vault)
+    if name == "cve.resume_work":
+        return _prompt_resume_work(vault)
 
     return None
 
@@ -253,6 +269,40 @@ def _prompt_quality_plan(vault: str) -> dict:
     )
     return {
         "description": "Quality planning workflow",
+        "messages": [
+            {"role": "user", "content": {"type": "text", "text": text}},
+        ],
+    }
+
+def _prompt_resume_work(vault: str) -> dict:
+    text = (
+        f"You are resuming work on the vault: {vault!r}\n\n"
+        "Follow these steps to reconstruct where work was up to:\n\n"
+        "1. Call `cve.summarise_session` with `vault={vault!r}` to read the "
+        "most recently active session summary.\n"
+        "   The summary includes: session_id, active_vault, current_project, "
+        "current_topic, user_goal, recent_notes, status, and timestamps.\n\n"
+        "2. Call `cve.get_project_state` with `vault={vault!r}` to read the "
+        "current project state.\n"
+        "   The state includes: current_phase, completed_work, next_actions, "
+        "blockers, decisions, and risks.\n\n"
+        "3. If a session is found:\n"
+        "   - Report the session ID and when it was last active.\n"
+        "   - Report the user_goal if set.\n"
+        "   - List the recent_notes (the last few files worked on).\n\n"
+        "4. Report project state:\n"
+        "   - Report current_phase.\n"
+        "   - List next_actions (what was planned).\n"
+        "   - List any blockers.\n\n"
+        "5. If no session exists, call `cve.get_context_state` with "
+        f"`vault={vault!r}` and report the vault readiness and blockers.\n\n"
+        "6. Recommend the immediate next step based on the above information.\n\n"
+        "PRIVACY NOTE: Session state may contain user goals or project details. "
+        "Do not share session content outside this conversation without user consent.\n"
+        f"{_SAFETY_FOOTER}"
+    )
+    return {
+        "description": "Resume work from stored session and project state",
         "messages": [
             {"role": "user", "content": {"type": "text", "text": text}},
         ],
