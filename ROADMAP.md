@@ -92,7 +92,7 @@ The backend is strong. The local UI has reached a usable application baseline. T
 
 ## Current Active Phase
 
-**Phase 18 - CI and Release Hardening**
+**Phase 19 - Context Controller Layer**
 
 ## Phase Status Overview
 
@@ -117,7 +117,7 @@ The backend is strong. The local UI has reached a usable application baseline. T
 | 16    | Visual Graph and Missing Concepts UI    | Complete |
 | 17A   | HTML Bundle Renderer                    | Complete |
 | 17    | Distribution and Local App Launcher     | Complete |
-| 18    | CI and Release Hardening                | Planned  |
+| 18    | CI and Release Hardening                | Complete |
 | 19    | Context Controller Layer                | Planned  |
 | 20    | MCP Compatibility Layer                 | Planned  |
 | 21    | Private Cloud Mode                      | Planned  |

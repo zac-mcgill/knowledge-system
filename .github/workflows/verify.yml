@@ -1,0 +1,60 @@
+name: Verify
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install base dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Install API and test dependencies
+        run: python -m pip install -r mcp/requirements.txt
+
+      - name: Run full verification suite
+        run: python mcp/test_verify.py
+
+      - name: Run validation
+        run: python run.py validate
+
+      - name: Run security scan
+        run: python run.py security
+
+      - name: Run feedback smoke check
+        run: python run.py feedback
+
+      - name: Run export smoke check
+        run: python run.py export --overwrite
+
+      - name: Check generated artefacts are not tracked
+        run: |
+          git status --short
+          if git status --short | grep -E '^..(dist/|ui/dist/)'; then
+            echo "ERROR: generated artefacts found in working tree"
+            exit 1
+          fi
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Build frontend
+        working-directory: ui
+        run: |
+          npm ci
+          npm run build

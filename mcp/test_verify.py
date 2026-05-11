@@ -7958,6 +7958,98 @@ def test_p17_existing_commands_dispatch():
 
 
 # ============================================================
+# Phase 18: CI and Release Hardening
+# ============================================================
+
+_REPO_ROOT = Path(__file__).parent.parent
+
+
+def test_p18_release_checklist_exists():
+    """P18-A: RELEASE_CHECKLIST.md exists in the repository root."""
+    print("\n=== Test P18-A: RELEASE_CHECKLIST.md exists ===")
+    path = _REPO_ROOT / "RELEASE_CHECKLIST.md"
+    assert path.is_file(), "RELEASE_CHECKLIST.md not found in repository root"
+    print(f"  RELEASE_CHECKLIST.md found at {path} ✓")
+
+
+def test_p18_workflow_file_exists():
+    """P18-B: .github/workflows/verify.yml exists."""
+    print("\n=== Test P18-B: .github/workflows/verify.yml exists ===")
+    path = _REPO_ROOT / ".github" / "workflows" / "verify.yml"
+    assert path.is_file(), ".github/workflows/verify.yml not found"
+    print(f"  verify.yml found at {path} ✓")
+
+
+def test_p18_workflow_triggers():
+    """P18-C: Workflow triggers on push and pull_request."""
+    print("\n=== Test P18-C: workflow triggers on push and pull_request ===")
+    path = _REPO_ROOT / ".github" / "workflows" / "verify.yml"
+    text = path.read_text(encoding="utf-8")
+    assert "push" in text, "Workflow does not trigger on push"
+    assert "pull_request" in text, "Workflow does not trigger on pull_request"
+    print("  on: push ✓")
+    print("  on: pull_request ✓")
+
+
+def test_p18_workflow_required_commands():
+    """P18-D: Workflow contains all required install and run commands."""
+    print("\n=== Test P18-D: workflow required commands ===")
+    path = _REPO_ROOT / ".github" / "workflows" / "verify.yml"
+    text = path.read_text(encoding="utf-8")
+    required = [
+        ("requirements.txt", "install base requirements"),
+        ("mcp/requirements.txt", "install mcp requirements"),
+        ("mcp/test_verify.py", "run test suite"),
+        ("run.py validate", "run validate"),
+        ("run.py security", "run security"),
+        ("run.py feedback", "run feedback"),
+        ("run.py export --overwrite", "run export"),
+    ]
+    for fragment, label in required:
+        assert fragment in text, f"Workflow missing command: {label} ({fragment!r})"
+        print(f"  {label}: found ✓")
+
+
+def test_p18_gitignore_excludes_dist():
+    """P18-E: .gitignore excludes dist/ and ui/dist/."""
+    print("\n=== Test P18-E: .gitignore excludes generated artefacts ===")
+    path = _REPO_ROOT / ".gitignore"
+    assert path.is_file(), ".gitignore not found"
+    text = path.read_text(encoding="utf-8")
+    assert "dist/" in text, ".gitignore does not exclude dist/"
+    assert "ui/dist/" in text, ".gitignore does not exclude ui/dist/"
+    print("  dist/ excluded ✓")
+    print("  ui/dist/ excluded ✓")
+
+
+def test_p18_readme_has_ci_badge():
+    """P18-F: README.md contains the CI badge pointing to verify.yml."""
+    print("\n=== Test P18-F: README contains CI badge ===")
+    path = _REPO_ROOT / "README.md"
+    text = path.read_text(encoding="utf-8")
+    assert "verify.yml" in text, "README does not reference verify.yml badge"
+    assert "actions/workflows" in text, "README badge does not link to GitHub Actions"
+    print("  verify.yml badge found in README ✓")
+
+
+def test_p18_release_checklist_coverage():
+    """P18-G: RELEASE_CHECKLIST.md contains the required verification sections."""
+    print("\n=== Test P18-G: RELEASE_CHECKLIST.md covers required items ===")
+    path = _REPO_ROOT / "RELEASE_CHECKLIST.md"
+    text = path.read_text(encoding="utf-8")
+    required = [
+        ("test_verify.py", "test suite"),
+        ("run.py validate", "validate command"),
+        ("run.py security", "security command"),
+        ("run.py export", "export command"),
+        ("GitHub Release", "release section"),
+    ]
+    for fragment, label in required:
+        assert fragment in text, f"RELEASE_CHECKLIST.md missing: {label}"
+        print(f"  {label}: found ✓")
+
+
+# ============================================================
 # Main
 # ============================================================
 
@@ -8311,6 +8403,18 @@ def main():
     test_p17_check_ui_built_missing_index()
     test_p17_check_ui_built_present()
     test_p17_existing_commands_dispatch()
+
+    # ---- Phase 18: CI and Release Hardening ----
+    print("\n" + "=" * 60)
+    print("Phase 18 — CI and Release Hardening")
+    print("=" * 60)
+    test_p18_release_checklist_exists()
+    test_p18_workflow_file_exists()
+    test_p18_workflow_triggers()
+    test_p18_workflow_required_commands()
+    test_p18_gitignore_excludes_dist()
+    test_p18_readme_has_ci_badge()
+    test_p18_release_checklist_coverage()
 
     print()
     print("=" * 60)

@@ -1,6 +1,6 @@
 # Context Vault Engine — Testing
 
-All tests live in `mcp/test_verify.py`. There are 264 test functions covering all implemented phases.
+All tests live in `mcp/test_verify.py`. There are 272 test functions covering all implemented phases.
 
 ---
 
@@ -506,6 +506,43 @@ py run.py app                  # starts server, opens browser to http://127.0.0.
 - `QUICKSTART.md` — Local App Launcher section added under Section 6.
 - `TESTING.md` — added Phase 17 section (this entry); test count updated.
 - `ROADMAP.md` — Phase 17 marked Complete; active phase updated to Phase 18.
+
+### Phase 18 — CI and Release Hardening
+
+Phase 18 adds GitHub Actions CI, a release checklist, artefact hygiene checks, and README badge. No new external dependencies were added. 7 deterministic backend tests were added.
+
+**Verification steps for Phase 18:**
+
+```bash
+py mcp/test_verify.py      # 272 tests — all must pass (7 new Phase 18 tests added)
+py run.py validate         # 19/19 valid
+py run.py security         # status: pass
+py run.py feedback         # exits 0, valid JSON
+py run.py export --overwrite   # status: ok; 7 files including context.html
+cd ui && npm run build     # must complete with 0 errors
+cd ..
+git status --short         # no dist/ or ui/dist/ entries
+```
+
+**Tests added (7 total, P18-A through P18-G):**
+
+- `test_p18_release_checklist_exists` — `RELEASE_CHECKLIST.md` exists in repository root.
+- `test_p18_workflow_file_exists` — `.github/workflows/verify.yml` exists.
+- `test_p18_workflow_triggers` — workflow `on:` block references both `push` and `pull_request`.
+- `test_p18_workflow_required_commands` — workflow text contains `requirements.txt`, `mcp/requirements.txt`, `mcp/test_verify.py`, `run.py validate`, `run.py security`, `run.py feedback`, and `run.py export --overwrite`.
+- `test_p18_gitignore_excludes_dist` — `.gitignore` contains both `dist/` and `ui/dist/`.
+- `test_p18_readme_has_ci_badge` — `README.md` references the `verify.yml` badge.
+- `test_p18_release_checklist_coverage` — `RELEASE_CHECKLIST.md` contains all required verification and release sections.
+
+**What was added:**
+
+- `.github/workflows/verify.yml` — GitHub Actions workflow: checkout, Python 3.12, install both requirements files, run test suite, validate, security, feedback, export, artefact hygiene check, Node 20 + `npm ci` + `npm run build`.
+- `RELEASE_CHECKLIST.md` — concise pre-release checklist covering verification, versioning, and GitHub release steps.
+- `.gitignore` — added `.pytest_cache/` entry.
+- `README.md` — CI badge added below title; test count updated to 272.
+- `mcp/test_verify.py` — 7 new Phase 18 tests.
+- `TESTING.md` — added Phase 18 section (this entry); test count updated to 272.
+- `ROADMAP.md` — Phase 18 marked Complete; active phase updated to Phase 19.
 
 ### Phase 16 — Visual Graph and Missing Concepts UI
 

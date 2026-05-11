@@ -35,3 +35,6 @@ dist/
 ui/dist/
 ui/.astro/
 ui/node_modules/
+
+# Test runner caches
+.pytest_cache/
