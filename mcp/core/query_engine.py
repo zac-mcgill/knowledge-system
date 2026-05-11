@@ -404,7 +404,7 @@ def get_note(vault_name: str, path: str) -> dict:
 
     # Phase 5: normalise and validate path
     decoded = urllib.parse.unquote(path)
-    normed = os.path.normpath(decoded)
+    normed = os.path.normpath(decoded.replace("\\", "/"))
 
     # Reject absolute paths outright
     if os.path.isabs(normed):
