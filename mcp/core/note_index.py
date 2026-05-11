@@ -279,6 +279,27 @@ def get_index_metadata(vault_name: str) -> dict | None:
         }
 
 
+def clear_vault_index(vault_name: str) -> bool:
+    """Remove the cached index entry for vault_name.
+
+    Safe to call at any time — does nothing if the vault has no cached index.
+    After this call the vault will not appear in index lookups until the next
+    build_index() / get_index() call.
+
+    Returns
+    -------
+    bool
+        True if an entry was present and removed, False otherwise.
+    """
+    lock = _get_vault_lock(vault_name)
+    with lock:
+        if vault_name in _indices:
+            del _indices[vault_name]
+            logger.info("index_cleared vault=%s", vault_name)
+            return True
+    return False
+
+
 def expire_index_cooldown(vault_name: str) -> None:
     """Reset the index schema-check timestamp to zero for ``vault_name``.
 

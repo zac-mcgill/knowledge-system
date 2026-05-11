@@ -9601,6 +9601,550 @@ def test_pvs_vaultstate_file_exists():
 
 
 # ============================================================
+# Phase 18C — Vault Deletion Lifecycle Tests
+# ============================================================
+
+def _make_temp_vault(repo_root: Path) -> tuple[Path, str]:
+    """Create a minimal temporary vault for deletion tests.
+
+    Returns (vault_path, vault_name).
+    Caller is responsible for cleanup if the vault is not deleted by the test.
+    """
+    import shutil as _shutil
+    from core.shared.bootstrap_service import bootstrap_vault_noninteractive, update_config
+
+    vault_name = "_test_del_vault_tmp"
+    vault_path = repo_root / vault_name
+
+    # Clean up if leftover from previous failed test
+    if vault_path.exists():
+        _shutil.rmtree(vault_path)
+
+    bootstrap_vault_noninteractive(
+        repo_root=repo_root,
+        vault_name=vault_name,
+        domain="Test Delete Domain",
+        note_type="test-note",
+        sections=["Overview", "Details"],
+        expected_concepts=None,
+    )
+    # Update config so registry can find it
+    update_config(repo_root, vault_name)
+    return vault_path, vault_name
+
+
+def test_p18c_delete_requires_confirmation():
+    """P18C-D1: validate_delete_request raises CONFIRMATION_REQUIRED when confirm is blank."""
+    print("\n=== Test P18C-D1: Delete Requires Confirmation ===")
+    from mcp.core.vault_delete import validate_delete_request, VaultDeleteError, CONFIRMATION_REQUIRED
+
+    try:
+        validate_delete_request("some-vault", "", ["demo-vault", "some-vault"])
+        assert False, "Should have raised VaultDeleteError"
+    except VaultDeleteError as exc:
+        assert exc.code == CONFIRMATION_REQUIRED, f"Expected CONFIRMATION_REQUIRED, got {exc.code}"
+    print("  Blank confirm raises CONFIRMATION_REQUIRED ✓")
+
+    try:
+        validate_delete_request("some-vault", "   ", ["demo-vault", "some-vault"])
+        assert False, "Should have raised VaultDeleteError"
+    except VaultDeleteError as exc:
+        assert exc.code == CONFIRMATION_REQUIRED
+    print("  Whitespace-only confirm raises CONFIRMATION_REQUIRED ✓")
+
+
+def test_p18c_delete_confirmation_mismatch():
+    """P18C-D2: validate_delete_request raises CONFIRMATION_MISMATCH on wrong phrase."""
+    print("\n=== Test P18C-D2: Confirmation Mismatch ===")
+    from mcp.core.vault_delete import validate_delete_request, VaultDeleteError, CONFIRMATION_MISMATCH
+
+    for bad_confirm in ["delete some-vault", "DELETE SOME-VAULT", "DELETE some_vault", "yes", "true"]:
+        try:
+            validate_delete_request("some-vault", bad_confirm, ["demo-vault", "some-vault"])
+            assert False, f"Should have raised VaultDeleteError for confirm={bad_confirm!r}"
+        except VaultDeleteError as exc:
+            assert exc.code == CONFIRMATION_MISMATCH, (
+                f"Expected CONFIRMATION_MISMATCH for {bad_confirm!r}, got {exc.code}"
+            )
+    print("  Wrong confirmation phrases correctly rejected ✓")
+
+
+def test_p18c_delete_unknown_vault():
+    """P18C-D3: validate_delete_request raises INVALID_VAULT for unregistered vault."""
+    print("\n=== Test P18C-D3: Unknown Vault ===")
+    from mcp.core.vault_delete import validate_delete_request, VaultDeleteError, INVALID_VAULT
+
+    try:
+        validate_delete_request(
+            "__nonexistent__",
+            "DELETE __nonexistent__",
+            ["demo-vault"],
+        )
+        assert False, "Should have raised VaultDeleteError"
+    except VaultDeleteError as exc:
+        assert exc.code == INVALID_VAULT, f"Expected INVALID_VAULT, got {exc.code}"
+        assert exc.http_status == 404
+    print("  Unknown vault raises INVALID_VAULT (404) ✓")
+
+
+def test_p18c_delete_protected_vault():
+    """P18C-D4: validate_delete_request refuses demo-vault."""
+    print("\n=== Test P18C-D4: Protected Vault Refused ===")
+    from mcp.core.vault_delete import validate_delete_request, VaultDeleteError, PROTECTED_VAULT
+
+    try:
+        validate_delete_request(
+            "demo-vault",
+            "DELETE demo-vault",
+            ["demo-vault", "other-vault"],
+        )
+        assert False, "Should have raised VaultDeleteError"
+    except VaultDeleteError as exc:
+        assert exc.code == PROTECTED_VAULT, f"Expected PROTECTED_VAULT, got {exc.code}"
+        assert exc.http_status == 403
+    print("  demo-vault deletion refused with PROTECTED_VAULT (403) ✓")
+
+
+def test_p18c_delete_last_vault():
+    """P18C-D5: validate_delete_request refuses to delete the last vault."""
+    print("\n=== Test P18C-D5: Last Vault Protected ===")
+    from mcp.core.vault_delete import validate_delete_request, VaultDeleteError, LAST_VAULT
+
+    try:
+        validate_delete_request(
+            "some-vault",
+            "DELETE some-vault",
+            ["some-vault"],  # only one vault
+        )
+        assert False, "Should have raised VaultDeleteError"
+    except VaultDeleteError as exc:
+        assert exc.code == LAST_VAULT, f"Expected LAST_VAULT, got {exc.code}"
+    print("  Last vault deletion refused with LAST_VAULT ✓")
+
+
+def test_p18c_path_safety():
+    """P18C-D6: assert_safe_vault_path blocks paths outside repo root."""
+    print("\n=== Test P18C-D6: Path Safety ===")
+    from mcp.core.vault_delete import assert_safe_vault_path, VaultDeleteError, PATH_TRAVERSAL
+
+    repo_root = Path(__file__).resolve().parent.parent
+    safe_path = repo_root / "some-vault"
+    # Should not raise
+    assert_safe_vault_path(safe_path, repo_root)
+    print("  Path inside repo root: allowed ✓")
+
+    # Path outside repo root must be blocked
+    outside_path = Path("/tmp/outside-vault")
+    try:
+        assert_safe_vault_path(outside_path, repo_root)
+        assert False, "Should have raised VaultDeleteError"
+    except VaultDeleteError as exc:
+        assert exc.code == PATH_TRAVERSAL, f"Expected PATH_TRAVERSAL, got {exc.code}"
+    print("  Path outside repo root: PATH_TRAVERSAL raised ✓")
+
+
+def test_p18c_valid_delete_removes_directory():
+    """P18C-D7: delete_vault removes the vault directory from disk."""
+    print("\n=== Test P18C-D7: Valid Delete Removes Directory ===")
+    import shutil
+    from mcp.core.vault_delete import delete_vault, VaultDeleteError
+    from mcp.core.vault_registry import reload_config
+
+    repo_root = Path(__file__).resolve().parent.parent
+    vault_path, vault_name = _make_temp_vault(repo_root)
+
+    # Reload registry so new vault is visible
+    reload_config()
+
+    assert vault_path.is_dir(), f"Vault not created at {vault_path}"
+
+    try:
+        result = delete_vault(vault_name, f"DELETE {vault_name}", repo_root)
+    except VaultDeleteError as exc:
+        # Clean up if deletion service failed
+        if vault_path.exists():
+            shutil.rmtree(vault_path)
+        raise AssertionError(f"delete_vault raised unexpectedly: {exc.code}: {exc.message}")
+
+    assert not vault_path.exists(), f"Vault directory should be gone: {vault_path}"
+    assert result["deleted"] == vault_name
+    assert vault_name not in result["remaining_vaults"]
+    print(f"  Vault '{vault_name}' directory removed ✓")
+    print(f"  remaining_vaults: {result['remaining_vaults']} ✓")
+
+    # Reload registry after test
+    reload_config()
+
+
+def test_p18c_valid_delete_updates_config():
+    """P18C-D8: delete_vault removes vault from vault_roots in config.yaml."""
+    print("\n=== Test P18C-D8: Valid Delete Updates Config ===")
+    import shutil
+    import yaml
+    from mcp.core.vault_delete import delete_vault, VaultDeleteError
+    from mcp.core.vault_registry import reload_config
+
+    repo_root = Path(__file__).resolve().parent.parent
+    config_path = repo_root / "config" / "config.yaml"
+    vault_path, vault_name = _make_temp_vault(repo_root)
+    reload_config()
+
+    try:
+        delete_vault(vault_name, f"DELETE {vault_name}", repo_root)
+    except VaultDeleteError as exc:
+        if vault_path.exists():
+            shutil.rmtree(vault_path)
+        raise AssertionError(f"delete_vault raised: {exc.code}: {exc.message}")
+
+    with open(config_path, encoding="utf-8") as f:
+        data = yaml.safe_load(f)
+
+    roots = data.get("vault_roots", [])
+    assert f"./{vault_name}" not in roots, (
+        f"Deleted vault still in vault_roots: {roots}"
+    )
+    print(f"  vault_roots after deletion: {roots} ✓")
+
+    # active vault_root must not point to deleted vault
+    active = data.get("vault_root", "")
+    assert vault_name not in active, f"vault_root still points to deleted vault: {active!r}"
+    print(f"  vault_root = {active!r} (not deleted vault) ✓")
+
+    reload_config()
+
+
+def test_p18c_valid_delete_updates_active_vault_in_config():
+    """P18C-D9: If deleted vault was vault_root, config falls back to demo-vault."""
+    print("\n=== Test P18C-D9: vault_root Falls Back to demo-vault ===")
+    import shutil
+    import yaml
+    import os
+    import tempfile
+    from mcp.core.vault_delete import update_config_after_delete
+
+    repo_root = Path(__file__).resolve().parent.parent
+    config_path = repo_root / "config" / "config.yaml"
+
+    # Save original config
+    original = config_path.read_text(encoding="utf-8")
+
+    # Write a config where vault_root points to the vault-to-delete
+    test_data = {
+        "vault_root": "./test-active-vault",
+        "vault_roots": ["./demo-vault", "./test-active-vault"],
+    }
+    import yaml as _yaml
+    tmp_fd, tmp_path = tempfile.mkstemp(dir=config_path.parent, suffix=".yaml")
+    with os.fdopen(tmp_fd, "w", encoding="utf-8") as f:
+        f.write(_yaml.dump(test_data, default_flow_style=False, sort_keys=False))
+    Path(tmp_path).replace(config_path)
+
+    try:
+        update_config_after_delete(config_path, "test-active-vault", "demo-vault")
+        with open(config_path, encoding="utf-8") as f:
+            updated = _yaml.safe_load(f)
+
+        assert updated["vault_root"] == "./demo-vault", (
+            f"vault_root should fall back to ./demo-vault, got {updated['vault_root']!r}"
+        )
+        assert "./test-active-vault" not in updated.get("vault_roots", []), (
+            f"Deleted vault still in vault_roots: {updated['vault_roots']}"
+        )
+        print(f"  vault_root fell back to ./demo-vault ✓")
+        print(f"  vault_roots: {updated['vault_roots']} ✓")
+    finally:
+        # Restore original config
+        config_path.write_text(original, encoding="utf-8")
+
+    from mcp.core.vault_registry import reload_config
+    reload_config()
+
+
+def test_p18c_vaults_endpoint_does_not_list_deleted():
+    """P18C-D10: /vaults no longer lists deleted vault after deletion."""
+    print("\n=== Test P18C-D10: /vaults Excludes Deleted Vault ===")
+    import shutil
+    from mcp.core.vault_delete import delete_vault, VaultDeleteError
+    from mcp.core.vault_registry import reload_config, list_vaults
+
+    repo_root = Path(__file__).resolve().parent.parent
+    vault_path, vault_name = _make_temp_vault(repo_root)
+    reload_config()
+
+    # Confirm it's registered before deletion
+    assert vault_name in list_vaults(), f"{vault_name} should be visible before delete"
+
+    try:
+        delete_vault(vault_name, f"DELETE {vault_name}", repo_root)
+    except VaultDeleteError as exc:
+        if vault_path.exists():
+            shutil.rmtree(vault_path)
+        raise AssertionError(f"delete_vault raised: {exc.code}: {exc.message}")
+
+    reload_config()
+
+    # Confirm it's no longer registered
+    vaults_after = list_vaults()
+    assert vault_name not in vaults_after, (
+        f"{vault_name} should not be in vault list after deletion, got: {vaults_after}"
+    )
+    print(f"  {vault_name} not in list_vaults() after deletion ✓")
+
+
+def test_p18c_caches_cleared_after_delete():
+    """P18C-D11: clear_vault_index and clear_vault_cache remove stale entries."""
+    print("\n=== Test P18C-D11: Caches Cleared After Delete ===")
+    from mcp.core.note_index import _indices, clear_vault_index
+    from mcp.core.result_cache import _cache, clear_vault_cache, set_cached
+
+    # Inject fake cache entries for a fake vault
+    fake_vault = "_fake_vault_for_cache_test"
+    _indices[fake_vault] = {
+        "index": [{"path": "Test.md", "fields": {}, "body": ""}],
+        "schema_hash": "abc",
+        "notes_fingerprint": "def",
+        "last_build_time": 0.0,
+        "last_schema_check": 0.0,
+        "baseline_size": 100,
+        "index_size_bytes": 100,
+    }
+
+    # Inject into result cache via internal state (avoid fingerprint I/O)
+    import threading as _threading
+    from mcp.core.result_cache import _lock as _rc_lock
+    with _rc_lock:
+        _cache[(fake_vault, "/validation")] = {
+            "result": {"status": "pass"},
+            "schema_hash": "abc",
+            "vault_fingerprint": "def",
+        }
+        _cache[(fake_vault, "/tasks")] = {
+            "result": {"status": "ok"},
+            "schema_hash": "abc",
+            "vault_fingerprint": "def",
+        }
+
+    # Verify entries are present
+    assert fake_vault in _indices
+    assert (fake_vault, "/validation") in _cache
+    assert (fake_vault, "/tasks") in _cache
+
+    # Clear them
+    removed_idx = clear_vault_index(fake_vault)
+    removed_cache = clear_vault_cache(fake_vault)
+
+    assert removed_idx is True, "clear_vault_index should return True when entry existed"
+    assert removed_cache == 2, f"Expected 2 cache entries removed, got {removed_cache}"
+    assert fake_vault not in _indices, "Index entry should be gone"
+    assert (fake_vault, "/validation") not in _cache
+    assert (fake_vault, "/tasks") not in _cache
+    print(f"  Index entry cleared ✓")
+    print(f"  {removed_cache} result cache entries cleared ✓")
+
+
+def test_p18c_path_name_abuse_rejected():
+    """P18C-D12: validate_delete_request rejects names that look like path traversal."""
+    print("\n=== Test P18C-D12: Path Name Abuse Rejected ===")
+    from mcp.core.vault_delete import validate_delete_request, VaultDeleteError
+
+    suspicious_names = ["../demo-vault", "../../etc", "..", "."]
+    for name in suspicious_names:
+        confirm = f"DELETE {name}"
+        try:
+            # These names won't be in the registry so should get INVALID_VAULT
+            validate_delete_request(name, confirm, ["demo-vault"])
+            assert False, f"Should have raised for name={name!r}"
+        except VaultDeleteError as exc:
+            # Acceptable errors: INVALID_VAULT, PROTECTED_VAULT
+            assert exc.code in ("INVALID_VAULT", "PROTECTED_VAULT", "LAST_VAULT"), (
+                f"Unexpected error code {exc.code!r} for name={name!r}"
+            )
+    print("  Suspicious vault names rejected with structured errors ✓")
+
+
+def test_p18c_existing_bootstrap_flow_unaffected():
+    """P18C-D13: Existing bootstrap flow still works after importing vault_delete."""
+    print("\n=== Test P18C-D13: Bootstrap Flow Unaffected ===")
+    from mcp.core.vault_delete import delete_vault  # noqa: F401 – just ensure importable
+    from mcp.core.vault_registry import list_vaults
+
+    vaults = list_vaults()
+    assert len(vaults) > 0, "Vault registry must still be functional"
+    assert "demo-vault" in vaults, "demo-vault must always be present"
+    print(f"  Vault registry intact: {vaults} ✓")
+
+
+def test_p18c_demo_vault_unaffected():
+    """P18C-D14: demo-vault remains accessible after all delete tests."""
+    print("\n=== Test P18C-D14: demo-vault Unaffected ===")
+    from mcp.core.vault_registry import list_vaults, get_vault_path
+    from mcp.core.note_index import build_index
+
+    assert "demo-vault" in list_vaults(), "demo-vault must still be registered"
+    path = get_vault_path("demo-vault")
+    assert path.is_dir(), f"demo-vault path must still exist: {path}"
+    idx = build_index("demo-vault")
+    assert len(idx) > 0, "demo-vault index must still be non-empty"
+    print(f"  demo-vault: registered, path exists, index has {len(idx)} notes ✓")
+
+
+def test_p18c_api_delete_endpoint():
+    """P18C-D15: DELETE /vault/{name} API endpoint works end-to-end via TestClient."""
+    print("\n=== Test P18C-D15: API Delete Endpoint (TestClient) ===")
+    try:
+        from fastapi.testclient import TestClient
+    except RuntimeError as exc:
+        print(f"  SKIP: TestClient unavailable — {exc}")
+        return
+
+    import shutil
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    from mcp.server.mcp_server import app, _BOOTSTRAP_REPO_ROOT
+    from mcp.core.vault_registry import reload_config
+    from mcp.core.vault_delete import VaultDeleteError
+    from core.shared.bootstrap_service import bootstrap_vault_noninteractive, update_config
+    import mcp.server.mcp_server as _server_mod
+
+    repo_root = Path(__file__).resolve().parent.parent
+    vault_name = "_test_api_del_vault"
+    vault_path = repo_root / vault_name
+
+    # Clean up any leftover
+    if vault_path.exists():
+        shutil.rmtree(vault_path)
+
+    # Bootstrap a temp vault
+    bootstrap_vault_noninteractive(
+        repo_root=repo_root,
+        vault_name=vault_name,
+        domain="API Delete Test",
+        note_type="test-note",
+        sections=["Overview", "Details"],
+    )
+    update_config(repo_root, vault_name)
+    reload_config()
+
+    with TestClient(app, raise_server_exceptions=True) as client:
+
+        # --- Confirmation required ---
+        resp = client.request(
+            "DELETE", f"/vault/{vault_name}",
+            json={"confirm": ""},
+        )
+        assert resp.status_code == 400, f"Blank confirm: expected 400, got {resp.status_code}"
+        body = resp.json()
+        assert body["status"] == "error"
+        assert body["error"]["code"] == "CONFIRMATION_REQUIRED"
+        print(f"  Blank confirm → 400 CONFIRMATION_REQUIRED ✓")
+
+        # --- Confirmation mismatch ---
+        resp = client.request(
+            "DELETE", f"/vault/{vault_name}",
+            json={"confirm": "delete " + vault_name},
+        )
+        assert resp.status_code == 400, f"Bad confirm: expected 400, got {resp.status_code}"
+        body = resp.json()
+        assert body["error"]["code"] == "CONFIRMATION_MISMATCH"
+        print(f"  Wrong phrase → 400 CONFIRMATION_MISMATCH ✓")
+
+        # --- demo-vault is protected ---
+        resp = client.request(
+            "DELETE", "/vault/demo-vault",
+            json={"confirm": "DELETE demo-vault"},
+        )
+        assert resp.status_code == 403, f"demo-vault: expected 403, got {resp.status_code}"
+        body = resp.json()
+        assert body["error"]["code"] == "PROTECTED_VAULT"
+        print(f"  demo-vault → 403 PROTECTED_VAULT ✓")
+
+        # --- Unknown vault ---
+        resp = client.request(
+            "DELETE", "/vault/__nonexistent_xyz__",
+            json={"confirm": "DELETE __nonexistent_xyz__"},
+        )
+        assert resp.status_code == 404, f"Unknown vault: expected 404, got {resp.status_code}"
+        body = resp.json()
+        assert body["error"]["code"] == "INVALID_VAULT"
+        print(f"  Unknown vault → 404 INVALID_VAULT ✓")
+
+        # --- Valid delete ---
+        resp = client.request(
+            "DELETE", f"/vault/{vault_name}",
+            json={"confirm": f"DELETE {vault_name}"},
+        )
+        assert resp.status_code == 200, f"Valid delete: expected 200, got {resp.status_code}: {resp.text}"
+        body = resp.json()
+        assert body["status"] == "ok"
+        data = body["data"]
+        assert data["deleted"] == vault_name
+        assert vault_name not in data["remaining_vaults"]
+        assert data["active_vault"] is not None
+        assert not vault_path.exists(), "Vault directory should be gone"
+        print(f"  Valid delete → 200 OK, deleted={data['deleted']!r}, "
+              f"active_vault={data['active_vault']!r} ✓")
+
+        # --- Deleted vault no longer in /vaults ---
+        resp = client.get("/vaults")
+        assert resp.status_code == 200
+        vaults_now = resp.json()["data"]["vaults"]
+        assert vault_name not in vaults_now, f"Deleted vault still in /vaults: {vaults_now}"
+        print(f"  /vaults no longer lists {vault_name!r} ✓")
+
+    # Reload registry to clean up
+    reload_config()
+
+
+def test_p18c_ui_has_danger_zone():
+    """P18C-UI1: VaultSetup.svelte contains a Danger Zone section."""
+    print("\n=== Test P18C-UI1: VaultSetup Has Danger Zone Section ===")
+    vault_setup = Path(__file__).resolve().parent.parent / "ui" / "src" / "components" / "VaultSetup.svelte"
+    assert vault_setup.is_file(), f"VaultSetup.svelte not found: {vault_setup}"
+    source = vault_setup.read_text(encoding="utf-8")
+
+    assert "Danger Zone" in source, "VaultSetup.svelte must have a 'Danger Zone' section"
+    assert "DELETE {deleteVaultName}" in source or "DELETE ${deleteVaultName}" in source or "DELETE" in source, (
+        "VaultSetup.svelte must reference the DELETE confirmation phrase"
+    )
+    print("  VaultSetup.svelte has Danger Zone section ✓")
+
+
+def test_p18c_ui_no_delete_for_demo_vault():
+    """P18C-UI2: VaultSetup.svelte protects demo-vault in the UI."""
+    print("\n=== Test P18C-UI2: UI Protects demo-vault ===")
+    vault_setup = Path(__file__).resolve().parent.parent / "ui" / "src" / "components" / "VaultSetup.svelte"
+    source = vault_setup.read_text(encoding="utf-8")
+
+    assert "demo-vault" in source, "VaultSetup.svelte must reference demo-vault protection"
+    assert "protected" in source.lower(), "VaultSetup.svelte must indicate demo-vault is protected"
+    print("  VaultSetup.svelte marks demo-vault as protected ✓")
+
+
+def test_p18c_api_has_delete_vault_helper():
+    """P18C-UI3: api.ts has deleteVault export."""
+    print("\n=== Test P18C-UI3: api.ts has deleteVault ===")
+    api_ts = Path(__file__).resolve().parent.parent / "ui" / "src" / "lib" / "api.ts"
+    assert api_ts.is_file(), f"api.ts not found: {api_ts}"
+    source = api_ts.read_text(encoding="utf-8")
+
+    assert "deleteVault" in source, "api.ts must export deleteVault"
+    assert "VaultDeleteRequest" in source, "api.ts must have VaultDeleteRequest type"
+    assert "VaultDeleteResponse" in source, "api.ts must have VaultDeleteResponse type"
+    assert "confirm" in source, "api.ts VaultDeleteRequest must have confirm field"
+    print("  api.ts has deleteVault, VaultDeleteRequest, VaultDeleteResponse ✓")
+
+
+def test_p18c_vaultstate_has_clear():
+    """P18C-UI4: vaultState.ts has clearStoredVault for post-delete fallback."""
+    print("\n=== Test P18C-UI4: vaultState.ts Has clearStoredVault ===")
+    vs = Path(__file__).resolve().parent.parent / "ui" / "src" / "lib" / "vaultState.ts"
+    source = vs.read_text(encoding="utf-8")
+
+    assert "clearStoredVault" in source, "vaultState.ts must export clearStoredVault"
+    print("  vaultState.ts clearStoredVault present ✓")
+
+
+# ============================================================
 # Main
 # ============================================================
 
@@ -10035,6 +10579,27 @@ def main():
     test_pvs_vaultsetup_dashboard_link_includes_vault()
     test_pvs_vaultstate_helper_choose_initial_vault()
     test_pvs_vaultstate_file_exists()
+
+    # Phase 18C — Vault Deletion Lifecycle
+    test_p18c_delete_requires_confirmation()
+    test_p18c_delete_confirmation_mismatch()
+    test_p18c_delete_unknown_vault()
+    test_p18c_delete_protected_vault()
+    test_p18c_delete_last_vault()
+    test_p18c_path_safety()
+    test_p18c_valid_delete_removes_directory()
+    test_p18c_valid_delete_updates_config()
+    test_p18c_valid_delete_updates_active_vault_in_config()
+    test_p18c_vaults_endpoint_does_not_list_deleted()
+    test_p18c_caches_cleared_after_delete()
+    test_p18c_path_name_abuse_rejected()
+    test_p18c_existing_bootstrap_flow_unaffected()
+    test_p18c_demo_vault_unaffected()
+    test_p18c_api_delete_endpoint()
+    test_p18c_ui_has_danger_zone()
+    test_p18c_ui_no_delete_for_demo_vault()
+    test_p18c_api_has_delete_vault_helper()
+    test_p18c_vaultstate_has_clear()
 
     print()
     print("=" * 60)

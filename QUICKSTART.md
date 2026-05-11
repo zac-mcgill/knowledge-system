@@ -555,6 +555,50 @@ EXPECTED_CONCEPTS: dict[str, frozenset[str]] = {
 
 ---
 
+## 6e-delete. Deleting a Vault (Phase 18C)
+
+Vaults can be permanently deleted through the API or the UI.
+
+> **Warning:** Deletion removes the entire vault folder from disk. There is no undo in the app. Back up your notes manually (e.g. copy the folder or commit to version control) before proceeding.
+
+### Via API
+
+```bash
+curl -X DELETE http://127.0.0.1:8000/vault/my-vault \
+  -H "Content-Type: application/json" \
+  -d '{"confirm": "DELETE my-vault"}'
+```
+
+The `confirm` field must be the exact phrase `DELETE <vault-name>` — case-sensitive, no extra whitespace.
+
+**Success response:**
+```json
+{
+  "status": "ok",
+  "data": {
+    "deleted": "my-vault",
+    "remaining_vaults": ["demo-vault"],
+    "active_vault": "demo-vault"
+  }
+}
+```
+
+**Rules:**
+- `demo-vault` is permanently protected and cannot be deleted.
+- The last registered vault cannot be deleted.
+- `config/config.yaml` is updated atomically after deletion.
+
+### Via UI
+
+1. Open [http://127.0.0.1:8000/app/vault-setup](http://127.0.0.1:8000/app/vault-setup).
+2. Scroll to the **Danger Zone** section at the bottom of the page.
+3. Select the vault to delete from the dropdown. `demo-vault` is shown but disabled.
+4. Read the warning banner, then type the confirmation phrase: `DELETE <vault-name>`.
+5. Click **Delete \<vault-name\>** (enabled only when phrase matches exactly).
+6. On success, the active vault in localStorage is updated to the fallback vault.
+
+---
+
 ## 6e. Bundle Builder UI (Phase 13A)
 
 A browser-based Bundle Builder is available for interactively generating and previewing context bundles.

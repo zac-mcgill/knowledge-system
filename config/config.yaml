@@ -1,3 +1,3 @@
 vault_root: ./demo-vault
 vault_roots:
-  - ./demo-vault
+- ./demo-vault

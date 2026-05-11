@@ -302,6 +302,39 @@ feat(bootstrap): write expected concepts into generated schemas
 
 ---
 
+### Phase 18C - Vault Lifecycle Management — **Complete**
+
+#### Purpose
+
+Allow users to safely delete non-demo vaults through the API and UI without manually editing `config.yaml`. Deletion is destructive and requires explicit typed confirmation.
+
+#### Delivered
+
+- `mcp/core/vault_delete.py` (NEW) — service layer with `validate_delete_request()`, `assert_safe_vault_path()`, `update_config_after_delete()`, and `delete_vault()`.
+- `mcp/core/note_index.py` — `clear_vault_index(vault_name)` evicts a vault's in-process note index.
+- `mcp/core/result_cache.py` — `clear_vault_cache(vault_name)` clears all cached results for a vault.
+- `DELETE /vault/{vault_name}` endpoint — requires exact `"DELETE {vault_name}"` confirmation; protects `demo-vault` and the last remaining vault; updates config atomically; clears registry, index, and cache.
+- `ui/src/lib/api.ts` — `deleteVault()`, `VaultDeleteRequest`, `VaultDeleteResponse`.
+- `ui/src/components/VaultSetup.svelte` — Danger Zone section with vault selector, confirmation phrase input, and delete button; post-delete localStorage fallback.
+- 18 new P18C tests covering all error paths, happy path, config updates, cache clearing, and UI/API contract assertions.
+- Docs updated: QUICKSTART.md, API.md, TESTING.md, ROADMAP.md.
+
+#### Safety Design
+
+- Vault path resolved only from registry (never from user input).
+- `demo-vault` is permanently protected.
+- Last vault is protected.
+- Directory deleted first; config updated only after successful deletion.
+- Exact case-sensitive confirmation phrase prevents accidental or agent-triggered deletion.
+
+#### Suggested Commit
+
+```
+feat(vault): safe vault deletion with typed confirmation
+```
+
+---
+
 ### Phase 19 - Context Controller Layer
 
 #### Purpose

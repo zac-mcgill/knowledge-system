@@ -817,3 +817,54 @@ export function fetchGraphMissing(
   if (vault) params.set('vault', vault);
   return get<GraphMissingNeighborsData>(`/graph/missing?${params.toString()}`);
 }
+
+// ---------------------------------------------------------------------------
+// Vault Deletion — DELETE /vault/{name}
+// ---------------------------------------------------------------------------
+
+export interface VaultDeleteRequest {
+  /** Must be exactly "DELETE <vault-name>". */
+  confirm: string;
+}
+
+export interface VaultDeleteResponse {
+  deleted: string;
+  remaining_vaults: string[];
+  active_vault: string;
+}
+
+/**
+ * DELETE /vault/{vaultName} — permanently delete a non-demo vault.
+ *
+ * Requires an exact confirmation phrase: "DELETE <vault-name>".
+ * demo-vault is always rejected. The last remaining vault is protected.
+ */
+export function deleteVault(
+  vaultName: string,
+  confirm: string,
+): Promise<ApiResult<VaultDeleteResponse>> {
+  try {
+    return fetch(`${API_BASE}/vault/${encodeURIComponent(vaultName)}`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ confirm }),
+    })
+      .then((resp) => resp.json())
+      .then((json) => json as ApiResult<VaultDeleteResponse>)
+      .catch((err: unknown) => ({
+        status: 'error' as const,
+        error: {
+          code: 'NETWORK_ERROR',
+          message: err instanceof Error ? err.message : 'Network request failed',
+        },
+      }));
+  } catch (err) {
+    return Promise.resolve({
+      status: 'error',
+      error: {
+        code: 'NETWORK_ERROR',
+        message: err instanceof Error ? err.message : 'Network request failed',
+      },
+    });
+  }
+}

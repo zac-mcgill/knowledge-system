@@ -557,6 +557,57 @@ git status --short         # no dist/ or ui/dist/ entries
 - `TESTING.md` — added Phase 18 section (this entry); test count updated to 272.
 - `ROADMAP.md` — Phase 18 marked Complete; active phase updated to Phase 19.
 
+### Phase 18C — Vault Lifecycle Management
+
+Safe vault deletion through API and UI. Users can permanently delete non-demo vaults via `DELETE /vault/{vault_name}` with explicit typed confirmation. A Danger Zone section was added to the Vault Setup page. 18 backend tests added.
+
+**Verification steps:**
+
+```bash
+py mcp/test_verify.py      # 322 tests — all must pass (18 new P18C tests added)
+py run.py validate         # 19/19 valid
+py run.py security         # status: pass
+py run.py feedback         # exits 0, valid JSON
+py run.py export --overwrite   # status: ok; 7 files including context.html
+cd ui && npm run build     # must complete with 0 errors
+```
+
+**Tests added (18 total, P18C-D1 through P18C-D15, P18C-UI1 through P18C-UI4):**
+
+- `test_p18c_delete_requires_confirmation` — blank or whitespace confirm raises `CONFIRMATION_REQUIRED`.
+- `test_p18c_delete_confirmation_mismatch` — wrong phrase raises `CONFIRMATION_MISMATCH`.
+- `test_p18c_delete_unknown_vault` — unregistered vault name raises `INVALID_VAULT` (404).
+- `test_p18c_delete_protected_vault` — `demo-vault` deletion raises `PROTECTED_VAULT` (403).
+- `test_p18c_delete_last_vault` — deleting the only vault raises `LAST_VAULT`.
+- `test_p18c_path_safety` — `assert_safe_vault_path` blocks paths outside the repo root with `PATH_TRAVERSAL`.
+- `test_p18c_valid_delete_removes_directory` — `delete_vault()` removes the vault directory from disk.
+- `test_p18c_valid_delete_updates_config` — deleted vault is removed from `vault_roots` in `config.yaml`.
+- `test_p18c_valid_delete_updates_active_vault_in_config` — if deleted vault was `vault_root`, config falls back to `demo-vault`.
+- `test_p18c_vaults_endpoint_does_not_list_deleted` — deleted vault is absent from `list_vaults()` after reload.
+- `test_p18c_caches_cleared_after_delete` — `clear_vault_index()` and `clear_vault_cache()` evict stale entries.
+- `test_p18c_path_name_abuse_rejected` — path-traversal names (`../demo-vault`, `..`) are rejected.
+- `test_p18c_existing_bootstrap_flow_unaffected` — vault registry still works correctly after importing `vault_delete`.
+- `test_p18c_demo_vault_unaffected` — `demo-vault` remains accessible, indexed, and populated after all delete tests.
+- `test_p18c_api_delete_endpoint` — end-to-end `DELETE /vault/{name}` TestClient test covering all error cases and the happy path.
+- `test_p18c_ui_has_danger_zone` — `VaultSetup.svelte` contains a Danger Zone section.
+- `test_p18c_ui_no_delete_for_demo_vault` — `VaultSetup.svelte` marks demo-vault as protected.
+- `test_p18c_api_has_delete_vault_helper` — `api.ts` exports `deleteVault`, `VaultDeleteRequest`, and `VaultDeleteResponse`.
+- `test_p18c_vaultstate_has_clear` — `vaultState.ts` exports `clearStoredVault`.
+
+**Files changed:**
+
+- `mcp/core/vault_delete.py` (NEW) — service layer: `validate_delete_request()`, `assert_safe_vault_path()`, `update_config_after_delete()`, `delete_vault()`.
+- `mcp/core/note_index.py` — added `clear_vault_index(vault_name)`.
+- `mcp/core/result_cache.py` — added `clear_vault_cache(vault_name)`.
+- `mcp/server/mcp_server.py` — added `VaultDeleteRequest` model and `DELETE /vault/{vault_name}` endpoint.
+- `ui/src/lib/api.ts` — added `deleteVault()`, `VaultDeleteRequest`, `VaultDeleteResponse`.
+- `ui/src/components/VaultSetup.svelte` — added Danger Zone section with vault selector, confirmation input, and delete button.
+- `mcp/test_verify.py` — 18 new P18C tests.
+- `API.md` — added `DELETE /vault/{vault_name}` endpoint documentation and error table entries.
+- `QUICKSTART.md` — added "Deleting a Vault" section with API and UI instructions.
+- `TESTING.md` — added Phase 18C section (this entry).
+- `ROADMAP.md` — Phase 18C marked Complete.
+
 ### Phase 18B-U — Schema Builder UX Hardening
 
 Bootstrap usability pass before Phase 19. Expected concepts are now written into generated `vault_schema.py` so that `GET /missing` works immediately after vault creation. 10 backend tests added.

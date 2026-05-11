@@ -1,10 +1,13 @@
 <script lang="ts">
   import {
     bootstrapVault,
+    deleteVault,
+    fetchVaults,
     isOk,
     type VaultBootstrapResponse,
+    type VaultDeleteResponse,
   } from '../lib/api.ts';
-  import { setStoredVault } from '../lib/vaultState.ts';
+  import { setStoredVault, getStoredVault, clearStoredVault } from '../lib/vaultState.ts';
 
   // ── Form state ─────────────────────────────────────────────────────────────
   let vaultName = '';
@@ -21,6 +24,91 @@
   let successData: VaultBootstrapResponse | null = null;
   let errorCode = '';
   let errorMsg = '';
+
+  // ── Delete vault state ─────────────────────────────────────────────────────
+  let deleteVaultName = '';
+  let deleteConfirmPhrase = '';
+  type DeleteState = 'idle' | 'loading' | 'success' | 'error';
+  let deleteState: DeleteState = 'idle';
+  let deleteSuccessData: VaultDeleteResponse | null = null;
+  let deleteErrorCode = '';
+  let deleteErrorMsg = '';
+  let availableVaults: string[] = [];
+  let vaultsLoaded = false;
+
+  async function loadVaults(): Promise<void> {
+    const result = await fetchVaults();
+    if (isOk(result)) {
+      availableVaults = result.data.vaults;
+    }
+    vaultsLoaded = true;
+  }
+
+  // Load available vaults for the Danger Zone section
+  loadVaults();
+
+  const PROTECTED_VAULT = 'demo-vault';
+
+  $: expectedDeletePhrase = deleteVaultName ? `DELETE ${deleteVaultName}` : '';
+  $: deleteConfirmValid = deleteConfirmPhrase.trim() === expectedDeletePhrase && expectedDeletePhrase !== '';
+  $: deleteTargetIsProtected = deleteVaultName === PROTECTED_VAULT;
+  $: canDelete =
+    deleteVaultName !== '' &&
+    !deleteTargetIsProtected &&
+    deleteConfirmValid &&
+    deleteState !== 'loading';
+
+  async function handleDelete(): Promise<void> {
+    if (!canDelete) return;
+    deleteState = 'loading';
+    deleteSuccessData = null;
+    deleteErrorCode = '';
+    deleteErrorMsg = '';
+
+    const result = await deleteVault(deleteVaultName, deleteConfirmPhrase.trim());
+
+    if (isOk(result)) {
+      deleteSuccessData = result.data;
+      deleteState = 'success';
+      // Clear selected vault in localStorage if it was the one just deleted
+      const stored = getStoredVault();
+      if (stored === deleteVaultName) {
+        clearStoredVault();
+        setStoredVault(result.data.active_vault);
+      }
+      // Refresh vault list
+      availableVaults = result.data.remaining_vaults;
+      // Reset delete form
+      deleteVaultName = '';
+      deleteConfirmPhrase = '';
+    } else {
+      deleteErrorCode = result.error?.code ?? 'UNKNOWN';
+      deleteErrorMsg = result.error?.message ?? 'An unexpected error occurred.';
+      deleteState = 'error';
+    }
+  }
+
+  function resetDeleteForm(): void {
+    deleteVaultName = '';
+    deleteConfirmPhrase = '';
+    deleteState = 'idle';
+    deleteSuccessData = null;
+    deleteErrorCode = '';
+    deleteErrorMsg = '';
+  }
+
+  function deleteErrorTitle(code: string): string {
+    if (code === 'INVALID_VAULT') return 'Unknown Vault';
+    if (code === 'PROTECTED_VAULT') return 'Protected Vault';
+    if (code === 'LAST_VAULT') return 'Cannot Delete Last Vault';
+    if (code === 'CONFIRMATION_REQUIRED') return 'Confirmation Required';
+    if (code === 'CONFIRMATION_MISMATCH') return 'Confirmation Mismatch';
+    if (code === 'PATH_TRAVERSAL') return 'Security Violation';
+    if (code === 'DELETE_FAILED') return 'Delete Failed';
+    if (code === 'CONFIG_UPDATE_FAILED') return 'Config Update Failed';
+    if (code === 'NETWORK_ERROR') return 'Backend Unavailable';
+    return 'Error';
+  }
 
   // ── Validation patterns ────────────────────────────────────────────────────
   const VAULT_NAME_RE = /^[A-Za-z0-9_-]+$/;
@@ -597,3 +685,160 @@
 
   </div><!-- end grid -->
 {/if}
+
+<!-- =========================================================
+     Danger Zone — Vault Management (Deletion)
+     ========================================================= -->
+<div class="mt-10">
+  <div class="border-t border-zinc-800 pt-8">
+    <h2 class="text-base font-semibold text-red-400 mb-1">Danger Zone</h2>
+    <p class="text-xs text-zinc-500 mb-5">
+      Permanently delete a vault and all its files. This cannot be undone by the app.
+      Exported packages are <strong>not</strong> the source of truth — the vault folder contains all notes.
+    </p>
+
+    <!-- Delete success message -->
+    {#if deleteState === 'success' && deleteSuccessData}
+      <div class="bg-emerald-950 border border-emerald-800 rounded-lg p-4 mb-4">
+        <div class="flex items-start gap-2.5">
+          <svg class="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
+          </svg>
+          <div class="min-w-0">
+            <p class="text-sm font-medium text-emerald-300">Vault deleted</p>
+            <p class="text-sm text-emerald-200 mt-0.5">
+              <span class="font-mono font-medium">{deleteSuccessData.deleted}</span> has been permanently removed.
+              Active vault set to <span class="font-mono font-medium">{deleteSuccessData.active_vault}</span>.
+            </p>
+            <div class="mt-3 flex flex-wrap gap-3">
+              <a
+                href="/app/?vault={deleteSuccessData.active_vault}"
+                class="inline-flex items-center gap-1.5 text-xs bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-200 px-3 py-1.5 rounded transition-colors"
+              >
+                Go to Dashboard
+              </a>
+              <button
+                on:click={resetDeleteForm}
+                class="text-xs text-zinc-400 hover:text-zinc-300 px-3 py-1.5 transition-colors"
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    {/if}
+
+    <!-- Delete error message -->
+    {#if deleteState === 'error'}
+      <div class="bg-red-950 border border-red-800 rounded-lg p-4 mb-4">
+        <div class="flex items-start gap-2.5">
+          <svg class="w-4 h-4 text-red-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <div class="min-w-0">
+            <p class="text-sm font-medium text-red-300">{deleteErrorTitle(deleteErrorCode)}</p>
+            <p class="text-sm text-red-200 mt-0.5 break-words">{deleteErrorMsg}</p>
+            <p class="text-xs font-mono text-red-700 mt-1.5">{deleteErrorCode}</p>
+            <button
+              on:click={() => { deleteState = 'idle'; }}
+              class="text-xs text-red-400 hover:text-red-300 mt-2 transition-colors"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      </div>
+    {/if}
+
+    <div class="bg-zinc-900 border border-red-900/50 rounded-lg p-4">
+
+      <!-- Vault selector -->
+      <div class="mb-4">
+        <label for="delete-vault-select" class="block text-sm font-medium text-zinc-300 mb-1.5">
+          Vault to delete
+        </label>
+        {#if !vaultsLoaded}
+          <p class="text-xs text-zinc-500">Loading vaults…</p>
+        {:else}
+          <select
+            id="delete-vault-select"
+            bind:value={deleteVaultName}
+            on:change={() => { deleteConfirmPhrase = ''; deleteState = 'idle'; }}
+            class="w-full bg-zinc-950 border border-zinc-700 text-zinc-100 text-sm rounded px-3 py-2 focus:outline-none focus:ring-1 focus:ring-red-600"
+          >
+            <option value="">— Select a vault —</option>
+            {#each availableVaults as v}
+              <option value={v} disabled={v === PROTECTED_VAULT}>
+                {v}{v === PROTECTED_VAULT ? ' (protected)' : ''}
+              </option>
+            {/each}
+          </select>
+          {#if deleteTargetIsProtected}
+            <p class="text-xs text-amber-400 mt-1.5">
+              <strong>demo-vault</strong> is protected and cannot be deleted via the app.
+            </p>
+          {/if}
+        {/if}
+      </div>
+
+      {#if deleteVaultName && !deleteTargetIsProtected}
+        <!-- Warning banner -->
+        <div class="bg-red-950/60 border border-red-800/60 rounded p-3 mb-4">
+          <p class="text-xs text-red-300 font-medium mb-1">Warning — this is permanent</p>
+          <ul class="text-xs text-red-400 space-y-0.5 list-disc list-inside">
+            <li>The entire <span class="font-mono">{deleteVaultName}/</span> folder will be deleted from disk.</li>
+            <li>This cannot be undone by the app.</li>
+            <li>Exported packages are not the source of truth — do not rely on them as backups.</li>
+          </ul>
+        </div>
+
+        <!-- Confirmation phrase -->
+        <div class="mb-4">
+          <label for="delete-confirm" class="block text-sm font-medium text-zinc-300 mb-1.5">
+            Type the confirmation phrase to enable deletion
+          </label>
+          <p class="text-xs text-zinc-500 mb-2">
+            To confirm, type exactly:
+            <span class="font-mono text-zinc-300 bg-zinc-800 px-1.5 py-0.5 rounded">DELETE {deleteVaultName}</span>
+          </p>
+          <input
+            id="delete-confirm"
+            type="text"
+            bind:value={deleteConfirmPhrase}
+            autocomplete="off"
+            spellcheck="false"
+            placeholder="DELETE {deleteVaultName}"
+            class="w-full bg-zinc-950 border {deleteConfirmPhrase && !deleteConfirmValid ? 'border-red-600 focus:ring-red-500' : deleteConfirmValid ? 'border-emerald-700 focus:ring-emerald-600' : 'border-zinc-700 focus:ring-zinc-600'} text-zinc-100 text-sm rounded px-3 py-2 focus:outline-none focus:ring-1 font-mono placeholder:text-zinc-700 placeholder:font-sans"
+          />
+          {#if deleteConfirmPhrase && !deleteConfirmValid}
+            <p class="text-xs text-red-400 mt-1.5">
+              Phrase must be exactly: <span class="font-mono">DELETE {deleteVaultName}</span>
+            </p>
+          {:else if deleteConfirmValid}
+            <p class="text-xs text-emerald-600 mt-1.5">Confirmation matches.</p>
+          {/if}
+        </div>
+
+        <!-- Delete button -->
+        <button
+          type="button"
+          on:click={handleDelete}
+          disabled={!canDelete}
+          class="w-full flex items-center justify-center gap-2 bg-red-700 hover:bg-red-600 disabled:bg-zinc-800 disabled:text-zinc-600 disabled:cursor-not-allowed text-white disabled:border disabled:border-zinc-700 text-sm font-medium px-4 py-2.5 rounded-lg transition-colors"
+        >
+          {#if deleteState === 'loading'}
+            <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+            </svg>
+            Deleting…
+          {:else}
+            Delete {deleteVaultName}
+          {/if}
+        </button>
+      {/if}
+
+    </div><!-- end danger zone card -->
+  </div>
+</div>

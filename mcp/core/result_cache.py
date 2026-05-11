@@ -109,3 +109,22 @@ def set_cached(vault_name: str, endpoint: str, result: dict) -> None:
             "vault_fingerprint": vault_fp,
         }
     logger.debug("cache_stored vault=%s endpoint=%s", vault_name, endpoint)
+
+
+def clear_vault_cache(vault_name: str) -> int:
+    """Evict all cached entries for vault_name.
+
+    Safe to call at any time — does nothing if the vault has no entries.
+
+    Returns
+    -------
+    int
+        Number of cache entries removed.
+    """
+    with _lock:
+        keys = [k for k in _cache if k[0] == vault_name]
+        for k in keys:
+            del _cache[k]
+    if keys:
+        logger.info("cache_cleared vault=%s entries_removed=%d", vault_name, len(keys))
+    return len(keys)

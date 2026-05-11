@@ -44,7 +44,8 @@ from typing import Any
 import mimetypes
 
 from mcp.core.vault_registry import list_vaults, get_vault_path, get_schema, reload_config
-from mcp.core.note_index import build_index, get_index, get_schema_hash, get_index_metadata
+from mcp.core.note_index import build_index, get_index, get_schema_hash, get_index_metadata, clear_vault_index
+from mcp.core.result_cache import clear_vault_cache
 from mcp.core.query_engine import query, list_notes, get_note, aggregate
 from mcp.core.contract_runner import run_all_checks, run_lightweight_checks
 from mcp.core.adapters.validation_adapter import get_validation
@@ -2152,6 +2153,113 @@ def endpoint_vault_bootstrap(req: VaultBootstrapRequest):
             "created": result["created"],
             "warnings": result["warnings"],
             "expected_concepts": result.get("expected_concepts", {"requested": 0, "written": 0}),
+        },
+    }
+
+
+# ---------- Phase 18C: Safe Vault Deletion ----------
+
+
+class VaultDeleteRequest(BaseModel):
+    """Request body for DELETE /vault/{name}."""
+
+    confirm: str = Field(
+        ...,
+        description=(
+            "Confirmation phrase. Must be exactly: 'DELETE <vault-name>'. "
+            "This prevents accidental deletion by vague or boolean confirmation."
+        ),
+    )
+
+
+@app.delete("/vault/{vault_name}")
+def endpoint_vault_delete(vault_name: str, req: VaultDeleteRequest):
+    """Permanently delete a non-demo vault.
+
+    Validates all safety rules, removes the vault directory, and updates
+    config/config.yaml atomically.  The in-process vault registry and all
+    caches for the deleted vault are refreshed immediately so no restart is
+    required.
+
+    Path parameter:
+        vault_name (str): Name of the vault to delete (not a path).
+
+    Request body:
+        confirm (str, required): Must be exactly ``DELETE <vault-name>``.
+            Boolean or vague confirmations are rejected to prevent accidental
+            deletion by an automated tool calling this endpoint.
+
+    Response data on success:
+        deleted (str): Name of the deleted vault.
+        remaining_vaults (list[str]): Vaults still registered after deletion.
+        active_vault (str): Recommended fallback vault (prefer demo-vault).
+
+    Error codes:
+        INVALID_VAULT:        Vault name is not registered (HTTP 404).
+        PROTECTED_VAULT:      Attempt to delete demo-vault (HTTP 403).
+        LAST_VAULT:           Attempt to delete the last remaining vault (HTTP 400).
+        CONFIRMATION_REQUIRED: confirm field is missing or blank (HTTP 400).
+        CONFIRMATION_MISMATCH: confirm does not match "DELETE <vault-name>" (HTTP 400).
+        PATH_TRAVERSAL:       Registered vault path is outside repo root (HTTP 400).
+        DELETE_FAILED:        Directory removal failed (HTTP 500).
+        CONFIG_UPDATE_FAILED: Config rewrite failed after directory was removed (HTTP 500).
+
+    Safety:
+        - Only named vaults in the registry can be deleted.
+        - demo-vault is unconditionally protected.
+        - The last vault cannot be deleted.
+        - The vault path is resolved from the registry only (never from user input).
+        - The resolved path must reside inside the repository root.
+        - Deletion via GET is not possible.
+    """
+    from mcp.core.vault_delete import delete_vault, VaultDeleteError
+
+    repo_root = _get_bootstrap_repo_root()
+
+    try:
+        result = delete_vault(vault_name, req.confirm, repo_root)
+    except VaultDeleteError as exc:
+        http_status_map = {
+            "INVALID_VAULT": 404,
+            "PROTECTED_VAULT": 403,
+            "LAST_VAULT": 400,
+            "CONFIRMATION_REQUIRED": 400,
+            "CONFIRMATION_MISMATCH": 400,
+            "PATH_TRAVERSAL": 400,
+            "DELETE_FAILED": 500,
+            "CONFIG_UPDATE_FAILED": 500,
+        }
+        status_code = http_status_map.get(exc.code, 400)
+        return _error(exc.code, exc.message, status_code)
+    except Exception as exc:
+        logger.exception("vault_delete_unhandled vault=%s", vault_name)
+        return _error("INTERNAL", f"Unexpected error during vault deletion: {exc}", 500)
+
+    # Refresh in-process vault registry
+    try:
+        reload_config()
+        logger.info("vault_registry_refreshed after_delete vault=%s", vault_name)
+    except Exception as exc:
+        logger.warning(
+            "vault_registry_refresh_failed vault=%s error=%s", vault_name, exc
+        )
+
+    # Evict stale caches for the deleted vault
+    try:
+        clear_vault_index(vault_name)
+        clear_vault_cache(vault_name)
+        logger.info("vault_caches_cleared vault=%s", vault_name)
+    except Exception as exc:
+        logger.warning(
+            "vault_cache_clear_failed vault=%s error=%s", vault_name, exc
+        )
+
+    return {
+        "status": "ok",
+        "data": {
+            "deleted": result["deleted"],
+            "remaining_vaults": result["remaining_vaults"],
+            "active_vault": result["active_vault"],
         },
     }
 

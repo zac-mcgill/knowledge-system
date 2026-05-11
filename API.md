@@ -56,6 +56,7 @@ py mcp/server/mcp_server.py
 | `GET` | `/app` | Serve compiled local web UI (index.html) |
 | `GET` | `/app/{ui_path:path}` | Serve compiled local web UI static assets |
 | `POST` | `/vault/bootstrap` | Create a new vault (Phase 11A) |
+| `DELETE` | `/vault/{vault_name}` | Permanently delete a non-demo vault (Phase 18C) |
 
 ---
 
@@ -881,6 +882,58 @@ The in-process vault registry is refreshed automatically after a successful boot
 
 ---
 
+### DELETE /vault/{vault_name}
+
+Permanently delete a non-demo vault. Requires explicit typed confirmation. Removes all vault files from disk, updates `config/config.yaml`, and clears in-process caches.
+
+**Path parameter:**
+- `vault_name` — registered vault name to delete.
+
+**Request body:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `confirm` | string | yes | Exact phrase `"DELETE {vault_name}"` — case-sensitive, no extra whitespace. |
+
+**Example request:**
+```json
+{"confirm": "DELETE dogs-vault"}
+```
+
+**Success response (HTTP 200):**
+```json
+{
+  "status": "ok",
+  "data": {
+    "deleted": "dogs-vault",
+    "remaining_vaults": ["demo-vault"],
+    "active_vault": "demo-vault"
+  }
+}
+```
+
+**Error responses:**
+
+| Code | HTTP Status | Trigger |
+|------|-------------|---------|
+| `CONFIRMATION_REQUIRED` | 400 | `confirm` field is blank or whitespace |
+| `CONFIRMATION_MISMATCH` | 400 | `confirm` does not match `"DELETE {vault_name}"` exactly |
+| `INVALID_VAULT` | 404 | `vault_name` is not registered |
+| `PROTECTED_VAULT` | 403 | Attempted deletion of `demo-vault` |
+| `LAST_VAULT` | 409 | Deleting would leave zero vaults |
+| `PATH_TRAVERSAL` | 400 | Resolved vault path is outside the repository root |
+| `DELETE_FAILED` | 500 | `shutil.rmtree` failed (filesystem error) |
+| `CONFIG_UPDATE_FAILED` | 500 | Config write failed after directory was already deleted |
+
+**Safety design:**
+- Vault path is resolved only from the registry — never from user-supplied paths.
+- `demo-vault` is permanently protected and cannot be deleted via the API.
+- The last remaining vault cannot be deleted.
+- Directory is deleted first; config is updated only after successful deletion. If config write fails after deletion, the error code `CONFIG_UPDATE_FAILED` is returned with the fallback vault in `active_vault`.
+- After a successful delete, `vault_registry.reload_config()`, `clear_vault_index()`, and `clear_vault_cache()` are called to evict stale data.
+
+---
+
 ## Error Reference
 
 | Code | HTTP Status | Meaning |
@@ -898,7 +951,12 @@ The in-process vault registry is refreshed automatically after a successful boot
 | `UI_NOT_BUILT` | 503 | `ui/dist/` not present — run `npm run build` in `ui/` |
 | `VAULT_EXISTS` | 409 | Vault directory already exists (bootstrap) |
 | `BOOTSTRAP_FAILED` | 500 | Vault creation or template generation error (bootstrap) |
-| `CONFIG_UPDATE_FAILED` | 500 | Config write failed during bootstrap |
+| `CONFIG_UPDATE_FAILED` | 500 | Config write failed during bootstrap or vault deletion |
 | `FEEDBACK_NOT_FOUND` | 404 | Feedback entry ID not found in feedback file |
 | `FEEDBACK_WRITE_FAILED` | 500 | Feedback file write error (atomic write failed) |
+| `PROTECTED_VAULT` | 403 | Deletion of demo-vault refused |
+| `LAST_VAULT` | 409 | Deletion refused — would leave zero vaults |
+| `CONFIRMATION_REQUIRED` | 400 | Delete confirm field is blank |
+| `CONFIRMATION_MISMATCH` | 400 | Delete confirm phrase does not match exactly |
+| `DELETE_FAILED` | 500 | Vault directory deletion failed (filesystem error) |
 | `INTERNAL` | 500 | Unexpected server error |
