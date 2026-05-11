@@ -1087,6 +1087,51 @@ echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":
 
 ---
 
+## 6n. Private Cloud Mode (Phase 21)
+
+Run Context Vault Engine on a personal VPS or private server and access it from trusted clients with token-based authentication. All local behaviour is unchanged by default.
+
+> **Security:** Never expose the API port directly on a public IP. Use Tailscale, WireGuard, Cloudflare Tunnel, or a TLS reverse proxy. See `DEPLOYMENT.md`.
+
+### Environment variables
+
+| Variable | Purpose | Default |
+|----------|---------|---------|
+| `CVE_PRIVATE_CLOUD_ENABLED` | Enable private cloud mode | `false` |
+| `CVE_AUTH_TOKEN` | Bearer token (keep secret, never commit) | _(empty)_ |
+| `CVE_REQUIRE_AUTH` | Require auth for all non-health routes | `false` locally; `true` when private cloud enabled |
+| `CVE_REMOTE_READ_ONLY` | Block mutating routes | `true` when private cloud enabled |
+| `CVE_PUBLIC_BASE_URL` | Public URL for status display | _(empty)_ |
+| `CVE_DEPLOYMENT_MODE` | `local`, `vps`, or `tunnel` | `local` |
+
+### Local test of private mode
+
+```bash
+# Generate a token
+TOKEN=$(python -c "import secrets; print(secrets.token_hex(32))")
+
+# Start with private cloud mode
+CVE_PRIVATE_CLOUD_ENABLED=true CVE_AUTH_TOKEN="$TOKEN" py run.py app
+
+# Check status (no auth required)
+curl http://localhost:8000/private/status
+
+# Authenticated read
+curl -H "Authorization: Bearer $TOKEN" http://localhost:8000/vaults
+# or
+curl -H "X-CVE-Token: $TOKEN" http://localhost:8000/vaults
+
+# Unauthenticated → 401 AUTH_REQUIRED
+curl http://localhost:8000/vaults
+
+# Write in read-only mode → 403 REMOTE_READ_ONLY
+curl -X PUT -H "Authorization: Bearer $TOKEN" http://localhost:8000/note
+```
+
+For full VPS deployment instructions, systemd service example, reverse proxy config, backup guidance, and firewall rules, see **`DEPLOYMENT.md`**.
+
+---
+
 ## 8. Run Verification Tests (Optional)
 
 Core tests (requires only `requirements.txt`):

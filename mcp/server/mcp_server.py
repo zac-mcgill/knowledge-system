@@ -71,6 +71,13 @@ from core.shared.context_security import scan_vault_context as _scan_vault_conte
 from core.shared.context_security import scan_context_bundle as _scan_context_bundle
 from mcp.core.note_write import update_note as _update_note
 from mcp.core.context_controller import get_context_state, build_context_plan
+from mcp.core.private_cloud import (
+    load_private_cloud_config,
+    private_cloud_status,
+    require_auth,
+    is_remote_read_only,
+    verify_token,
+)
 
 
 # ---------- Structured Logging (Phase 7) ----------
@@ -270,6 +277,9 @@ async def lifespan(app: FastAPI):
 
     logger.info("startup_complete vaults=%d", len(vaults))
 
+    # Phase 21: Private cloud mode startup checks
+    _check_private_cloud_config()
+
     # Graceful shutdown: register signal handlers
     _install_signal_handlers()
 
@@ -290,6 +300,55 @@ async def lifespan(app: FastAPI):
         "shutdown_summary uptime_s=%d requests_served=%d",
         int(time.monotonic() - _start_time), _request_count,
     )
+
+
+# ---------- Phase 21: Private Cloud Mode helpers ----------
+
+# Mutating routes that are blocked when CVE_REMOTE_READ_ONLY=true.
+# Matched by (method, path_prefix).  Order is checked most-specific first.
+_WRITE_PATH_PREFIXES: tuple[tuple[str, str], ...] = (
+    ("PUT", "/note"),
+    ("POST", "/feedback/normalise"),
+    ("POST", "/feedback"),
+    ("PUT", "/feedback/"),
+    ("DELETE", "/feedback/"),
+    ("POST", "/vault/bootstrap"),
+    ("DELETE", "/vault/"),
+    ("POST", "/context/export"),
+)
+
+# Paths always allowed without auth (even when CVE_REQUIRE_AUTH=true).
+_AUTH_EXEMPT_PATHS: frozenset[str] = frozenset({"/health", "/private/status"})
+
+
+def _is_write_path(method: str, path: str) -> bool:
+    """Return True if this method+path targets a mutating route."""
+    method = method.upper()
+    for m, prefix in _WRITE_PATH_PREFIXES:
+        if method == m and path.startswith(prefix):
+            return True
+    return False
+
+
+def _check_private_cloud_config() -> None:
+    """Log a startup summary for private cloud mode.
+
+    Does not raise; warnings are emitted to the structured log only.
+    """
+    cfg = load_private_cloud_config()
+    if cfg["enabled"]:
+        logger.info(
+            "private_cloud_mode enabled=true deployment_mode=%s "
+            "require_auth=%s token_configured=%s remote_read_only=%s",
+            cfg["deployment_mode"],
+            cfg["require_auth"],
+            cfg["token_configured"],
+            cfg["remote_read_only"],
+        )
+        for w in cfg["warnings"]:
+            logger.warning("private_cloud_config_warning msg=%s", w)
+    else:
+        logger.info("private_cloud_mode enabled=false (local mode)")
 
 
 def _install_signal_handlers() -> None:
@@ -332,7 +391,7 @@ app.add_middleware(
         "http://127.0.0.1:4322",
     ],
     allow_methods=["GET", "POST", "PUT", "DELETE"],
-    allow_headers=["Content-Type"],
+    allow_headers=["Content-Type", "Authorization", "X-CVE-Token"],
     allow_credentials=False,
 )
 
@@ -393,6 +452,52 @@ async def request_middleware(request: Request, call_next):
                 "error": {
                     "code": "RATE_LIMIT",
                     "message": "Too many requests",
+                },
+            },
+        )
+
+    # Phase 21: authentication check
+    path = request.url.path
+    if path not in _AUTH_EXEMPT_PATHS and require_auth():
+        # Extract token from Authorization: Bearer <token> or X-CVE-Token: <token>
+        token_candidate = ""
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.lower().startswith("bearer "):
+            token_candidate = auth_header[7:].strip()
+        if not token_candidate:
+            token_candidate = request.headers.get("X-CVE-Token", "").strip()
+
+        if not verify_token(token_candidate):
+            logger.warning(
+                "auth_required_rejected method=%s path=%s", request.method, path
+            )
+            return JSONResponse(
+                status_code=401,
+                content={
+                    "status": "error",
+                    "error": {
+                        "code": "AUTH_REQUIRED",
+                        "message": (
+                            "Authentication required. "
+                            "Provide a valid token via 'Authorization: Bearer <token>' "
+                            "or 'X-CVE-Token: <token>' header."
+                        ),
+                    },
+                },
+            )
+
+    # Phase 21: remote read-only enforcement
+    if _is_write_path(request.method, path) and is_remote_read_only():
+        logger.warning(
+            "read_only_blocked method=%s path=%s", request.method, path
+        )
+        return JSONResponse(
+            status_code=403,
+            content={
+                "status": "error",
+                "error": {
+                    "code": "REMOTE_READ_ONLY",
+                    "message": "Remote read-only mode blocks this operation.",
                 },
             },
         )
@@ -848,6 +953,32 @@ def endpoint_health():
         return {"status": "ok", "data": health_data}
     except Exception as exc:
         return _error("HEALTH_FAILED", f"Health check failed: {exc}", 500)
+
+
+@app.get("/private/status")
+def endpoint_private_status():
+    """Return private cloud mode configuration status.
+
+    Always returns HTTP 200 when reachable.  Never includes the raw auth token.
+
+    Response data:
+        enabled (bool): True if CVE_PRIVATE_CLOUD_ENABLED=true.
+        deployment_mode (str): Value of CVE_DEPLOYMENT_MODE (local/vps/tunnel).
+        require_auth (bool): True if authentication is currently required.
+        token_configured (bool): True if a non-empty CVE_AUTH_TOKEN is set.
+        remote_read_only (bool): True if mutating routes are blocked.
+        public_base_url (str | null): Value of CVE_PUBLIC_BASE_URL if set.
+        warnings (list[str]): Configuration warnings (no secrets).
+        protected_methods (list[str]): HTTP methods blocked in read-only mode.
+
+    Note:
+        /private/status is accessible without authentication even when
+        CVE_REQUIRE_AUTH=true, so operators can verify configuration.
+    """
+    try:
+        return {"status": "ok", "data": private_cloud_status()}
+    except Exception as exc:
+        return _error("STATUS_FAILED", f"Status check failed: {exc}", 500)
 
 
 @app.get("/contract")

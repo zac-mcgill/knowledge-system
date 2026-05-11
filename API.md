@@ -17,6 +17,46 @@ py mcp/server/mcp_server.py
 - Rate limit: 50 requests/second (global, in-memory). HTTP 429 on excess.
 - All note paths use vault-relative POSIX forward slashes (e.g. `Fundamentals/Algorithms.md`).
 
+## Authentication (Private Cloud Mode)
+
+When `CVE_PRIVATE_CLOUD_ENABLED=true`, authentication is required for all non-health API routes.
+
+**Token header formats (either is accepted):**
+
+```
+Authorization: Bearer <token>
+X-CVE-Token: <token>
+```
+
+**Unauthenticated request returns HTTP 401:**
+```json
+{"status": "error", "error": {"code": "AUTH_REQUIRED", "message": "Authentication required. ..."}}
+```
+
+**Mutating route in read-only mode returns HTTP 403:**
+```json
+{"status": "error", "error": {"code": "REMOTE_READ_ONLY", "message": "Remote read-only mode blocks this operation."}}
+```
+
+**Auth-exempt routes (always accessible without a token):**
+- `GET /health`
+- `GET /private/status`
+
+**Environment variables controlling auth:**
+
+| Variable | Purpose | Default |
+|----------|---------|---------|
+| `CVE_PRIVATE_CLOUD_ENABLED` | Enable private cloud mode | `false` |
+| `CVE_AUTH_TOKEN` | Secret bearer token (never committed or logged) | _(empty)_ |
+| `CVE_REQUIRE_AUTH` | Require auth for API routes | `false` locally; `true` when private cloud enabled |
+| `CVE_REMOTE_READ_ONLY` | Block all mutating HTTP routes | `true` when private cloud enabled |
+| `CVE_PUBLIC_BASE_URL` | Public base URL for status display only | _(empty)_ |
+| `CVE_DEPLOYMENT_MODE` | Deployment mode tag: `local`, `vps`, `tunnel` | `local` |
+
+**Local mode is unchanged.** When `CVE_PRIVATE_CLOUD_ENABLED` is not set (or set to `false`), all existing behaviour is identical — no auth is required and no routes are blocked.
+
+See `DEPLOYMENT.md` for full deployment and VPS setup guidance.
+
 ---
 
 ## Route Index
@@ -25,6 +65,7 @@ py mcp/server/mcp_server.py
 |--------|------|---------|
 | `GET` | `/vaults` | List registered vault names |
 | `GET` | `/health` | Server health and request metrics |
+| `GET` | `/private/status` | Private cloud mode configuration status (Phase 21) |
 | `GET` | `/contract` | System contract check |
 | `GET` | `/summary` | Vault-level completion summary |
 | `POST` | `/query` | Filtered note query |
@@ -96,6 +137,56 @@ Server health, vault metrics, and request statistics.
     "requests_served": 10,
     "rate_limit_status": {"max_per_second": 50, "current_window": 1, "total_rejected": 0},
     "metrics": {"per_endpoint": {"/health": 1}, "avg_response_time_ms": 2.5}
+  }
+}
+```
+
+---
+
+### GET /private/status
+
+Return private cloud mode configuration status. Always accessible without authentication — even when `CVE_REQUIRE_AUTH=true`.
+
+**Response data:**
+- `enabled` (bool) — True if `CVE_PRIVATE_CLOUD_ENABLED=true`.
+- `deployment_mode` (str) — Value of `CVE_DEPLOYMENT_MODE` (`local`, `vps`, `tunnel`).
+- `require_auth` (bool) — True if authentication is currently required.
+- `token_configured` (bool) — True if `CVE_AUTH_TOKEN` is set. Never exposes the token value.
+- `remote_read_only` (bool) — True if mutating routes are blocked.
+- `public_base_url` (str | null) — Value of `CVE_PUBLIC_BASE_URL` if set.
+- `warnings` (list[str]) — Configuration warnings (no secrets).
+- `protected_methods` (list[str]) — HTTP methods blocked in read-only mode.
+
+**Example response (private cloud enabled):**
+```json
+{
+  "status": "ok",
+  "data": {
+    "enabled": true,
+    "deployment_mode": "vps",
+    "require_auth": true,
+    "token_configured": true,
+    "remote_read_only": true,
+    "public_base_url": "https://vault.example.com",
+    "warnings": [],
+    "protected_methods": ["PUT", "POST", "DELETE"]
+  }
+}
+```
+
+**Example response (local mode):**
+```json
+{
+  "status": "ok",
+  "data": {
+    "enabled": false,
+    "deployment_mode": "local",
+    "require_auth": false,
+    "token_configured": false,
+    "remote_read_only": false,
+    "public_base_url": null,
+    "warnings": [],
+    "protected_methods": []
   }
 }
 ```

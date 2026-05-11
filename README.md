@@ -4,7 +4,7 @@
 
 Context Vault Engine is a local-first Python pipeline for validating, scanning, and securely packaging structured Markdown content. It enforces a schema contract on every note, scans content for credential leaks, prompt-injection patterns, and suspicious executable/script blocks, then exports integrity-verified packages with SHA-256 manifests. All security rules are deterministic and regex-based, so every finding is explainable, reproducible, and auditable without an LLM or cloud dependency.
 
-**Local-first Python pipeline: credential leak scanning, prompt-injection detection, schema enforcement, rate-limited API, path-traversal blocking, SHA-256 artefact integrity, MCP stdio compatibility layer. 382 tests.**
+**Local-first Python pipeline: credential leak scanning, prompt-injection detection, schema enforcement, rate-limited API, path-traversal blocking, SHA-256 artefact integrity, MCP stdio compatibility layer, private cloud mode. 396 tests.**
 
 ---
 
@@ -20,7 +20,8 @@ Context Vault Engine is a local-first Python pipeline for validating, scanning, 
 - Optional export security gate: `require_security_pass: true` aborts export on `fail`-severity findings
 - Relationship graph, quality audit, missing-concept detection
 - MCP stdio compatibility for read-only vault inspection and deterministic context planning
-- 382 deterministic tests
+- Private Cloud Mode: token-authenticated, read-only remote API access — self-hosted, no cloud accounts required
+- 396 deterministic tests
 
 ---
 
@@ -80,6 +81,7 @@ Each command exits `0` on success, `1` on failure, and writes structured JSON ou
 | **Feedback** | Parses vault feedback entries and adjusts task priorities when requested. Does not rewrite notes. |
 | **API** | Serves all of the above through a rate-limited FastAPI HTTP interface for programmatic use. |
 | **MCP** | Exposes vault capabilities as JSON-RPC tools, resources, and prompts over stdio for use with MCP-compatible local clients. Read-only, deterministic. |
+| **Private Cloud** | Optional token-authenticated read-only remote access mode. Self-hosted, no cloud dependencies. Mutating routes blocked by default in remote mode. See `DEPLOYMENT.md`. |
 
 ---
 
@@ -133,6 +135,10 @@ py run.py security --fail-on-warning  # exit 1 for warning results too
 
 # MCP stdio server (Phase 20)
 py run.py mcp                     # start MCP JSON-RPC stdio server
+
+# Private Cloud Mode (Phase 21) — opt-in, local mode unchanged
+# See DEPLOYMENT.md for full setup
+CVE_PRIVATE_CLOUD_ENABLED=true CVE_AUTH_TOKEN=<token> py run.py app
 
 # Local app launcher (Phase 17)
 py run.py app                     # start server + open browser UI

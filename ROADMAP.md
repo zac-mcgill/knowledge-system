@@ -120,7 +120,7 @@ The backend is strong. The local UI has reached a usable application baseline. T
 | 18    | CI and Release Hardening                | Complete |
 | 19    | Context Controller Layer                | Complete |
 | 20    | MCP Compatibility Layer                 | Complete |
-| 21    | Private Cloud Mode                      | Planned  |
+| 21    | Private Cloud Mode                      | Complete |
 | 22    | Session and Project State Layer         | Planned  |
 | 23    | Safe Memory Write Queue                 | Planned  |
 | 24    | Device Profiles and Context Budgets     | Planned  |

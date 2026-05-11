@@ -11134,6 +11134,25 @@ def main():
     test_p20_no_destructive_tools()
     test_p20_tool_calls_deterministic()
 
+    # ---- Phase 21: Private Cloud Mode ----
+    print("\n" + "=" * 60)
+    print("Phase 21 — Private Cloud Mode")
+    print("=" * 60)
+    test_p21_config_defaults_local_safe()
+    test_p21_private_mode_enabled_reports_correctly()
+    test_p21_private_status_shape_no_token_leak()
+    test_p21_read_route_without_token_returns_401()
+    test_p21_read_route_with_bearer_token_succeeds()
+    test_p21_read_route_with_x_cve_token_succeeds()
+    test_p21_invalid_token_returns_401()
+    test_p21_write_route_blocked_read_only()
+    test_p21_write_route_allowed_when_read_only_false()
+    test_p21_health_no_token_leak()
+    test_p21_docs_mention_private_cloud()
+    test_p21_api_docs_error_codes()
+    test_p21_deployment_md_complete()
+    test_p21_existing_tests_unaffected()
+
     print()
     print("=" * 60)
     print("ALL VERIFICATION TESTS PASSED")
@@ -11699,6 +11718,461 @@ def test_p20_tool_calls_deterministic():
     data2 = r2[0]["result"]["structuredContent"]
     assert data1 == data2, f"Tool call not deterministic: {data1} vs {data2}"
     print(f"  cve.list_vaults: same result on repeated calls ✓")
+
+
+# ============================================================
+# Phase 21 — Private Cloud Mode Tests
+# ============================================================
+
+
+def _p21_env(**overrides):
+    """Context manager: temporarily override environment variables for testing.
+
+    Restores original values (or removes new keys) on exit.  Safe with any
+    existing env state; tests do not depend on one another.
+    """
+    import os
+    import contextlib
+
+    @contextlib.contextmanager
+    def _ctx():
+        originals = {k: os.environ.get(k) for k in overrides}
+        try:
+            for k, v in overrides.items():
+                if v is None:
+                    os.environ.pop(k, None)
+                else:
+                    os.environ[k] = v
+            yield
+        finally:
+            for k, original_v in originals.items():
+                if original_v is None:
+                    os.environ.pop(k, None)
+                else:
+                    os.environ[k] = original_v
+
+    return _ctx()
+
+
+def test_p21_config_defaults_local_safe():
+    """P21-1: Default config (no env vars) is local-safe: disabled, no auth, no warnings."""
+    print("\n=== Test P21-1: config defaults are local-safe ===")
+    import os
+    from mcp.core.private_cloud import load_private_cloud_config
+
+    _keys = [
+        "CVE_PRIVATE_CLOUD_ENABLED", "CVE_AUTH_TOKEN", "CVE_REQUIRE_AUTH",
+        "CVE_REMOTE_READ_ONLY", "CVE_PUBLIC_BASE_URL", "CVE_DEPLOYMENT_MODE",
+    ]
+    with _p21_env(**{k: None for k in _keys}):
+        cfg = load_private_cloud_config()
+
+    assert cfg["enabled"] is False, f"Expected enabled=False, got {cfg['enabled']}"
+    assert cfg["require_auth"] is False, f"Expected require_auth=False, got {cfg['require_auth']}"
+    assert cfg["token_configured"] is False
+    # No warnings in default local mode
+    assert cfg["warnings"] == [], f"Expected no warnings, got {cfg['warnings']}"
+    print(f"  Default config: enabled=False, require_auth=False, no warnings ✓")
+
+
+def test_p21_private_mode_enabled_reports_correctly():
+    """P21-2: Private mode enabled with token reports enabled/auth/read-only correctly."""
+    print("\n=== Test P21-2: private mode enabled with token ===")
+    from mcp.core.private_cloud import load_private_cloud_config
+
+    with _p21_env(
+        CVE_PRIVATE_CLOUD_ENABLED="true",
+        CVE_AUTH_TOKEN="test-secret-token-123",
+        CVE_REMOTE_READ_ONLY="true",
+        CVE_DEPLOYMENT_MODE="vps",
+        CVE_PUBLIC_BASE_URL="https://vault.example.com",
+        CVE_REQUIRE_AUTH=None,
+    ):
+        cfg = load_private_cloud_config()
+
+    assert cfg["enabled"] is True
+    assert cfg["require_auth"] is True, "Should require auth when private cloud enabled"
+    assert cfg["token_configured"] is True
+    assert cfg["remote_read_only"] is True
+    assert cfg["deployment_mode"] == "vps"
+    assert cfg["public_base_url"] == "https://vault.example.com"
+    # No warnings when properly configured
+    assert cfg["warnings"] == [], f"Unexpected warnings: {cfg['warnings']}"
+    print(f"  Private mode with token: all flags correct ✓")
+
+
+def test_p21_private_status_shape_no_token_leak():
+    """P21-3: /private/status returns expected shape and never leaks the token."""
+    print("\n=== Test P21-3: /private/status shape and no token leak ===")
+    try:
+        from fastapi.testclient import TestClient
+    except RuntimeError as exc:
+        print(f"  SKIP: TestClient unavailable — {exc}")
+        return
+
+    import json as _json
+
+    _SECRET_TOKEN = "super-secret-token-do-not-expose-xyz"
+
+    with _p21_env(
+        CVE_PRIVATE_CLOUD_ENABLED="true",
+        CVE_AUTH_TOKEN=_SECRET_TOKEN,
+        CVE_REMOTE_READ_ONLY="true",
+        CVE_DEPLOYMENT_MODE="vps",
+        CVE_REQUIRE_AUTH="true",
+        CVE_PUBLIC_BASE_URL=None,
+    ):
+        from mcp.server.mcp_server import app
+        with TestClient(app, raise_server_exceptions=True) as client:
+            resp = client.get("/private/status")
+
+    assert resp.status_code == 200, f"/private/status status {resp.status_code}: {resp.text}"
+    body = resp.json()
+    assert body["status"] == "ok", f"Expected ok: {body}"
+    data = body["data"]
+
+    # Required fields
+    for key in ("enabled", "deployment_mode", "require_auth", "token_configured",
+                "remote_read_only", "warnings", "protected_methods"):
+        assert key in data, f"Missing key in /private/status: {key!r}"
+
+    assert data["enabled"] is True
+    assert data["require_auth"] is True
+    assert data["token_configured"] is True
+    assert data["remote_read_only"] is True
+    assert isinstance(data["warnings"], list)
+    assert isinstance(data["protected_methods"], list)
+
+    # Token must NEVER appear in the response
+    raw = _json.dumps(body)
+    assert _SECRET_TOKEN not in raw, "Token value leaked into /private/status response!"
+    print(f"  /private/status shape correct; token not leaked ✓")
+
+
+def test_p21_read_route_without_token_returns_401():
+    """P21-4: GET /vaults returns 401 AUTH_REQUIRED when auth required and no token."""
+    print("\n=== Test P21-4: read route without token returns 401 ===")
+    try:
+        from fastapi.testclient import TestClient
+    except RuntimeError as exc:
+        print(f"  SKIP: TestClient unavailable — {exc}")
+        return
+
+    with _p21_env(
+        CVE_PRIVATE_CLOUD_ENABLED="true",
+        CVE_AUTH_TOKEN="some-token-abc123",
+        CVE_REQUIRE_AUTH="true",
+        CVE_REMOTE_READ_ONLY=None,
+        CVE_DEPLOYMENT_MODE=None,
+    ):
+        from mcp.server.mcp_server import app
+        with TestClient(app, raise_server_exceptions=True) as client:
+            resp = client.get("/vaults")
+
+    assert resp.status_code == 401, (
+        f"Expected 401, got {resp.status_code}: {resp.text}"
+    )
+    body = resp.json()
+    assert body["status"] == "error"
+    assert body["error"]["code"] == "AUTH_REQUIRED"
+    print(f"  GET /vaults without token: 401 AUTH_REQUIRED ✓")
+
+
+def test_p21_read_route_with_bearer_token_succeeds():
+    """P21-5: Authorization: Bearer <token> succeeds on read route."""
+    print("\n=== Test P21-5: read route with Bearer token succeeds ===")
+    try:
+        from fastapi.testclient import TestClient
+    except RuntimeError as exc:
+        print(f"  SKIP: TestClient unavailable — {exc}")
+        return
+
+    _TOKEN = "bearer-test-token-p21"
+
+    with _p21_env(
+        CVE_PRIVATE_CLOUD_ENABLED="true",
+        CVE_AUTH_TOKEN=_TOKEN,
+        CVE_REQUIRE_AUTH="true",
+        CVE_REMOTE_READ_ONLY=None,
+        CVE_DEPLOYMENT_MODE=None,
+    ):
+        from mcp.server.mcp_server import app
+        with TestClient(app, raise_server_exceptions=True) as client:
+            resp = client.get(
+                "/vaults",
+                headers={"Authorization": f"Bearer {_TOKEN}"},
+            )
+
+    assert resp.status_code == 200, (
+        f"Expected 200, got {resp.status_code}: {resp.text}"
+    )
+    body = resp.json()
+    assert body["status"] == "ok"
+    print(f"  GET /vaults with Bearer token: 200 ok ✓")
+
+
+def test_p21_read_route_with_x_cve_token_succeeds():
+    """P21-6: X-CVE-Token: <token> succeeds on read route."""
+    print("\n=== Test P21-6: read route with X-CVE-Token succeeds ===")
+    try:
+        from fastapi.testclient import TestClient
+    except RuntimeError as exc:
+        print(f"  SKIP: TestClient unavailable — {exc}")
+        return
+
+    _TOKEN = "x-cve-test-token-p21"
+
+    with _p21_env(
+        CVE_PRIVATE_CLOUD_ENABLED="true",
+        CVE_AUTH_TOKEN=_TOKEN,
+        CVE_REQUIRE_AUTH="true",
+        CVE_REMOTE_READ_ONLY=None,
+        CVE_DEPLOYMENT_MODE=None,
+    ):
+        from mcp.server.mcp_server import app
+        with TestClient(app, raise_server_exceptions=True) as client:
+            resp = client.get(
+                "/vaults",
+                headers={"X-CVE-Token": _TOKEN},
+            )
+
+    assert resp.status_code == 200, (
+        f"Expected 200, got {resp.status_code}: {resp.text}"
+    )
+    body = resp.json()
+    assert body["status"] == "ok"
+    print(f"  GET /vaults with X-CVE-Token: 200 ok ✓")
+
+
+def test_p21_invalid_token_returns_401():
+    """P21-7: Wrong token returns 401 AUTH_REQUIRED."""
+    print("\n=== Test P21-7: invalid token returns 401 ===")
+    try:
+        from fastapi.testclient import TestClient
+    except RuntimeError as exc:
+        print(f"  SKIP: TestClient unavailable — {exc}")
+        return
+
+    with _p21_env(
+        CVE_PRIVATE_CLOUD_ENABLED="true",
+        CVE_AUTH_TOKEN="correct-token-abc",
+        CVE_REQUIRE_AUTH="true",
+        CVE_REMOTE_READ_ONLY=None,
+        CVE_DEPLOYMENT_MODE=None,
+    ):
+        from mcp.server.mcp_server import app
+        with TestClient(app, raise_server_exceptions=True) as client:
+            resp = client.get(
+                "/vaults",
+                headers={"Authorization": "Bearer wrong-token-xyz"},
+            )
+
+    assert resp.status_code == 401, (
+        f"Expected 401, got {resp.status_code}: {resp.text}"
+    )
+    body = resp.json()
+    assert body["status"] == "error"
+    assert body["error"]["code"] == "AUTH_REQUIRED"
+    print(f"  Wrong token: 401 AUTH_REQUIRED ✓")
+
+
+def test_p21_write_route_blocked_read_only():
+    """P21-8: Mutating route returns 403 REMOTE_READ_ONLY in read-only mode (valid auth)."""
+    print("\n=== Test P21-8: write route blocked by REMOTE_READ_ONLY ===")
+    try:
+        from fastapi.testclient import TestClient
+    except RuntimeError as exc:
+        print(f"  SKIP: TestClient unavailable — {exc}")
+        return
+
+    _TOKEN = "read-only-test-token-p21"
+    vault = list_vaults()[0]
+
+    with _p21_env(
+        CVE_PRIVATE_CLOUD_ENABLED="true",
+        CVE_AUTH_TOKEN=_TOKEN,
+        CVE_REQUIRE_AUTH="true",
+        CVE_REMOTE_READ_ONLY="true",
+        CVE_DEPLOYMENT_MODE=None,
+    ):
+        from mcp.server.mcp_server import app
+        with TestClient(app, raise_server_exceptions=True) as client:
+            # POST /feedback is a write route
+            resp = client.post(
+                "/feedback",
+                json={
+                    "vault": vault, "path": "Fundamentals/Algorithms.md",
+                    "source": "human", "signal": "unclear",
+                    "severity": "low", "comment": "test",
+                },
+                headers={"Authorization": f"Bearer {_TOKEN}"},
+            )
+
+    assert resp.status_code == 403, (
+        f"Expected 403 REMOTE_READ_ONLY, got {resp.status_code}: {resp.text}"
+    )
+    body = resp.json()
+    assert body["status"] == "error"
+    assert body["error"]["code"] == "REMOTE_READ_ONLY"
+    print(f"  POST /feedback in read-only mode: 403 REMOTE_READ_ONLY ✓")
+
+
+def test_p21_write_route_allowed_when_read_only_false():
+    """P21-9: Mutating route is NOT blocked when CVE_REMOTE_READ_ONLY=false (with valid auth)."""
+    print("\n=== Test P21-9: write route allowed when CVE_REMOTE_READ_ONLY=false ===")
+    try:
+        from fastapi.testclient import TestClient
+    except RuntimeError as exc:
+        print(f"  SKIP: TestClient unavailable — {exc}")
+        return
+
+    _TOKEN = "rw-mode-test-token-p21"
+    vault = list_vaults()[0]
+
+    with _p21_env(
+        CVE_PRIVATE_CLOUD_ENABLED="true",
+        CVE_AUTH_TOKEN=_TOKEN,
+        CVE_REQUIRE_AUTH="true",
+        CVE_REMOTE_READ_ONLY="false",
+        CVE_DEPLOYMENT_MODE=None,
+    ):
+        from mcp.server.mcp_server import app
+        with TestClient(app, raise_server_exceptions=True) as client:
+            # POST /feedback is a write route — should NOT be blocked by read-only guard.
+            # It may still return 404/400 from its own validation, but NOT 403 REMOTE_READ_ONLY.
+            resp = client.post(
+                "/feedback",
+                json={
+                    "vault": vault, "path": "Fundamentals/Algorithms.md",
+                    "source": "human", "signal": "unclear",
+                    "severity": "low", "comment": "test-p21-rw",
+                },
+                headers={"Authorization": f"Bearer {_TOKEN}"},
+            )
+
+    # Must NOT be 403 REMOTE_READ_ONLY
+    assert resp.status_code != 403, (
+        f"Read-only guard should not block when CVE_REMOTE_READ_ONLY=false: {resp.text}"
+    )
+    body = resp.json()
+    if resp.status_code == 403:
+        assert body["error"]["code"] != "REMOTE_READ_ONLY", (
+            "REMOTE_READ_ONLY must not fire when CVE_REMOTE_READ_ONLY=false"
+        )
+    # Route may succeed (200) or fail route-level validation (400/404); either is correct
+    print(f"  POST /feedback with CVE_REMOTE_READ_ONLY=false: status={resp.status_code} (not 403) ✓")
+
+
+def test_p21_health_no_token_leak():
+    """P21-10: /health does not contain the configured token value."""
+    print("\n=== Test P21-10: /health does not leak token ===")
+    try:
+        from fastapi.testclient import TestClient
+    except RuntimeError as exc:
+        print(f"  SKIP: TestClient unavailable — {exc}")
+        return
+
+    import json as _json
+
+    _SECRET = "health-leak-test-token-zzz"
+
+    with _p21_env(
+        CVE_PRIVATE_CLOUD_ENABLED="true",
+        CVE_AUTH_TOKEN=_SECRET,
+        CVE_REQUIRE_AUTH="true",
+        CVE_REMOTE_READ_ONLY=None,
+        CVE_DEPLOYMENT_MODE=None,
+    ):
+        from mcp.server.mcp_server import app
+        with TestClient(app, raise_server_exceptions=True) as client:
+            resp = client.get("/health")
+
+    # /health is auth-exempt, must return 200
+    assert resp.status_code == 200, (
+        f"Expected /health 200, got {resp.status_code}: {resp.text}"
+    )
+    raw = _json.dumps(resp.json())
+    assert _SECRET not in raw, "Token value leaked into /health response!"
+    print(f"  /health: 200 ok; token not leaked ✓")
+
+
+def test_p21_docs_mention_private_cloud():
+    """P21-11: README.md, API.md, and DEPLOYMENT.md all mention Private Cloud Mode."""
+    print("\n=== Test P21-11: docs mention Private Cloud Mode ===")
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parent.parent
+
+    for fname in ("README.md", "API.md", "DEPLOYMENT.md"):
+        fpath = root / fname
+        assert fpath.is_file(), f"Missing file: {fname}"
+        content = fpath.read_text(encoding="utf-8")
+        assert "private" in content.lower() or "Private Cloud" in content, (
+            f"{fname} does not mention Private Cloud Mode"
+        )
+        print(f"  {fname}: mentions private cloud ✓")
+
+
+def test_p21_api_docs_error_codes():
+    """P21-12: API.md contains AUTH_REQUIRED and REMOTE_READ_ONLY error code documentation."""
+    print("\n=== Test P21-12: API.md documents AUTH_REQUIRED and REMOTE_READ_ONLY ===")
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parent.parent
+    api_md = (root / "API.md").read_text(encoding="utf-8")
+
+    assert "AUTH_REQUIRED" in api_md, "API.md missing AUTH_REQUIRED error code"
+    assert "REMOTE_READ_ONLY" in api_md, "API.md missing REMOTE_READ_ONLY error code"
+    print(f"  API.md: AUTH_REQUIRED ✓, REMOTE_READ_ONLY ✓")
+
+
+def test_p21_deployment_md_complete():
+    """P21-13: DEPLOYMENT.md exists and contains required guidance sections."""
+    print("\n=== Test P21-13: DEPLOYMENT.md is complete ===")
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parent.parent
+    depl = root / "DEPLOYMENT.md"
+
+    assert depl.is_file(), "DEPLOYMENT.md does not exist"
+    content = depl.read_text(encoding="utf-8")
+
+    required = {
+        "Tailscale": "Tailscale access model",
+        "WireGuard": "WireGuard access model",
+        "Cloudflare Tunnel": "Cloudflare Tunnel guidance",
+        "reverse proxy": "reverse proxy guidance",
+        "backup": "backup guidance",
+        "CVE_AUTH_TOKEN": "token environment variable",
+    }
+
+    for phrase, description in required.items():
+        assert phrase.lower() in content.lower(), (
+            f"DEPLOYMENT.md missing {description}: '{phrase}'"
+        )
+    print(f"  DEPLOYMENT.md: all required sections present ✓")
+
+
+def test_p21_existing_tests_unaffected():
+    """P21-14: Local mode (env vars unset) leaves existing test behaviour unchanged."""
+    print("\n=== Test P21-14: existing tests unaffected in local mode ===")
+    from mcp.core.private_cloud import (
+        is_private_cloud_enabled,
+        require_auth,
+        is_remote_read_only,
+    )
+
+    _keys = [
+        "CVE_PRIVATE_CLOUD_ENABLED", "CVE_AUTH_TOKEN", "CVE_REQUIRE_AUTH",
+        "CVE_REMOTE_READ_ONLY", "CVE_PUBLIC_BASE_URL", "CVE_DEPLOYMENT_MODE",
+    ]
+
+    with _p21_env(**{k: None for k in _keys}):
+        assert is_private_cloud_enabled() is False, "Local mode must not enable private cloud"
+        assert require_auth() is False, "Local mode must not require auth"
+        assert is_remote_read_only() is False, "Local mode must not block write routes"
+
+    print(f"  Local mode: private cloud disabled, no auth, no read-only enforcement ✓")
 
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
 # Context Vault Engine — Testing
 
-All tests live in `mcp/test_verify.py`. There are 294 test functions covering all implemented phases.
+All tests live in `mcp/test_verify.py`. There are 396 test functions covering all implemented phases.
 
 ---
 
@@ -677,9 +677,64 @@ Safety tests:
 - `TESTING.md` — added Phase 20 section (this entry).
 - `ROADMAP.md` — Phase 20 marked Complete.
 
+---
+
+### Phase 21 — Private Cloud Mode
+
+Self-hostable private cloud mode: token-based API authentication, read-only remote enforcement, and `/private/status` configuration endpoint. 14 tests added.
+
+**Verification steps:**
+
+```bash
+py mcp/test_verify.py      # 396 tests — all must pass (14 new P21 tests added)
+py run.py validate         # 19/19 valid
+py run.py security         # status: pass
+py run.py feedback         # exits 0, valid JSON
+py run.py export --overwrite   # status: ok; 7 files including context.html
+cd ui && npm run build     # must complete with 0 errors
+```
+
+**Tests added (14 total):**
+
+- `test_p21_config_defaults_local_safe` — default config has `enabled=False`, `require_auth=False`, no warnings.
+- `test_p21_private_mode_enabled_reports_correctly` — private mode enabled with token: `enabled=True`, `require_auth=True`, `token_configured=True`, `remote_read_only=True`.
+- `test_p21_private_status_shape_no_token_leak` — `/private/status` response has correct shape; raw token never in response.
+- `test_p21_read_route_without_token_returns_401` — `GET /vaults` returns 401 `AUTH_REQUIRED` when auth required and no token supplied.
+- `test_p21_read_route_with_bearer_token_succeeds` — `Authorization: Bearer <token>` succeeds on read route.
+- `test_p21_read_route_with_x_cve_token_succeeds` — `X-CVE-Token: <token>` succeeds on read route.
+- `test_p21_invalid_token_returns_401` — wrong token returns 401 `AUTH_REQUIRED`.
+- `test_p21_write_route_blocked_read_only` — mutating route returns 403 `REMOTE_READ_ONLY` in read-only mode (valid auth supplied).
+- `test_p21_write_route_allowed_when_read_only_false` — mutating route is not blocked by read-only guard when `CVE_REMOTE_READ_ONLY=false`.
+- `test_p21_health_no_token_leak` — `/health` response does not contain the configured token value.
+- `test_p21_docs_mention_private_cloud` — `README.md`, `API.md`, and `DEPLOYMENT.md` all mention Private Cloud Mode.
+- `test_p21_api_docs_error_codes` — `API.md` contains `AUTH_REQUIRED` and `REMOTE_READ_ONLY` error code documentation.
+- `test_p21_deployment_md_complete` — `DEPLOYMENT.md` contains Tailscale, WireGuard, Cloudflare Tunnel, reverse proxy, backup, and token guidance.
+- `test_p21_existing_tests_unaffected` — local mode (env vars unset) leaves existing test behaviour unchanged; no auth errors on normal routes.
+
+**Files created:**
+
+- `mcp/core/private_cloud.py` — private cloud configuration module: `load_private_cloud_config`, `is_private_cloud_enabled`, `is_remote_read_only`, `get_expected_token`, `require_auth`, `auth_status_summary`, `private_cloud_status`, `verify_token`. Pure stdlib.
+- `DEPLOYMENT.md` — deployment guide: private cloud overview, access models (Tailscale, WireGuard, Cloudflare Tunnel, Nginx, Caddy), environment variable table, local example, VPS systemd service, firewall guidance, backup guidance, update procedure, verification commands.
+
+**Files modified:**
+
+- `mcp/server/mcp_server.py` — imported private cloud helpers; updated CORS to allow `Authorization` and `X-CVE-Token` headers; added `_WRITE_PATH_PREFIXES` set; added `_AUTH_EXEMPT_PATHS` set; added `_is_write_path()`, `_check_private_cloud_config()` helpers; updated `request_middleware` with auth check and read-only enforcement; added `GET /private/status` endpoint.
+- `API.md` — added `/private/status` endpoint, `AUTH_REQUIRED` and `REMOTE_READ_ONLY` error codes, environment auth behaviour, token header formats.
+- `README.md` — added Private Cloud Mode capability line; updated test count to 396.
+- `QUICKSTART.md` — added Private Cloud Mode section.
+- `TESTING.md` — added Phase 21 section (this entry); updated test count to 396.
+- `ROADMAP.md` — Phase 21 marked Complete.
+- `mcp/test_verify.py` — 14 new Phase 21 tests.
+
+**Security model:**
+
+- Token comparison uses `secrets.compare_digest` (constant-time, no timing oracle).
+- Token never written to logs, responses, or status output.
+- `/health` and `/private/status` are always accessible without authentication.
+- Read-only enforcement is applied before route-level validation.
+- Local mode (all env vars unset) is completely unchanged.
 
 
-### Phase 18C — Vault Lifecycle Management
 
 Safe vault deletion through API and UI. Users can permanently delete non-demo vaults via `DELETE /vault/{vault_name}` with explicit typed confirmation. A Danger Zone section was added to the Vault Setup page. 18 backend tests added.
 
