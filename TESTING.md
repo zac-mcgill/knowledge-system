@@ -1,6 +1,6 @@
 # Context Vault Engine — Testing
 
-All tests live in `mcp/test_verify.py`. There are 272 test functions covering all implemented phases.
+All tests live in `mcp/test_verify.py`. There are 284 test functions covering all implemented phases.
 
 ---
 
@@ -515,6 +515,7 @@ Phase 18 adds GitHub Actions CI, a release checklist, artefact hygiene checks, a
 
 ```bash
 py mcp/test_verify.py      # 272 tests — all must pass (7 new Phase 18 tests added)
+
 py run.py validate         # 19/19 valid
 py run.py security         # status: pass
 py run.py feedback         # exits 0, valid JSON
@@ -543,6 +544,40 @@ git status --short         # no dist/ or ui/dist/ entries
 - `mcp/test_verify.py` — 7 new Phase 18 tests.
 - `TESTING.md` — added Phase 18 section (this entry); test count updated to 272.
 - `ROADMAP.md` — Phase 18 marked Complete; active phase updated to Phase 19.
+
+### Phase QAS — UI QA Stabilisation
+
+UI QA pass before Phase 19. No new backend features. Targeted UI fixes and 6 source-level regression tests added.
+
+**Verification steps:**
+
+```bash
+py mcp/test_verify.py      # 284 tests — all must pass (6 new PQAS tests added)
+py run.py validate         # 19/19 valid
+py run.py security         # status: pass
+py run.py feedback         # exits 0, valid JSON
+py run.py export --overwrite   # status: ok; 7 files including context.html
+cd ui && npm run build     # must complete with 0 errors
+```
+
+**Tests added (6 total, PQAS-1 through PQAS-6):**
+
+- `test_pqas_applayout_no_soon_badges` — AppLayout.astro must not contain `>soon<` nav badge spans.
+- `test_pqas_applayout_footer_not_stale` — AppLayout.astro footer must not reference Phase 16 or older.
+- `test_pqas_placeholderpage_no_stale_phase_text` — PlaceholderPage.astro must not contain "Planned for Phase" text.
+- `test_pqas_all_routes_covered_in_route_test` — All 11 /app/* routes have corresponding Astro page files.
+- `test_pqas_export_context_html_in_source` — context_package.py still includes context.html in the package.
+- `test_pqas_feedback_envelope_regression` — GET /feedback returns standard `{status,data}` envelope, not flat response.
+
+**What was fixed:**
+
+- `ui/src/layouts/AppLayout.astro` — removed "soon" badge and opacity-60 from Validation, Tasks, API/Raw nav items; updated footer from "Phase 16 — Graph Explorer" to "Phase 18 — Stable".
+- `ui/src/components/PlaceholderPage.astro` — replaced stale "Planned for Phase 12" text; added `cliCommand` prop for correct CLI references.
+- `ui/src/pages/validation.astro` — updated PlaceholderPage to use `cliCommand="py run.py validate"`.
+- `ui/src/pages/tasks.astro` — updated PlaceholderPage to use `cliCommand="py run.py improve"`.
+- `ui/src/pages/raw.astro` — updated PlaceholderPage with correct API access note.
+- `ui/src/components/GraphExplorer.svelte` — removed stale "Phase 16" from HTML comment.
+- `README.md`, `TESTING.md` — test count updated to 284.
 
 ### Phase 16 — Visual Graph and Missing Concepts UI
 

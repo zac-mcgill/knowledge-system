@@ -459,7 +459,7 @@
 </script>
 
 <!-- =========================================================================
-     Graph Explorer — Phase 16
+     Graph Explorer
      Schema-derived deterministic relationships only.
      ========================================================================= -->
 

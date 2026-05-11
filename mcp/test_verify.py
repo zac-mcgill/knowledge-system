@@ -8381,6 +8381,160 @@ def test_p18r_api_routes_unaffected():
 
 
 # ============================================================
+# Phase QAS — UI QA Stabilisation
+# ============================================================
+
+_UI_SRC = Path(__file__).parent.parent / "ui" / "src"
+
+
+def test_pqas_applayout_no_soon_badges():
+    """PQAS-1: AppLayout.astro must not render 'soon' badges on any nav item.
+
+    All app routes are implemented and accessible. No nav item should be
+    labelled 'soon' in the source.
+    """
+    print("\n=== Test PQAS-1: AppLayout has no 'soon' nav badges ===")
+    layout_path = _UI_SRC / "layouts" / "AppLayout.astro"
+    assert layout_path.is_file(), f"AppLayout.astro not found at {layout_path}"
+    source = layout_path.read_text(encoding="utf-8")
+    # The old logic injected a <span>soon</span> badge for placeholder items.
+    assert ">soon<" not in source, (
+        "AppLayout.astro still contains a 'soon' badge span — remove it from nav items"
+    )
+    print("  No 'soon' badge found in AppLayout nav ✓")
+
+
+def test_pqas_applayout_footer_not_stale():
+    """PQAS-2: AppLayout.astro footer must not reference a stale phase number.
+
+    The footer label is updated each phase. Verify it does not still say
+    'Phase 16' or any older phase.
+    """
+    print("\n=== Test PQAS-2: AppLayout footer is not stale ===")
+    layout_path = _UI_SRC / "layouts" / "AppLayout.astro"
+    assert layout_path.is_file(), f"AppLayout.astro not found at {layout_path}"
+    source = layout_path.read_text(encoding="utf-8")
+    stale_labels = ["Phase 16", "Phase 15", "Phase 14", "Phase 13", "Phase 12"]
+    for label in stale_labels:
+        assert label not in source, (
+            f"AppLayout.astro footer still contains stale label: {label!r}"
+        )
+    print("  No stale phase label found in AppLayout footer ✓")
+
+
+def test_pqas_placeholderpage_no_stale_phase_text():
+    """PQAS-3: PlaceholderPage.astro must not contain 'Planned for Phase' text.
+
+    The old placeholder text said 'Planned for Phase 12' which was stale.
+    Verify the component no longer emits phase-numbered planned text.
+    """
+    print("\n=== Test PQAS-3: PlaceholderPage has no stale 'Planned for Phase' text ===")
+    placeholder_path = _UI_SRC / "components" / "PlaceholderPage.astro"
+    assert placeholder_path.is_file(), f"PlaceholderPage.astro not found at {placeholder_path}"
+    source = placeholder_path.read_text(encoding="utf-8")
+    assert "Planned for Phase" not in source, (
+        "PlaceholderPage.astro still contains stale 'Planned for Phase' text"
+    )
+    print("  No 'Planned for Phase' text in PlaceholderPage ✓")
+
+
+def test_pqas_all_routes_covered_in_route_test():
+    """PQAS-4: All 11 /app/* routes are implemented as Astro page files.
+
+    Verifies that ui/src/pages/ contains an .astro file for every expected
+    route, including the placeholder routes (validation, tasks, raw).
+    """
+    print("\n=== Test PQAS-4: All 11 app routes have Astro page files ===")
+    pages_dir = _UI_SRC / "pages"
+    assert pages_dir.is_dir(), f"ui/src/pages/ not found at {pages_dir}"
+
+    expected_pages = [
+        "index.astro",        # /app/
+        "vault-setup.astro",  # /app/vault-setup
+        "notes.astro",        # /app/notes
+        "validation.astro",   # /app/validation
+        "tasks.astro",        # /app/tasks
+        "bundles.astro",      # /app/bundles
+        "security.astro",     # /app/security
+        "exports.astro",      # /app/exports
+        "feedback.astro",     # /app/feedback
+        "graph.astro",        # /app/graph
+        "raw.astro",          # /app/raw
+    ]
+    for page in expected_pages:
+        page_path = pages_dir / page
+        assert page_path.is_file(), (
+            f"Missing page file: {page} — route has no Astro page"
+        )
+        print(f"  {page} ✓")
+    print(f"  All {len(expected_pages)} route pages present ✓")
+
+
+def test_pqas_export_context_html_in_source():
+    """PQAS-5: context_package.py includes context.html in the exported package.
+
+    The export package was updated in Phase 17A to include context.html.
+    Verify the source still references it so we catch any accidental removal.
+    """
+    print("\n=== Test PQAS-5: context_package.py includes context.html ===")
+    pkg_path = Path(__file__).parent.parent / "core" / "shared" / "context_package.py"
+    assert pkg_path.is_file(), f"context_package.py not found at {pkg_path}"
+    source = pkg_path.read_text(encoding="utf-8")
+    assert "context.html" in source, (
+        "context_package.py does not reference context.html — "
+        "was the HTML bundle writer removed?"
+    )
+    print("  context.html referenced in context_package.py ✓")
+
+
+def test_pqas_feedback_envelope_regression():
+    """PQAS-6: GET /feedback endpoint returns the standard API envelope.
+
+    Regression guard complementing P5-REG1: the endpoint must return
+    {status:'ok', data:{...}} not a flat response. A flat response caused
+    the Dashboard security panel to get stuck at 'loading' (Phase 18b bug).
+    """
+    print("\n=== Test PQAS-6: GET /feedback envelope regression ===")
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    try:
+        from fastapi.testclient import TestClient
+    except RuntimeError as exc:
+        print(f"  SKIP: TestClient unavailable — {exc}")
+        return
+
+    from mcp.server.mcp_server import app as _fastapi_app
+
+    with TestClient(_fastapi_app) as client:
+        resp = client.get("/feedback")
+        assert resp.status_code in (200, 500), (
+            f"GET /feedback returned unexpected status {resp.status_code}"
+        )
+        if resp.status_code == 200:
+            body = resp.json()
+            assert "status" in body, "Response missing top-level 'status' key"
+            assert body["status"] == "ok", (
+                f"GET /feedback outer envelope must be 'ok', got: {body['status']!r}"
+            )
+            assert "data" in body, (
+                "GET /feedback missing 'data' key — response is flat, not enveloped"
+            )
+            data = body["data"]
+            assert "entries" in data, "Response data missing 'entries' key"
+            print(f"  GET /feedback: status=ok, data.entries present ✓")
+        else:
+            # No vaults registered — server returns an error envelope, not flat
+            body = resp.json()
+            assert "status" in body and body["status"] == "error", (
+                "Error response must still use envelope format"
+            )
+            assert "data" not in body, (
+                "Error envelope must not have 'data' key"
+            )
+            print(f"  GET /feedback (no vault): error envelope correct ✓")
+
+
+# ============================================================
 # Main
 # ============================================================
 
@@ -8757,6 +8911,17 @@ def main():
     test_p18r_static_assets_served_directly()
     test_p18r_path_traversal_still_blocked_with_real_routes()
     test_p18r_api_routes_unaffected()
+
+    # ---- Phase QAS — UI QA Stabilisation ----
+    print("\n" + "=" * 60)
+    print("Phase QAS — UI QA Stabilisation")
+    print("=" * 60)
+    test_pqas_applayout_no_soon_badges()
+    test_pqas_applayout_footer_not_stale()
+    test_pqas_placeholderpage_no_stale_phase_text()
+    test_pqas_all_routes_covered_in_route_test()
+    test_pqas_export_context_html_in_source()
+    test_pqas_feedback_envelope_regression()
 
     print()
     print("=" * 60)

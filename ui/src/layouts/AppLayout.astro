@@ -72,14 +72,9 @@ const activeItems = navItems.map(item => ({
                     item.active
                       ? 'bg-zinc-800 text-zinc-100 font-medium'
                       : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900',
-                    // Placeholder items are visually de-emphasised but still navigable
-                    item.label !== 'Dashboard' && item.label !== 'Vault Setup' && item.label !== 'Notes' && item.label !== 'Bundles' && item.label !== 'Exports' && item.label !== 'Security' && item.label !== 'Feedback' && item.label !== 'Graph' && !item.active ? 'opacity-60' : '',
                   ]}
                 >
                   {item.label}
-                  {item.label !== 'Dashboard' && item.label !== 'Vault Setup' && item.label !== 'Notes' && item.label !== 'Bundles' && item.label !== 'Exports' && item.label !== 'Security' && item.label !== 'Feedback' && item.label !== 'Graph' && (
-                    <span class="ml-auto text-xs text-zinc-700 font-mono">soon</span>
-                  )}
                 </a>
               </li>
             ))}
@@ -88,7 +83,7 @@ const activeItems = navItems.map(item => ({
 
         <!-- Footer: version badge -->
         <div class="px-4 py-3 border-t border-zinc-800">
-        <span class="text-xs text-zinc-600">Phase 16 — Graph Explorer</span>
+          <span class="text-xs text-zinc-600">Phase 18 — Stable</span>
         </div>
       </aside>
 
