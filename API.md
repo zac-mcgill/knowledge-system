@@ -674,6 +674,7 @@ Generate a context bundle and write it to disk as a portable package.
   "files": {
     "context.json":          {"sha256": "...", "bytes": 12345},
     "context.md":            {"sha256": "...", "bytes": 6789},
+    "context.html":          {"sha256": "...", "bytes": 9876},
     "manifest.json":         {"sha256": "...", "bytes": 890},
     "validation.json":       {"sha256": "...", "bytes": 234},
     "graph.json":            {"sha256": "...", "bytes": 56},
@@ -692,7 +693,8 @@ Generate a context bundle and write it to disk as a portable package.
 
 **Notes:**
 - Packages are written to `dist/context-bundles/<bundle_id>/` under the repo root.
-- `manifest.json` contains SHA-256 hashes of the other five files, plus metadata.
+- `manifest.json` contains SHA-256 hashes of all six non-manifest files, plus metadata.
+- `context.html` is a deterministic static HTML rendering generated from bundle data. It contains no remote scripts or external assets. Markdown vault notes remain the source of truth.
 - The `dist/` directory is gitignored.
 
 ---

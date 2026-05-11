@@ -1,6 +1,6 @@
 # Context Vault Engine — Testing
 
-All tests live in `mcp/test_verify.py`. There are 188 test functions covering all implemented phases.
+All tests live in `mcp/test_verify.py`. There are 200 test functions covering all implemented phases.
 
 ---
 
@@ -399,6 +399,134 @@ py run.py feedback         # exits 0, valid JSON
 - `QUICKSTART.md` — added §4e note update API usage.
 - `TESTING.md` — added Phase 15B section (this entry).
 - `ROADMAP.md` — marked Phase 15B Complete.
+
+### Phase 17A — HTML Bundle Renderer
+
+Phase 17A adds a deterministic static HTML rendering (`context.html`) to every exported context package. No UI framework changes were made. 12 new backend tests were added.
+
+**Verification steps for Phase 17A:**
+
+```bash
+py mcp/test_verify.py      # all tests must pass (12 new Phase 17A tests added)
+py run.py export --overwrite   # status: ok; context.html listed in files
+py run.py validate         # 19/19 valid
+py run.py security         # status: pass
+py run.py feedback         # exits 0, valid JSON
+cd ui && npm run build     # must complete with 0 errors
+```
+
+**New tests added (P17A-H*):**
+
+- `test_p17a_export_includes_context_html` — export package includes `context.html`.
+- `test_p17a_manifest_includes_context_html` — `manifest.json` lists `context.html` with sha256 and bytes.
+- `test_p17a_manifest_html_hash_matches_file` — SHA-256 in manifest matches actual file content.
+- `test_p17a_existing_files_unchanged` — `context.json`, `context.md`, and other files are unchanged.
+- `test_p17a_html_is_deterministic` — identical bundle input produces byte-for-byte identical HTML.
+- `test_p17a_html_escapes_script_injection` — `<script>alert(1)</script>` in note body is HTML-escaped.
+- `test_p17a_html_escapes_frontmatter` — unsafe frontmatter/warning values are HTML-escaped.
+- `test_p17a_html_no_remote_assets` — HTML contains no `http://`, `https://`, `<script`, `javascript:`, or `onclick=`.
+- `test_p17a_html_contains_artefact_warning` — generated artefact warning is present.
+- `test_p17a_html_contains_metadata` — bundle ID, vault, and created_at appear in HTML.
+- `test_p17a_html_contains_notes` — note paths, fields, and sections appear in HTML.
+- `test_p17a_html_contains_manifest_hashes` — manifest hash table is rendered when package_files provided.
+
+**Updated existing tests (P4):**
+
+- `test_p4_export_writes_all_seven_files` (was `all_six_files`) — expected set now includes `context.html`.
+- `test_p4_manifest_contains_all_files` — expected manifest file set now includes `context.html`.
+- `test_p4_no_extra_files_in_package` — expected set updated to 7 files.
+- `test_p4_cli_export_returns_valid_json` — now asserts 7 files in return value.
+- `test_p4_cli_export_writes_package_dir` — expected disk file set updated.
+- `test_p4_api_export_ok` — now asserts 7 files in API response.
+
+**Manual checks for Phase 17A:**
+
+1. Run `py run.py export --overwrite`.
+2. Locate the generated package under `dist/context-bundles/<bundle-id>/`.
+3. Confirm these files exist: `context.json`, `context.md`, `context.html`, `manifest.json`, `validation.json`, `graph.json`, `feedback-summary.json`.
+4. Open `context.html` locally in a browser — confirm it is readable.
+5. Confirm the generated artefact warning appears at the top.
+6. Confirm bundle metadata (ID, vault, created_at) is visible.
+7. Confirm notes section renders (note paths and fields visible).
+8. Confirm manifest hashes table shows file names and SHA-256 hashes.
+9. Confirm no external network requests occur (check browser DevTools Network tab).
+10. Confirm `manifest.json` includes a `context.html` entry with matching SHA-256.
+
+**Security assertions:**
+
+- All user-controlled content (note body, frontmatter values, warnings, graph labels) is HTML-escaped via `html.escape`.
+- No `<script>` tags in generated HTML.
+- No remote `http://` or `https://` URLs.
+- No `javascript:` URLs.
+- Note body/section text rendered in `<pre>` blocks (escaped text, not parsed Markdown).
+- CSS is inline in a `<style>` block — no external stylesheet links.
+
+**What was added:**
+
+- `core/shared/context_html.py` — new module: `render_context_html()`, `_escape()`, `_render_*` helper functions. Python standard library only (`html`, `json`).
+- `core/shared/context_package.py` — imports `render_context_html`; generates `context.html` bytes before manifest; adds `context.html` to `files_info` and `manifest["files"]`; writes `context.html` to package temp dir.
+- `mcp/test_verify.py` — 12 new Phase 17A tests; 6 existing P4 tests updated for 7-file expectation.
+- `README.md` — package artefact table includes `context.html`; Export capability description updated.
+- `QUICKSTART.md` — export section updated to show `context.html` in output shape, file table, and notes.
+- `TESTING.md` — added Phase 17A section (this entry); test count updated.
+- `ROADMAP.md` — Phase 17A marked Complete.
+- `API.md` — export package file list updated.
+
+### Phase 16 — Visual Graph and Missing Concepts UI
+
+Phase 16 is a frontend-only phase. No backend changes were made. All 242 backend tests still pass.
+
+**Verification steps for Phase 16:**
+
+```bash
+cd ui && npm run build     # must complete with 0 errors; GraphExplorer.svelte ~31 kB
+py mcp/test_verify.py      # 242 tests — all must pass
+py run.py validate         # 19/19 valid
+py run.py security         # status: pass
+py run.py feedback         # exits 0, valid JSON
+```
+
+**Manual checks for Phase 16:**
+
+1. Start the backend: `py mcp/server/mcp_server.py`
+2. Serve the built UI: `cd ui && npx serve dist` (or `npm run dev` for dev server)
+3. Navigate to the **Graph** link in the sidebar.
+4. Confirm the page title "Graph Explorer" and the amber disclaimer appear.
+5. Confirm the vault dropdown is pre-selected with the first registered vault.
+6. Confirm graph summary cards load (total nodes, total edges, per-type counts).
+7. Toggle node type filter buttons — confirm nodes of that type appear/disappear in the list.
+8. Toggle edge type filter buttons — confirm the neighbour list in the Inspector respects them.
+9. Type in the node search box — confirm the list filters by label/id.
+10. Click any node in the Graph tab — confirm the Inspector tab activates automatically.
+11. In the Inspector, confirm node id, type, and label are displayed.
+12. Confirm direct neighbours are listed with their edge type badge.
+13. Click **inspect →** on a neighbour — confirm the inspector updates to show that node.
+14. Select a `note` node — confirm the **Related notes** and **Missing expected concepts near this note** sections appear.
+15. Click the **Missing Concepts** tab — confirm summary cards load.
+16. Confirm the ranked table shows concepts sorted by score descending.
+17. Click **Draft action** on any ranked row — confirm the action card panel appears.
+18. Confirm the action card header reads: **Draft action only — no file has been created**.
+19. Click **Copy** — confirm the instruction text is copied to the clipboard.
+20. Click **dismiss** — confirm the action card disappears without any file write.
+21. Confirm all raw JSON panels are collapsed by default behind `<details>` elements.
+22. Confirm the amber disclaimer on the page reads: *Schema-derived deterministic relationships, not semantic or AI-inferred links.*
+23. Confirm existing Dashboard, Notes, Feedback, Bundles, Exports, and Security pages still load and route correctly.
+
+**Known limitations:**
+
+- The graph is displayed as a grouped node list, not as a visual network diagram. No heavy graph library (e.g. D3, Cytoscape) was added.
+- The action card path suggestion (`Fundamentals/<title>.md`) is a conventional hint only. Users should verify the correct path against `vault_schema.py` before creating the note.
+- `expected_concept` nodes selected in the Inspector show neighbours but not related/missing (those queries are note-scoped only).
+
+**What was added:**
+
+- `ui/src/components/GraphExplorer.svelte` — new component: vault selector, reload button, node type filters, edge type filters, graph summary metrics, grouped searchable node browser, node inspector (neighbours + related notes + missing neighbours), missing concepts panel with ranked table and action card generator.
+- `ui/src/pages/graph.astro` — new Astro page mounting `GraphExplorer` at `/app/graph`.
+- `ui/src/lib/api.ts` — added `GraphNode`, `GraphEdge`, `GraphData`, `GraphNeighborEntry`, `GraphNeighborsData`, `GraphRelatedEntry`, `GraphRelatedData`, `GraphMissingEntry`, `GraphMissingNeighborsData`, `RankedMissingConcept` interfaces; added `fetchGraph`, `fetchGraphNeighbors`, `fetchGraphRelated`, `fetchGraphMissing` functions; added `subdomains?: number` to `MissingData`.
+- `ui/src/layouts/AppLayout.astro` — added **Graph** nav item at `/app/graph`; updated footer to "Phase 16 — Graph Explorer".
+- `QUICKSTART.md` — added §6k Graph Explorer UI section.
+- `TESTING.md` — added Phase 16 section (this entry).
+- `ROADMAP.md` — marked Phase 16 Complete.
 
 ### Phase 15C — Safe Note Editing UI
 

@@ -72,7 +72,7 @@ Each command exits `0` on success, `1` on failure, and writes structured JSON ou
 | **Analyse** | Runs structured analyses: completeness by domain, difficulty/completeness distribution, section deficiency heatmap, scored action list. |
 | **Improve** | Scores partial notes by difficulty weight, missing section penalties, and domain priority. Outputs ranked upgrade tasks with per-note writing constraints. |
 | **Bundle** | Generates a deterministic context bundle — a JSON package of selected notes with metadata, section extracts, validation state, graph relationships, and budget information. |
-| **Export** | Writes a portable context package to ``dist/context-bundles/<bundle-id>/`` with SHA-256 hashes, a manifest, and a Markdown rendering. |
+| **Export** | Writes a portable context package to ``dist/context-bundles/<bundle-id>/`` with SHA-256 hashes, a manifest, a Markdown rendering, and a static HTML rendering. |
 | **Security** | Scans a context bundle for secrets, prompt injection patterns, suspicious code blocks, and external links using deterministic regex rules. |
 | **Feedback** | Parses vault feedback entries and adjusts task priorities when requested. Does not rewrite notes. |
 | **API** | Serves all of the above through a rate-limited FastAPI HTTP interface for programmatic use. |
@@ -219,10 +219,13 @@ See [API.md](API.md) for full route documentation with request/response shapes.
 |------|---------|
 | ``context.json`` | Full bundle JSON |
 | ``context.md`` | Human-readable Markdown rendering |
+| ``context.html`` | Deterministic static HTML rendering for human review |
 | ``manifest.json`` | SHA-256 hashes + metadata |
 | ``validation.json`` | Validation status and warnings |
 | ``graph.json`` | Graph relationships for selected notes |
 | ``feedback-summary.json`` | Feedback entries relevant to selected notes |
+
+``context.html`` is a deterministic static rendering for human review; Markdown vault notes remain the source of truth.
 
 The ``dist/`` directory is gitignored. Packages are build artefacts — regenerate them from the vault.
 

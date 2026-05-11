@@ -2875,9 +2875,9 @@ def _make_test_bundle() -> dict:
     )
 
 
-def test_p4_export_writes_all_six_files():
-    """P4-E1: export_context_package writes all six expected files."""
-    print("\n=== Test P4-E1: export writes all six files ===")
+def test_p4_export_writes_all_seven_files():
+    """P4-E1: export_context_package writes all seven expected files (inc. context.html)."""
+    print("\n=== Test P4-E1: export writes all seven files ===")
     import tempfile
     import shutil
     from core.shared.context_package import export_context_package
@@ -2891,12 +2891,12 @@ def test_p4_export_writes_all_six_files():
         pkg_dir = Path(tmp) / bundle_id
         assert pkg_dir.is_dir(), f"Package dir not created: {pkg_dir}"
         expected = {
-            "context.json", "context.md", "manifest.json",
+            "context.json", "context.md", "context.html", "manifest.json",
             "validation.json", "graph.json", "feedback-summary.json",
         }
         actual = {f.name for f in pkg_dir.iterdir()}
         assert expected == actual, f"Expected files {expected}, got {actual}"
-        print(f"  All 6 files present in {pkg_dir.name} ✓")
+        print(f"  All 7 files present in {pkg_dir.name} ✓")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
@@ -2950,7 +2950,7 @@ def test_p4_context_md_contains_required_fields():
 
 
 def test_p4_manifest_contains_all_files():
-    """P4-E4: manifest.json contains entries for all six package files."""
+    """P4-E4: manifest.json contains entries for all seven package files (inc. context.html)."""
     print("\n=== Test P4-E4: manifest.json contains all file entries ===")
     import tempfile
     import shutil
@@ -2966,7 +2966,7 @@ def test_p4_manifest_contains_all_files():
         manifest = _json.loads((pkg_dir / "manifest.json").read_text(encoding="utf-8"))
         assert "files" in manifest, "manifest.json missing 'files'"
         expected_files = {
-            "context.json", "context.md", "validation.json",
+            "context.json", "context.md", "context.html", "validation.json",
             "graph.json", "feedback-summary.json",
         }
         for fname in expected_files:
@@ -3173,7 +3173,7 @@ def test_p4_error_bundle_returns_structured_error():
 
 
 def test_p4_no_extra_files_in_package():
-    """P4-E13: package directory contains exactly the six expected files."""
+    """P4-E13: package directory contains exactly the seven expected files."""
     print("\n=== Test P4-E13: no extra files in package ===")
     import tempfile
     import shutil
@@ -3187,11 +3187,11 @@ def test_p4_no_extra_files_in_package():
         pkg_dir = Path(tmp) / result["bundle_id"]
         actual = {f.name for f in pkg_dir.iterdir()}
         expected = {
-            "context.json", "context.md", "manifest.json",
+            "context.json", "context.md", "context.html", "manifest.json",
             "validation.json", "graph.json", "feedback-summary.json",
         }
         assert actual == expected, f"Unexpected files: {actual - expected}"
-        print(f"  Exactly 6 files, no extras ✓")
+        print(f"  Exactly 7 files, no extras ✓")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
@@ -3227,9 +3227,10 @@ def test_p4_cli_export_returns_valid_json():
     assert output["status"] == "ok", f"CLI export status not ok: {output}"
     for key in ("bundle_id", "package_dir", "files", "warnings"):
         assert key in output, f"CLI export missing key: {key!r}"
-    assert len(output["files"]) == 6, (
-        f"Expected 6 files, got {len(output['files'])}: {list(output['files'])}"
+    assert len(output["files"]) == 7, (
+        f"Expected 7 files, got {len(output['files'])}: {list(output['files'])}"
     )
+    assert "context.html" in output["files"], "CLI export missing context.html in files"
     print(f"  CLI export: status=ok, bundle_id={output['bundle_id']!r}, "
           f"package_dir={output['package_dir']!r} ✓")
 
@@ -3259,7 +3260,7 @@ def test_p4_cli_export_writes_package_dir():
     assert pkg_dir.is_dir(), f"Package directory not found: {pkg_dir}"
     files = {f.name for f in pkg_dir.iterdir()}
     expected = {
-        "context.json", "context.md", "manifest.json",
+        "context.json", "context.md", "context.html", "manifest.json",
         "validation.json", "graph.json", "feedback-summary.json",
     }
     assert files == expected, f"Unexpected files in package: {files}"
@@ -3364,9 +3365,10 @@ def test_p4_api_export_ok():
         assert body["status"] == "ok", f"Expected ok: {body}"
         for key in ("bundle_id", "package_dir", "files", "warnings"):
             assert key in body, f"Missing key: {key!r}"
-        assert len(body["files"]) == 6, (
-            f"Expected 6 files, got {len(body['files'])}"
+        assert len(body["files"]) == 7, (
+            f"Expected 7 files, got {len(body['files'])}"
         )
+        assert "context.html" in body["files"], "API export missing context.html in files"
         # Verify the package was actually written to disk.
         pkg_dir = _REPO_ROOT / body["package_dir"]
         assert pkg_dir.is_dir(), f"Package dir not on disk: {pkg_dir}"
@@ -7390,6 +7392,369 @@ def test_p15b_existing_get_note_still_works():
 
 
 # ============================================================
+# Phase 17A — HTML Bundle Renderer Tests
+# ============================================================
+
+def test_p17a_export_includes_context_html():
+    """P17A-H1: export_context_package includes context.html in the package."""
+    print("\n=== Test P17A-H1: export includes context.html ===")
+    import tempfile
+    import shutil
+    from core.shared.context_package import export_context_package
+
+    bundle = _make_test_bundle()
+    tmp = tempfile.mkdtemp()
+    try:
+        result = export_context_package(bundle, output_root=tmp)
+        assert result["status"] == "ok", f"Expected ok: {result}"
+        pkg_dir = Path(tmp) / result["bundle_id"]
+        assert (pkg_dir / "context.html").is_file(), "context.html not found in package"
+        print(f"  context.html present in {result['bundle_id']!r} ✓")
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_p17a_manifest_includes_context_html():
+    """P17A-H2: manifest.json includes context.html with sha256 and bytes."""
+    print("\n=== Test P17A-H2: manifest includes context.html ===")
+    import tempfile
+    import shutil
+    import json as _json
+    from core.shared.context_package import export_context_package
+
+    bundle = _make_test_bundle()
+    tmp = tempfile.mkdtemp()
+    try:
+        result = export_context_package(bundle, output_root=tmp)
+        assert result["status"] == "ok", f"Expected ok: {result}"
+        pkg_dir = Path(tmp) / result["bundle_id"]
+        manifest = _json.loads((pkg_dir / "manifest.json").read_text(encoding="utf-8"))
+        assert "context.html" in manifest["files"], "manifest missing context.html entry"
+        entry = manifest["files"]["context.html"]
+        assert "sha256" in entry, "context.html entry missing sha256"
+        assert "bytes" in entry, "context.html entry missing bytes"
+        assert len(entry["sha256"]) == 64, "sha256 is not 64 hex chars"
+        assert entry["bytes"] > 0, "context.html bytes must be > 0"
+        print(f"  manifest.json includes context.html: sha256={entry['sha256'][:16]}... "
+              f"bytes={entry['bytes']} ✓")
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_p17a_manifest_html_hash_matches_file():
+    """P17A-H3: SHA-256 for context.html in manifest matches actual file content."""
+    print("\n=== Test P17A-H3: manifest html hash matches file ===")
+    import tempfile
+    import shutil
+    import hashlib
+    import json as _json
+    from core.shared.context_package import export_context_package
+
+    bundle = _make_test_bundle()
+    tmp = tempfile.mkdtemp()
+    try:
+        result = export_context_package(bundle, output_root=tmp)
+        assert result["status"] == "ok", f"Expected ok: {result}"
+        pkg_dir = Path(tmp) / result["bundle_id"]
+        manifest = _json.loads((pkg_dir / "manifest.json").read_text(encoding="utf-8"))
+        html_bytes = (pkg_dir / "context.html").read_bytes()
+        actual_hash = hashlib.sha256(html_bytes).hexdigest()
+        manifest_hash = manifest["files"]["context.html"]["sha256"]
+        assert actual_hash == manifest_hash, (
+            f"Hash mismatch: manifest={manifest_hash!r} actual={actual_hash!r}"
+        )
+        manifest_bytes = manifest["files"]["context.html"]["bytes"]
+        assert len(html_bytes) == manifest_bytes, (
+            f"Bytes mismatch: manifest={manifest_bytes} actual={len(html_bytes)}"
+        )
+        print(f"  context.html hash verified: {actual_hash[:16]}... ✓")
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_p17a_existing_files_unchanged():
+    """P17A-H4: context.json and context.md behaviour is unchanged by HTML addition."""
+    print("\n=== Test P17A-H4: existing files still present and valid ===")
+    import tempfile
+    import shutil
+    import json as _json
+    from core.shared.context_package import export_context_package
+
+    bundle = _make_test_bundle()
+    tmp = tempfile.mkdtemp()
+    try:
+        result = export_context_package(bundle, output_root=tmp)
+        assert result["status"] == "ok", f"Expected ok: {result}"
+        pkg_dir = Path(tmp) / result["bundle_id"]
+
+        # context.json must still be valid JSON with bundle_id
+        ctx_json = _json.loads((pkg_dir / "context.json").read_text(encoding="utf-8"))
+        assert ctx_json["bundle_id"] == bundle["bundle_id"]
+
+        # context.md must still contain vault name
+        ctx_md = (pkg_dir / "context.md").read_text(encoding="utf-8")
+        assert bundle["vault"] in ctx_md
+
+        # manifest.json must still have entries for all original files
+        manifest = _json.loads((pkg_dir / "manifest.json").read_text(encoding="utf-8"))
+        for fname in ("context.json", "context.md", "validation.json",
+                      "graph.json", "feedback-summary.json"):
+            assert fname in manifest["files"], f"manifest missing {fname}"
+
+        print(f"  All original files present and valid ✓")
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_p17a_html_is_deterministic():
+    """P17A-H5: Identical bundle input produces byte-for-byte identical context.html."""
+    print("\n=== Test P17A-H5: context.html is deterministic ===")
+    import tempfile
+    import shutil
+    from core.shared.context_package import export_context_package
+
+    bundle = _make_test_bundle()
+    tmp1 = tempfile.mkdtemp()
+    tmp2 = tempfile.mkdtemp()
+    try:
+        r1 = export_context_package(bundle, output_root=tmp1)
+        r2 = export_context_package(bundle, output_root=tmp2)
+        assert r1["status"] == "ok" and r2["status"] == "ok"
+
+        html1 = (Path(tmp1) / r1["bundle_id"] / "context.html").read_bytes()
+        html2 = (Path(tmp2) / r2["bundle_id"] / "context.html").read_bytes()
+        assert html1 == html2, (
+            f"context.html is not deterministic: "
+            f"len1={len(html1)}, len2={len(html2)}"
+        )
+        print(f"  context.html is deterministic ({len(html1)} bytes) ✓")
+    finally:
+        shutil.rmtree(tmp1, ignore_errors=True)
+        shutil.rmtree(tmp2, ignore_errors=True)
+
+
+def test_p17a_html_escapes_script_injection():
+    """P17A-H6: Unsafe note body with <script> is escaped, not executed."""
+    print("\n=== Test P17A-H6: HTML escapes script injection ===")
+    from core.shared.context_html import render_context_html
+
+    malicious_body = "<script>alert(1)</script>"
+    bundle = {
+        "bundle_id": "test-escape-01",
+        "vault": "test-vault",
+        "created_at": "2026-05-11T00:00:00Z",
+        "validation_status": "pass",
+        "budget": {},
+        "warnings": [],
+        "filters": {},
+        "notes": [
+            {
+                "path": "Fundamentals/Test.md",
+                "fields": {"type": "core-concept"},
+                "sections": {},
+                "body": malicious_body,
+                "related": [],
+            }
+        ],
+        "graph": {},
+        "feedback": {},
+        "manifest": {"source_paths": [], "schema_version": "1.0"},
+    }
+
+    html = render_context_html(bundle)
+    # The literal script tag must NOT appear as executable HTML
+    assert "<script>" not in html, "Unescaped <script> found in HTML output"
+    assert "alert(1)" in html, "Escaped content should still be visible (as text)"
+    # The escaped form must be present
+    assert "&lt;script&gt;" in html, "Expected HTML-escaped script tag"
+    print(f"  <script> tag is HTML-escaped, not executable ✓")
+
+
+def test_p17a_html_escapes_frontmatter():
+    """P17A-H7: Unsafe frontmatter values are HTML-escaped."""
+    print("\n=== Test P17A-H7: HTML escapes frontmatter values ===")
+    from core.shared.context_html import render_context_html
+
+    bundle = {
+        "bundle_id": "test-escape-02",
+        "vault": "<b>bold-vault</b>",
+        "created_at": "2026-05-11T00:00:00Z",
+        "validation_status": "pass",
+        "budget": {},
+        "warnings": ['<img src=x onerror="alert(2)">'],
+        "filters": {},
+        "notes": [
+            {
+                "path": "Fundamentals/Test.md",
+                "fields": {"title": '<script>bad()</script>'},
+                "sections": {"Key Principles": "<b>not bold</b>"},
+                "body": "",
+                "related": [],
+            }
+        ],
+        "graph": {},
+        "feedback": {},
+        "manifest": {"source_paths": [], "schema_version": "1.0"},
+    }
+
+    html = render_context_html(bundle)
+    assert "<b>bold-vault</b>" not in html, "Unescaped <b> in vault name"
+    assert "<script>bad()</script>" not in html, "Unescaped script in frontmatter"
+    # onerror= is safe as escaped text; check the <img tag is not present as HTML
+    assert "<img " not in html, "Unescaped <img> tag found in HTML"
+    assert "&lt;" in html, "Expected escaped HTML entities"
+    print(f"  Frontmatter/warning values are HTML-escaped ✓")
+
+
+def test_p17a_html_no_remote_assets():
+    """P17A-H8: context.html contains no remote scripts, stylesheets, or assets."""
+    print("\n=== Test P17A-H8: context.html has no remote assets ===")
+    from core.shared.context_html import render_context_html
+
+    bundle = {
+        "bundle_id": "test-no-remote",
+        "vault": "test-vault",
+        "created_at": "2026-05-11T00:00:00Z",
+        "validation_status": "pass",
+        "budget": {},
+        "warnings": [],
+        "filters": {},
+        "notes": [],
+        "graph": {},
+        "feedback": {},
+        "manifest": {"source_paths": [], "schema_version": "1.0"},
+    }
+
+    html = render_context_html(bundle)
+    assert "http://" not in html, "Remote HTTP URL found in HTML"
+    assert "https://" not in html, "Remote HTTPS URL found in HTML"
+    assert "<script" not in html.lower(), "<script> element found in HTML"
+    assert "javascript:" not in html.lower(), "javascript: URL found in HTML"
+    assert "onclick=" not in html.lower(), "onclick handler found in HTML"
+    print(f"  No remote assets in context.html ✓")
+
+
+def test_p17a_html_contains_artefact_warning():
+    """P17A-H9: context.html contains the generated artefact warning."""
+    print("\n=== Test P17A-H9: HTML contains artefact warning ===")
+    from core.shared.context_html import render_context_html
+
+    bundle = {
+        "bundle_id": "test-warning",
+        "vault": "test-vault",
+        "created_at": "2026-05-11T00:00:00Z",
+        "validation_status": "pass",
+        "budget": {},
+        "warnings": [],
+        "filters": {},
+        "notes": [],
+        "graph": {},
+        "feedback": {},
+        "manifest": {"source_paths": [], "schema_version": "1.0"},
+    }
+
+    html = render_context_html(bundle)
+    assert "Generated artefact warning" in html, "Missing generated artefact warning"
+    assert "source of truth" in html.lower(), "Missing source of truth statement"
+    assert "Markdown" in html, "Missing reference to Markdown vault"
+    print(f"  Generated artefact warning present ✓")
+
+
+def test_p17a_html_contains_metadata():
+    """P17A-H10: context.html contains bundle metadata (id, vault, created_at)."""
+    print("\n=== Test P17A-H10: HTML contains bundle metadata ===")
+    from core.shared.context_html import render_context_html
+
+    bundle = {
+        "bundle_id": "abc123def456",
+        "vault": "demo-vault",
+        "created_at": "2026-05-11T12:34:56Z",
+        "validation_status": "pass",
+        "budget": {"note_count": 3, "used_chars": 100, "max_chars": 5000, "truncated": False},
+        "warnings": [],
+        "filters": {"status": "complete"},
+        "notes": [],
+        "graph": {},
+        "feedback": {},
+        "manifest": {"source_paths": [], "schema_version": "2.0"},
+    }
+
+    html = render_context_html(bundle)
+    assert "abc123def456" in html, "bundle_id not in HTML"
+    assert "demo-vault" in html, "vault not in HTML"
+    assert "2026-05-11T12:34:56Z" in html, "created_at not in HTML"
+    assert "Bundle Metadata" in html, "Missing 'Bundle Metadata' heading"
+    print(f"  Bundle metadata present in HTML ✓")
+
+
+def test_p17a_html_contains_notes():
+    """P17A-H11: context.html contains note paths and fields."""
+    print("\n=== Test P17A-H11: HTML contains notes ===")
+    from core.shared.context_html import render_context_html
+
+    bundle = {
+        "bundle_id": "test-notes",
+        "vault": "test-vault",
+        "created_at": "2026-05-11T00:00:00Z",
+        "validation_status": "pass",
+        "budget": {},
+        "warnings": [],
+        "filters": {},
+        "notes": [
+            {
+                "path": "Fundamentals/Algorithms.md",
+                "fields": {"type": "core-concept", "status": "complete"},
+                "sections": {"Key Principles": "Sorting, searching."},
+                "body": "",
+                "related": ["Fundamentals/Data Structures.md"],
+            }
+        ],
+        "graph": {},
+        "feedback": {},
+        "manifest": {"source_paths": [], "schema_version": "1.0"},
+    }
+
+    html = render_context_html(bundle)
+    assert "Fundamentals/Algorithms.md" in html, "Note path not in HTML"
+    assert "core-concept" in html, "Note field value not in HTML"
+    assert "Key Principles" in html, "Note section heading not in HTML"
+    assert "Sorting, searching." in html, "Note section body not in HTML"
+    assert "Notes" in html, "Missing Notes section heading"
+    print(f"  Notes rendered in HTML ✓")
+
+
+def test_p17a_html_contains_manifest_hashes():
+    """P17A-H12: context.html contains manifest hash table when package_files provided."""
+    print("\n=== Test P17A-H12: HTML contains manifest hashes ===")
+    from core.shared.context_html import render_context_html
+
+    bundle = {
+        "bundle_id": "test-manifest",
+        "vault": "test-vault",
+        "created_at": "2026-05-11T00:00:00Z",
+        "validation_status": "pass",
+        "budget": {},
+        "warnings": [],
+        "filters": {},
+        "notes": [],
+        "graph": {},
+        "feedback": {},
+        "manifest": {"source_paths": [], "schema_version": "1.0"},
+    }
+    package_files = {
+        "context.json": {"sha256": "a" * 64, "bytes": 512},
+        "context.md": {"sha256": "b" * 64, "bytes": 256},
+    }
+
+    html = render_context_html(bundle, package_files=package_files)
+    assert "Manifest Hashes" in html, "Missing Manifest Hashes section"
+    assert "context.json" in html, "context.json not in manifest hash table"
+    assert "context.md" in html, "context.md not in manifest hash table"
+    assert "a" * 64 in html, "SHA-256 hash not in HTML"
+    print(f"  Manifest hashes rendered in HTML ✓")
+
+
+# ============================================================
 # Main
 # ============================================================
 
@@ -7520,7 +7885,7 @@ def main():
     test_p3_cli_feedback()
 
     # Phase 4 — Export and Packaging
-    test_p4_export_writes_all_six_files()
+    test_p4_export_writes_all_seven_files()
     test_p4_context_json_valid()
     test_p4_context_md_contains_required_fields()
     test_p4_manifest_contains_all_files()
@@ -7711,6 +8076,23 @@ def main():
     test_p15b_failed_put_leaves_original_unchanged()
     test_p15b_no_temp_files_left_behind()
     test_p15b_existing_get_note_still_works()
+
+    # ---- Phase 17A: HTML Bundle Renderer ----
+    print("\n" + "=" * 60)
+    print("Phase 17A — HTML Bundle Renderer")
+    print("=" * 60)
+    test_p17a_export_includes_context_html()
+    test_p17a_manifest_includes_context_html()
+    test_p17a_manifest_html_hash_matches_file()
+    test_p17a_existing_files_unchanged()
+    test_p17a_html_is_deterministic()
+    test_p17a_html_escapes_script_injection()
+    test_p17a_html_escapes_frontmatter()
+    test_p17a_html_no_remote_assets()
+    test_p17a_html_contains_artefact_warning()
+    test_p17a_html_contains_metadata()
+    test_p17a_html_contains_notes()
+    test_p17a_html_contains_manifest_hashes()
 
     print()
     print("=" * 60)

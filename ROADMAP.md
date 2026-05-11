@@ -4,7 +4,7 @@
 
 Context Vault Engine is moving from a usable local vault application into a private context operating layer for humans, local LLMs, and agent clients.
 
-The current foundation is strong: deterministic Markdown validation, schema enforcement, analysis, improvement tasks, feedback, lexical search, context bundles, export packages, security scanning, FastAPI routes, and a local UI are already implemented. The current roadmap places the active work around Phase 16 - Visual Graph and Missing Concepts UI.
+The current foundation is strong: deterministic Markdown validation, schema enforcement, analysis, improvement tasks, feedback, lexical search, context bundles, export packages, security scanning, FastAPI routes, and a local UI are already implemented. The current roadmap places the active work around Phase 17 - Distribution and Local App Launcher.
 
 The next strategic direction should preserve the existing local-first, deterministic-first model while adding a new post-completion target:
 
@@ -92,7 +92,7 @@ The backend is strong. The local UI has reached a usable application baseline. T
 
 ## Current Active Phase
 
-**Phase 16 - Visual Graph and Missing Concepts UI**
+**Phase 17 - Distribution and Local App Launcher**
 
 ## Phase Status Overview
 
@@ -114,7 +114,8 @@ The backend is strong. The local UI has reached a usable application baseline. T
 | 13    | Bundle, Export, and Security UI         | Complete |
 | 14    | Feedback and Task Workflow UI           | Complete |
 | 15    | Note Browser and Safe Editing UI        | Complete |
-| 16    | Visual Graph and Missing Concepts UI    | Next     |
+| 16    | Visual Graph and Missing Concepts UI    | Complete |
+| 17A   | HTML Bundle Renderer                    | Complete |
 | 17    | Distribution and Local App Launcher     | Planned  |
 | 18    | CI and Release Hardening                | Planned  |
 | 19    | Context Controller Layer                | Planned  |
@@ -163,38 +164,54 @@ Delivered:
 - note browser
 - safe note edit API
 - safe note editing UI
+- graph explorer and missing concepts UI
 
 This completes the first major usability pass.
 
 ## Remaining Roadmap
 
-### Phase 16 - Visual Graph and Missing Concepts UI
+### Phase 16 - Visual Graph and Missing Concepts UI — Complete
 
-#### Purpose
+**Status:** Complete (Phase 16 — 2026-05-11)
 
-Make schema-derived relationships and missing expected concepts visible.
+**UI build:** PASS (GraphExplorer.svelte 31.75 kB / 9.00 kB gzip)
+**Backend tests:** 242 (all pass, no changes to backend)
 
-#### Deliver
+**Delivered:**
+- `ui/src/components/GraphExplorer.svelte` — vault selector, graph summary metrics, node type/edge type filters, grouped searchable node browser, node inspector (neighbours + related notes + missing neighbours), missing concepts tab with ranked table and non-destructive action card generator.
+- `ui/src/pages/graph.astro` — new Astro page at `/app/graph`.
+- `ui/src/lib/api.ts` — `fetchGraph`, `fetchGraphNeighbors`, `fetchGraphRelated`, `fetchGraphMissing` helper functions and all associated types.
+- `ui/src/layouts/AppLayout.astro` — **Graph** added to sidebar navigation.
+- QUICKSTART.md, TESTING.md, ROADMAP.md updated.
 
-- Graph view for domains, subdomains, topics, notes, and expected concepts
-- Missing concepts panel
-- Node inspector
-- Related notes panel
-- Relationship-type filters
-- Action to create a task or draft from a missing concept
-- Clear labelling that relationships are schema-derived, not semantic inference
-
-#### Acceptance Criteria
-
-- User can see missing expected concepts visually.
-- User can inspect related notes from graph nodes.
-- User can generate an improvement action from a missing concept.
-- UI does not imply semantic relationships where none exist.
+**Safety:** No backend changes. Action card is non-destructive (no file writes, no API writes). Raw JSON panels collapsed by default. UI clearly labels all relationships as schema-derived and deterministic.
 
 #### Suggested Commit
 
 ```
 feat(ui): add graph and missing concept visualisation
+```
+---
+
+### Phase 17A - HTML Bundle Renderer
+
+**Status:** Complete (Phase 17A — 2026-05-11)
+
+**Backend tests:** 254 (12 new Phase 17A tests + 6 existing P4 tests updated; all pass)
+**UI build:** PASS (no frontend changes)
+
+**Delivered:**
+- `core/shared/context_html.py` — NEW: `render_context_html()` and `_render_*` helpers. Python standard library only (`html`, `json`). All user content is HTML-escaped. No remote assets. Deterministic output.
+- `core/shared/context_package.py` — imports `render_context_html`; generates `context.html` before manifest; adds `context.html` to `files_info` and `manifest["files"]`; writes `context.html` to package temp dir.
+- `mcp/test_verify.py` — 12 new Phase 17A tests (security, determinism, content, manifest hash); 6 existing P4 export tests updated for 7-file expectation.
+- `README.md`, `QUICKSTART.md`, `TESTING.md`, `API.md` — package file list and export docs updated.
+
+**Safety:** All note body/section/frontmatter content is HTML-escaped via `html.escape`. No `<script>` tags, no `javascript:` URLs, no remote assets, no external stylesheets. CSS is inline in a `<style>` block. Output is deterministic for identical bundle input (no render timestamps, no random IDs).
+
+#### Suggested Commit
+
+```
+feat(export): add deterministic HTML bundle renderer
 ```
 
 ---

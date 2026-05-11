@@ -7,6 +7,7 @@ Package layout:
     dist/context-bundles/<bundle-id>/
         context.json          Full bundle JSON
         context.md            Human-readable Markdown rendering
+        context.html          Deterministic static HTML rendering (Phase 17A)
         manifest.json         Package manifest with SHA-256 file hashes
         validation.json       Validation status and warnings from bundle
         graph.json            Graph relationships from bundle
@@ -32,6 +33,8 @@ import shutil
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
+
+from core.shared.context_html import render_context_html
 
 # Repo root is three levels up from this file:
 #   core/shared/context_package.py → core/shared/ → core/ → <repo root>
@@ -197,6 +200,7 @@ def export_context_package(
             "files": {
                 "context.json":          {"sha256": "...", "bytes": N},
                 "context.md":            {"sha256": "...", "bytes": N},
+                "context.html":          {"sha256": "...", "bytes": N},
                 "manifest.json":         {"sha256": "...", "bytes": N},
                 "validation.json":       {"sha256": "...", "bytes": N},
                 "graph.json":            {"sha256": "...", "bytes": N},
@@ -277,13 +281,26 @@ def export_context_package(
         _build_feedback_summary_json(bundle), indent=2, ensure_ascii=False
     ).encode("utf-8")
 
-    # Compute file info (sha256 + size) for the five non-manifest files.
-    files_info: dict[str, dict] = {
+    # Compute file info (sha256 + size) for the five content files.
+    content_files_info: dict[str, dict] = {
         "context.json": _file_info(context_json_bytes),
         "context.md": _file_info(context_md_bytes),
         "validation.json": _file_info(validation_json_bytes),
         "graph.json": _file_info(graph_json_bytes),
         "feedback-summary.json": _file_info(feedback_json_bytes),
+    }
+
+    # Build context.html using the five content-file hashes as partial package
+    # info.  context.html cannot include its own hash (circular), and
+    # manifest.json's hash is also not yet known at this point.
+    context_html_bytes = render_context_html(
+        bundle, package_files=content_files_info
+    ).encode("utf-8")
+
+    # Final files_info: all six non-manifest files.
+    files_info: dict[str, dict] = {
+        **content_files_info,
+        "context.html": _file_info(context_html_bytes),
     }
 
     # Build manifest (manifest.json does not include its own hash — circular).
@@ -318,6 +335,7 @@ def export_context_package(
 
         (tmp_dir_path / "context.json").write_bytes(context_json_bytes)
         (tmp_dir_path / "context.md").write_bytes(context_md_bytes)
+        (tmp_dir_path / "context.html").write_bytes(context_html_bytes)
         (tmp_dir_path / "validation.json").write_bytes(validation_json_bytes)
         (tmp_dir_path / "graph.json").write_bytes(graph_json_bytes)
         (tmp_dir_path / "feedback-summary.json").write_bytes(feedback_json_bytes)

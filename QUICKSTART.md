@@ -203,7 +203,7 @@ On success returns the updated note's `path`, `fields`, `body`, and `validation`
 
 ---
 
-## 5d. Export Context Package (Phase 4)
+## 5d. Export Context Package (Phase 4 / Phase 17A)
 
 **Export the default bundle to disk:**
 ```bash
@@ -225,6 +225,7 @@ py run.py export --overwrite
   "files": {
     "context.json":          {"sha256": "...", "bytes": 12345},
     "context.md":            {"sha256": "...", "bytes": 6789},
+    "context.html":          {"sha256": "...", "bytes": 9876},
     "manifest.json":         {"sha256": "...", "bytes": 890},
     "validation.json":       {"sha256": "...", "bytes": 234},
     "graph.json":            {"sha256": "...", "bytes": 56},
@@ -240,10 +241,18 @@ py run.py export --overwrite
 |------|---------|
 | `context.json` | Full bundle JSON |
 | `context.md` | Human-readable Markdown rendering |
+| `context.html` | Deterministic static HTML rendering for human review (Phase 17A) |
 | `manifest.json` | SHA-256 hashes + metadata for all other files |
 | `validation.json` | Validation status and warnings |
 | `graph.json` | Graph relationships for selected notes |
 | `feedback-summary.json` | Feedback entries relevant to selected notes |
+
+**`context.html` notes:**
+- Generated from `context.json` / bundle data using Python standard library only.
+- Contains no remote scripts, remote CSS, or external assets of any kind.
+- All note content is HTML-escaped; note Markdown is not parsed into raw HTML.
+- Output is deterministic: identical bundle input produces identical HTML.
+- `context.html` is a generated artefact — Markdown vault notes remain the source of truth.
 
 **Overwrite behaviour:**
 - Without `--overwrite`: exits 1 with `PACKAGE_EXISTS` error if the package directory already exists.
@@ -702,6 +711,79 @@ The Note Browser at `/app/notes` includes a safe in-place editor for existing no
 - `Vault Files/` is protected from writes.
 - The original file is unchanged if validation or write fails.
 - Client-side: null bytes and empty body are blocked before the request is sent.
+
+---
+
+## 6k. Graph Explorer UI (Phase 16)
+
+The **Graph** page (`/app/graph`) provides a browser-based view of the vault's
+schema-derived relationship graph and missing expected concepts.
+
+> **Important:** All graph relationships are schema-derived and deterministic.
+> They are **not** semantic links, AI-inferred connections, or similarity scores.
+
+**Opening the Graph page:**
+1. Start the backend server: `py mcp/server/mcp_server.py`
+2. Start the Astro UI: `cd ui && npm run dev`
+3. Click **Graph** in the sidebar.
+
+**Vault selection:**
+- Use the **Vault** dropdown to choose a registered vault.
+- Click **Reload** to refresh both the graph and the missing concepts data.
+- Switching vaults automatically reloads both datasets.
+
+**What the Graph tab shows:**
+- Total nodes and total edges across the whole graph.
+- Per-type node counts (note, domain, subdomain, topic, expected_concept).
+- Per-type edge counts (parent, member_of, expected_coverage).
+- A grouped, searchable node list for every node in the graph.
+- Node type filter toggles and edge type filter toggles — click to hide/show groups.
+- A text search box to find nodes by label or id.
+
+**Node types:**
+| Type | Meaning |
+|---|---|
+| `note` | A vault note (Markdown file) |
+| `domain` | Schema-defined domain hub |
+| `subdomain` | Schema-defined subdomain hub |
+| `topic` | Schema-defined topic hub |
+| `expected_concept` | Concept declared in `EXPECTED_CONCEPTS` but absent from vault |
+
+**Edge types:**
+| Type | Meaning |
+|---|---|
+| `parent` | Hierarchy link (subdomain → domain, topic → subdomain) |
+| `member_of` | Note belongs to a domain/subdomain/topic hub |
+| `expected_coverage` | Note satisfies, or group declares, an expected concept slot |
+
+**Selecting a node:**
+- Click any node row in the Graph tab to select it and switch to the **Inspector** tab automatically.
+
+**Inspector tab:**
+- Shows node id, type, and label.
+- Shows all direct neighbours (filtered by the active node/edge type filters).
+- For `note` nodes only:
+  - **Related notes** — notes that share a domain, subdomain, or topic hub with this note (strength shown as `topic > subdomain > domain`).
+  - **Missing expected concepts near this note** — expected concepts the schema declares near this note's group hubs that are not yet in the vault.
+- Click **inspect →** on any neighbour to navigate to that node.
+- Raw JSON (neighbours, related, missing) is hidden by default behind a `<details>` expander.
+
+**Missing Concepts tab:**
+- Shows summary cards: expected, present, missing, and domains assessed.
+- Lists all missing expected concepts in a ranked table (rank, concept name, subdomain, score).
+- Score is derived from schema-defined priority weighting — higher score = higher priority gap.
+- Click **Draft action** on any row to generate a non-destructive action card.
+
+**Non-destructive action card:**
+- Click **Draft action** next to any missing concept.
+- The action card generates a copyable instruction block — it **does not create any files** and **does not call any write API**.
+- The card shows: proposed title, proposed path, domain, subdomain, suggested sections, and a full copyable instruction.
+- Click **Copy** to copy the instruction to the clipboard.
+- Use the copied instruction with your editor, CLI, or Copilot to create the note manually.
+- The card is labelled: **Draft action only — no file has been created**.
+
+**Raw JSON panels:**
+- All raw JSON panels (graph, inspector, missing concepts, action card) are hidden behind collapsed `<details>` elements by default.
 
 ---
 
