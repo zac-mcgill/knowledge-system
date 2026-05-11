@@ -1,6 +1,6 @@
 # Context Vault Engine — Testing
 
-All tests live in `mcp/test_verify.py`. There are 200 test functions covering all implemented phases.
+All tests live in `mcp/test_verify.py`. There are 264 test functions covering all implemented phases.
 
 ---
 
@@ -46,6 +46,7 @@ py run.py bundle                # prints JSON bundle to stdout
 py run.py feedback              # prints feedback entries as JSON
 py run.py export --overwrite    # exports bundle to dist/; exit 0 = ok
 py run.py security              # prints security scan as JSON; exit 0 = pass/warning
+py run.py app                   # starts server and opens browser (requires built UI)
 ```
 
 ---
@@ -471,6 +472,40 @@ cd ui && npm run build     # must complete with 0 errors
 - `TESTING.md` — added Phase 17A section (this entry); test count updated.
 - `ROADMAP.md` — Phase 17A marked Complete.
 - `API.md` — export package file list updated.
+
+### Phase 17 — Distribution and Local App Launcher
+
+Phase 17 adds the `py run.py app` command to start the local FastAPI server and open the browser UI in one step. No new external dependencies were added. 10 deterministic backend tests were added.
+
+**Verification steps for Phase 17:**
+
+```bash
+py mcp/test_verify.py          # all tests must pass (10 new Phase 17 launcher tests)
+py run.py validate             # 19/19 valid
+py run.py security             # status: pass
+py run.py feedback             # exits 0, valid JSON
+py run.py export --overwrite   # status: ok; 7 files including context.html
+cd ui && npm run build         # must complete with 0 errors
+cd ..
+py run.py app                  # starts server, opens browser to http://127.0.0.1:8000/app
+```
+
+**Server detection cases tested manually:**
+
+1. No server running → server starts, browser opens.
+2. Compatible server already running → reuses it, opens browser.
+3. Port occupied by another process → clear error message, exits 1.
+4. `ui/dist` missing → prints build instructions, starts API-only server.
+
+**What was added:**
+
+- `core/app_launcher.py` — new module: `check_ui_built()`, `probe_server()`, `is_context_vault_health_response()`, `wait_for_server()`, `open_browser()`, `launch_server()`, `main()`. Standard library only.
+- `run.py` — `app` command added to `USAGE` string; dispatches to `core.app_launcher.main(repo_root)`.
+- `mcp/test_verify.py` — 10 new Phase 17 launcher tests (constants, health validator, connection refused, UI build detection, command dispatch).
+- `README.md` — `py run.py app` added to quick-start commands; Local App Launcher section added.
+- `QUICKSTART.md` — Local App Launcher section added under Section 6.
+- `TESTING.md` — added Phase 17 section (this entry); test count updated.
+- `ROADMAP.md` — Phase 17 marked Complete; active phase updated to Phase 18.
 
 ### Phase 16 — Visual Graph and Missing Concepts UI
 

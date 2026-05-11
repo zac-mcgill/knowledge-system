@@ -126,6 +126,9 @@ py run.py export                  # export bundle as portable package to dist/
 py run.py export --overwrite      # replace existing package
 py run.py security                # scan bundle for security issues
 py run.py security --fail-on-warning  # exit 1 for warning results too
+
+# Local app launcher (Phase 17)
+py run.py app                     # start server + open browser UI
 ```
 
 On Windows, use ``py run.py ...``. On macOS/Linux, use ``python3 run.py ...``.
@@ -163,6 +166,18 @@ py mcp/server/mcp_server.py
 ```
 
 `GET /app` serves the compiled frontend. If `ui/dist` has not been built, it returns a structured `503 UI_NOT_BUILT` response with build instructions. No other API routes are affected.
+
+### Local App Launcher (Phase 17)
+
+One command opens the local app:
+
+```bash
+cd ui && npm install && npm run build && cd ..
+py run.py app
+# → opens http://127.0.0.1:8000/app in the default browser
+```
+
+`py run.py app` starts the FastAPI server if it is not already running, waits until it is reachable, then opens the browser. If a compatible server is already running, it reuses it. Press Ctrl+C to stop the server.
 
 **Stack:** Astro 5, TypeScript, Tailwind CSS 4, Svelte 5 islands.  
 **UI scope (Phase 10):** server health, vault list, vault selector, completion summary, validation status, security scan status, navigation shell for future pages.  

@@ -46,7 +46,9 @@ Commands:
                  Exit 0 on pass/warning, exit 1 on fail
                  Use --fail-on-warning to exit 1 for warning results
   templates      Generate canonical templates from vault schema
-                 Use --dry-run to preview without writing"""
+                 Use --dry-run to preview without writing
+  app            Start local server and open browser UI
+                 Reuses an already-running server automatically"""
 
 
 def _init_vault(repo_root: Path) -> None:
@@ -136,6 +138,10 @@ def main():
     if command == "bootstrap":
         from core.bootstrap_vault import main as bootstrap_main
         raise SystemExit(bootstrap_main(repo_root))
+
+    if command == "app":
+        from core.app_launcher import main as app_main
+        raise SystemExit(app_main(repo_root))
 
     if command == "bundle":
         import json

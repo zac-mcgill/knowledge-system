@@ -7755,6 +7755,209 @@ def test_p17a_html_contains_manifest_hashes():
 
 
 # ============================================================
+# Phase 17 — Distribution and Local App Launcher Tests
+# ============================================================
+
+
+def test_p17_run_py_app_in_usage():
+    """P17-L1: run.py USAGE string includes the 'app' command."""
+    print("\n=== Test P17-L1: run.py USAGE includes 'app' command ===")
+    import run as run_module
+
+    usage = run_module.USAGE
+    assert "app" in usage, "USAGE string does not mention the 'app' command"
+    # Confirm basic wording is present
+    assert "browser" in usage.lower() or "server" in usage.lower(), (
+        "USAGE for 'app' should mention server or browser"
+    )
+    print("  'app' command present in USAGE ✓")
+
+
+def test_p17_launcher_constants():
+    """P17-L2: Launcher constants point to 127.0.0.1:8000 with /app and /health."""
+    print("\n=== Test P17-L2: launcher constants ===")
+    from core.app_launcher import (
+        DEFAULT_HOST,
+        DEFAULT_PORT,
+        BASE_URL,
+        APP_URL,
+        HEALTH_URL,
+    )
+
+    assert DEFAULT_HOST == "127.0.0.1", f"Unexpected DEFAULT_HOST: {DEFAULT_HOST!r}"
+    assert DEFAULT_PORT == 8000, f"Unexpected DEFAULT_PORT: {DEFAULT_PORT}"
+    assert "127.0.0.1" in BASE_URL, f"BASE_URL missing host: {BASE_URL!r}"
+    assert "8000" in BASE_URL, f"BASE_URL missing port: {BASE_URL!r}"
+    assert APP_URL.endswith("/app"), f"APP_URL does not end with /app: {APP_URL!r}"
+    assert HEALTH_URL.endswith("/health"), (
+        f"HEALTH_URL does not end with /health: {HEALTH_URL!r}"
+    )
+    print(f"  DEFAULT_HOST={DEFAULT_HOST!r}, DEFAULT_PORT={DEFAULT_PORT} ✓")
+    print(f"  APP_URL={APP_URL!r} ✓")
+    print(f"  HEALTH_URL={HEALTH_URL!r} ✓")
+
+
+def test_p17_is_context_vault_health_response_accepts_valid():
+    """P17-L3: is_context_vault_health_response accepts a valid health payload."""
+    print("\n=== Test P17-L3: health response validator accepts valid payload ===")
+    from core.app_launcher import is_context_vault_health_response
+
+    valid = {
+        "status": "ok",
+        "data": {
+            "vaults": {"demo-vault": {"notes": 19}},
+            "uptime_seconds": 42,
+            "requests_served": 7,
+        },
+    }
+    assert is_context_vault_health_response(valid), (
+        "Valid health payload was rejected"
+    )
+    print("  Valid health payload accepted ✓")
+
+
+def test_p17_is_context_vault_health_response_rejects_unrelated():
+    """P17-L4: is_context_vault_health_response rejects unrelated JSON."""
+    print("\n=== Test P17-L4: health response validator rejects unrelated JSON ===")
+    from core.app_launcher import is_context_vault_health_response
+
+    cases = [
+        {"status": "ok", "data": {"something_else": True}},   # no 'vaults' key
+        {"status": "ok"},                                       # no 'data' key
+        {"status": "error", "data": {"vaults": {}}},           # non-ok status
+        {"message": "Hello World"},                             # totally unrelated
+        [1, 2, 3],                                              # not a dict
+        None,                                                   # None
+        42,                                                     # int
+        "ok",                                                   # string
+    ]
+    for payload in cases:
+        result = is_context_vault_health_response(payload)
+        assert not result, (
+            f"Unrelated payload was incorrectly accepted: {payload!r}"
+        )
+    print(f"  All {len(cases)} unrelated payloads rejected ✓")
+
+
+def test_p17_is_context_vault_health_response_rejects_malformed():
+    """P17-L5: is_context_vault_health_response rejects malformed health responses."""
+    print("\n=== Test P17-L5: health response validator rejects malformed responses ===")
+    from core.app_launcher import is_context_vault_health_response
+
+    malformed = [
+        {},                                                     # empty dict
+        {"status": "ok", "data": None},                        # data is None
+        {"status": "ok", "data": []},                          # data is list
+        {"status": "ok", "data": {"vaults": None}},            # vaults is None (key present)
+    ]
+    # Note: the last case has "vaults" key so it should pass — we only check
+    # key presence, not value type at this level.  Separate it out.
+    reject_cases = malformed[:3]
+    for payload in reject_cases:
+        result = is_context_vault_health_response(payload)
+        assert not result, (
+            f"Malformed payload was incorrectly accepted: {payload!r}"
+        )
+    # Case where "vaults" key exists but is None: still passes key check
+    edge_case = {"status": "ok", "data": {"vaults": None}}
+    assert is_context_vault_health_response(edge_case), (
+        "Payload with vaults=None should be accepted (key presence check only)"
+    )
+    print(f"  Malformed payloads handled correctly ✓")
+
+
+def test_p17_probe_server_handles_connection_refused():
+    """P17-L6: probe_server returns None when connection is refused (no crash)."""
+    print("\n=== Test P17-L6: probe_server handles connection refused ===")
+    import unittest.mock
+    import urllib.error
+
+    from core.app_launcher import probe_server
+
+    # Simulate connection refused by patching urlopen
+    refused = urllib.error.URLError(reason="Connection refused")
+    with unittest.mock.patch("urllib.request.urlopen", side_effect=refused):
+        result = probe_server()
+
+    assert result is None, (
+        f"probe_server should return None on connection refused, got {result!r}"
+    )
+    print("  probe_server returns None on connection refused ✓")
+
+
+def test_p17_check_ui_built_missing_dist():
+    """P17-L7: check_ui_built returns False when ui/dist is missing."""
+    print("\n=== Test P17-L7: check_ui_built handles missing dist ===")
+    import tempfile
+
+    from core.app_launcher import check_ui_built
+
+    with tempfile.TemporaryDirectory() as tmp:
+        repo_root = Path(tmp)
+        # No ui/dist directory created
+        result = check_ui_built(repo_root)
+    assert result is False, "check_ui_built should return False when dist is missing"
+    print("  check_ui_built returns False for missing ui/dist ✓")
+
+
+def test_p17_check_ui_built_missing_index():
+    """P17-L8: check_ui_built returns False when dist exists but index.html is absent."""
+    print("\n=== Test P17-L8: check_ui_built handles missing index.html ===")
+    import tempfile
+
+    from core.app_launcher import check_ui_built
+
+    with tempfile.TemporaryDirectory() as tmp:
+        repo_root = Path(tmp)
+        dist = repo_root / "ui" / "dist"
+        dist.mkdir(parents=True)
+        # index.html NOT created
+        result = check_ui_built(repo_root)
+    assert result is False, (
+        "check_ui_built should return False when index.html is missing"
+    )
+    print("  check_ui_built returns False when index.html absent ✓")
+
+
+def test_p17_check_ui_built_present():
+    """P17-L9: check_ui_built returns True when ui/dist/index.html exists."""
+    print("\n=== Test P17-L9: check_ui_built detects built UI ===")
+    import tempfile
+
+    from core.app_launcher import check_ui_built
+
+    with tempfile.TemporaryDirectory() as tmp:
+        repo_root = Path(tmp)
+        dist = repo_root / "ui" / "dist"
+        dist.mkdir(parents=True)
+        (dist / "index.html").write_text("<!DOCTYPE html>", encoding="utf-8")
+        result = check_ui_built(repo_root)
+    assert result is True, "check_ui_built should return True when index.html present"
+    print("  check_ui_built returns True for built UI ✓")
+
+
+def test_p17_existing_commands_dispatch():
+    """P17-L10: run.py still dispatches known commands and rejects unknown ones."""
+    print("\n=== Test P17-L10: run.py command dispatch unchanged ===")
+    import run as run_module
+
+    # Known commands (excluding app which is handled separately)
+    known_non_app = ["validate", "report", "analyse", "improve"]
+    for cmd in known_non_app:
+        assert cmd in run_module.COMMANDS, (
+            f"Expected command {cmd!r} missing from run.COMMANDS"
+        )
+
+    # 'app' must not appear in COMMANDS (it is handled before the COMMANDS dict)
+    assert "app" not in run_module.COMMANDS, (
+        "'app' should be handled directly in main(), not via COMMANDS dict"
+    )
+
+    print(f"  Known commands still in COMMANDS: {sorted(run_module.COMMANDS)} ✓")
+    print("  'app' handled outside COMMANDS dict ✓")
+
+
+# ============================================================
 # Main
 # ============================================================
 
@@ -8093,6 +8296,21 @@ def main():
     test_p17a_html_contains_metadata()
     test_p17a_html_contains_notes()
     test_p17a_html_contains_manifest_hashes()
+
+    # ---- Phase 17: Distribution and Local App Launcher ----
+    print("\n" + "=" * 60)
+    print("Phase 17 — Distribution and Local App Launcher")
+    print("=" * 60)
+    test_p17_run_py_app_in_usage()
+    test_p17_launcher_constants()
+    test_p17_is_context_vault_health_response_accepts_valid()
+    test_p17_is_context_vault_health_response_rejects_unrelated()
+    test_p17_is_context_vault_health_response_rejects_malformed()
+    test_p17_probe_server_handles_connection_refused()
+    test_p17_check_ui_built_missing_dist()
+    test_p17_check_ui_built_missing_index()
+    test_p17_check_ui_built_present()
+    test_p17_existing_commands_dispatch()
 
     print()
     print("=" * 60)

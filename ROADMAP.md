@@ -92,7 +92,7 @@ The backend is strong. The local UI has reached a usable application baseline. T
 
 ## Current Active Phase
 
-**Phase 17 - Distribution and Local App Launcher**
+**Phase 18 - CI and Release Hardening**
 
 ## Phase Status Overview
 
@@ -116,7 +116,7 @@ The backend is strong. The local UI has reached a usable application baseline. T
 | 15    | Note Browser and Safe Editing UI        | Complete |
 | 16    | Visual Graph and Missing Concepts UI    | Complete |
 | 17A   | HTML Bundle Renderer                    | Complete |
-| 17    | Distribution and Local App Launcher     | Planned  |
+| 17    | Distribution and Local App Launcher     | Complete |
 | 18    | CI and Release Hardening                | Planned  |
 | 19    | Context Controller Layer                | Planned  |
 | 20    | MCP Compatibility Layer                 | Planned  |
@@ -218,36 +218,24 @@ feat(export): add deterministic HTML bundle renderer
 
 ### Phase 17 - Distribution and Local App Launcher
 
-#### Purpose
+**Status:** Complete (Phase 17 — 2026-05-11)
 
-Reduce launch friction.
+**Backend tests:** 264 (10 new Phase 17 launcher tests; all pass)
+**UI build:** PASS (no frontend changes)
 
-#### Deliver
+**Delivered:**
+- `core/app_launcher.py` — NEW: `check_ui_built()`, `probe_server()`, `is_context_vault_health_response()`, `wait_for_server()`, `open_browser()`, `launch_server()`, `main()`. Standard library only (`subprocess`, `urllib.request`, `webbrowser`, `json`, `time`, `pathlib`).
+- `run.py` — `app` command added to `USAGE` string; dispatches to `core.app_launcher.main(repo_root)`.
+- `mcp/test_verify.py` — 10 new Phase 17 tests (constants, health validator, connection refused, UI build detection, command dispatch).
+- `README.md`, `QUICKSTART.md`, `TESTING.md` — local app launcher documented.
 
-```
-py run.py app
-```
-
-Behaviour:
-
-- starts FastAPI server
-- serves built UI
-- opens browser
-- detects already-running server
-- gives clear failure messages
-- preserves existing API server command
-
-#### Later Options
-
-- PyInstaller executable
-- desktop shell
-- packaged releases
-
-#### Acceptance Criteria
-
-- One command opens the app.
-- Existing CLI/API/test flows remain stable.
-- Docs explain local app mode.
+**Behaviour:**
+- `py run.py app` starts the FastAPI server if not already running, waits for `/health`, opens `http://127.0.0.1:8000/app` in the browser, stays attached to terminal.
+- If a compatible server is already running (detected via `/health` response shape), reuses it and opens the browser — no duplicate server started.
+- If port 8000 is occupied by an unrecognised process, prints a clear error and exits 1.
+- If `ui/dist` is missing, prints build instructions and starts the API server anyway.
+- No new external dependencies.
+- `py mcp/server/mcp_server.py` direct invocation unchanged.
 
 #### Suggested Commit
 

@@ -405,6 +405,47 @@ py mcp/server/mcp_server.py
 
 **Stack:** Astro 5 · TypeScript · Tailwind CSS 4 · Svelte 5 islands
 
+### Local App Launcher (Phase 17)
+
+The `py run.py app` command starts or reuses the local server and opens the browser in one step.
+
+**First-time setup (build the UI once):**
+
+```bash
+cd ui
+npm install
+npm run build
+cd ..
+```
+
+**Launch the app:**
+
+```bash
+py run.py app
+# → opens http://127.0.0.1:8000/app in the default browser
+```
+
+**What happens:**
+
+1. If the server is not running, it starts `mcp/server/mcp_server.py` automatically.
+2. It waits until `http://127.0.0.1:8000/health` responds with a valid Context Vault Engine response.
+3. It opens `http://127.0.0.1:8000/app` in the default system browser.
+4. The server remains attached to the terminal. Press **Ctrl+C** to stop it.
+
+**If the server is already running:**
+
+`py run.py app` detects it via the `/health` endpoint, reuses it, and opens the browser — no duplicate server is started.
+
+**If `ui/dist` has not been built:**
+
+The launcher prints clear build instructions and starts the API server anyway (API endpoints work; the `/app` route returns `UI_NOT_BUILT` until you build the UI).
+
+**The direct server command remains unchanged:**
+
+```bash
+py mcp/server/mcp_server.py   # same as before — start server directly
+```
+
 ### Dashboard panels (Phase 12A)
 
 The Dashboard shows a complete vault health overview loaded in parallel from all relevant API endpoints:
