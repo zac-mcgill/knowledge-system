@@ -1602,11 +1602,14 @@ def endpoint_feedback(
         result = _load_feedback(vault_path)
 
         return {
-            "status": result["status"],
-            "vault": vault,
-            "entries": result["entries"],
-            "warnings": result["warnings"],
-            "errors": result["errors"],
+            "status": "ok",
+            "data": {
+                "status": result["status"],
+                "vault": vault,
+                "entries": result["entries"],
+                "warnings": result["warnings"],
+                "errors": result["errors"],
+            },
         }
     except Exception as exc:
         return _error("FEEDBACK_ERROR", f"Feedback retrieval failed: {exc}", 500)

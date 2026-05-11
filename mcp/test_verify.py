@@ -2638,16 +2638,18 @@ def test_p3_api_feedback_endpoint():
             f"/feedback status {resp.status_code}: {resp.text[:300]}"
         )
         body = resp.json()
-        assert body["status"] in ("ok", "error"), f"Unexpected status: {body['status']}"
-        assert body["vault"] == vault
-        assert "entries" in body
-        assert "warnings" in body
-        assert "errors" in body
-        assert isinstance(body["entries"], list)
-        assert isinstance(body["warnings"], list)
-        assert isinstance(body["errors"], list)
+        assert body["status"] == "ok", f"Expected ok envelope: {body}"
+        data = body["data"]
+        assert data["status"] in ("ok", "error"), f"Unexpected data status: {data['status']}"
+        assert data["vault"] == vault
+        assert "entries" in data
+        assert "warnings" in data
+        assert "errors" in data
+        assert isinstance(data["entries"], list)
+        assert isinstance(data["warnings"], list)
+        assert isinstance(data["errors"], list)
         print(f"  GET /feedback?vault={vault}: 200 OK, "
-              f"status={body['status']}, entries={len(body['entries'])} ✓")
+              f"status={data['status']}, entries={len(data['entries'])} ✓")
 
 
 def test_p3_api_feedback_unknown_vault():
@@ -4262,6 +4264,89 @@ def test_p5_api_security_synthetic_fail():
     assert key_findings[0]["severity"] == "critical"
     assert result["summary"]["fail"] >= 1
     print(f"  Synthetic private key: status=fail, critical finding ✓")
+
+
+def test_p5_feedback_envelope_does_not_block_security_state():
+    """P5-REG1: GET /feedback returns standard {status:ok, data:{...}} envelope.
+
+    Regression test for the Dashboard security scan stuck-loading bug.
+
+    Root cause: GET /feedback previously returned data flat at the top level
+    instead of inside the standard envelope {status:'ok', data:{...}}.  When
+    the Dashboard's loadVaultData function processed the feedback result it
+    accessed fbResult.data.status, which was undefined (TypeError), causing
+    the function to throw before the security state update was reached, leaving
+    securityState stuck at 'loading'.
+
+    This test verifies:
+    1. GET /feedback returns the standard envelope (status at top, data nested).
+    2. data.status is present and is 'ok' or 'error'.
+    3. data.entries, data.vault, data.warnings, data.errors are all present.
+    4. POST /context/security (the security scan) still resolves independently.
+    """
+    print("\n=== Test P5-REG1: GET /feedback envelope + security independence ===")
+    try:
+        from fastapi.testclient import TestClient
+    except RuntimeError as exc:
+        print(f"  SKIP: TestClient unavailable — {exc}")
+        return
+
+    from mcp.server.mcp_server import app
+
+    vault = list_vaults()[0]
+    build_index(vault)
+
+    with TestClient(app, raise_server_exceptions=True) as client:
+        # 1. GET /feedback must use the standard {status:'ok', data:{...}} envelope.
+        fb_resp = client.get(f"/feedback?vault={vault}")
+        assert fb_resp.status_code == 200, (
+            f"GET /feedback status {fb_resp.status_code}: {fb_resp.text[:200]}"
+        )
+        fb_body = fb_resp.json()
+        assert fb_body["status"] == "ok", (
+            f"GET /feedback outer envelope must be 'ok', got: {fb_body['status']}"
+        )
+        assert "data" in fb_body, (
+            f"GET /feedback response must have 'data' field — got: {list(fb_body.keys())}"
+        )
+        fb_data = fb_body["data"]
+        assert fb_data["status"] in ("ok", "error"), (
+            f"GET /feedback data.status must be 'ok' or 'error': {fb_data.get('status')}"
+        )
+        assert "entries" in fb_data, "GET /feedback data must have 'entries'"
+        assert "vault" in fb_data, "GET /feedback data must have 'vault'"
+        assert "warnings" in fb_data, "GET /feedback data must have 'warnings'"
+        assert "errors" in fb_data, "GET /feedback data must have 'errors'"
+        print(
+            f"  GET /feedback: standard envelope ✓ "
+            f"data.status={fb_data['status']!r}, entries={len(fb_data['entries'])}"
+        )
+
+        # 2. POST /context/security must still resolve to pass/warning/fail.
+        sec_resp = client.post("/context/security", json={
+            "vault": vault,
+            "filters": {"status": "complete"},
+            "max_notes": 10,
+            "include_body": True,
+            "allow_partial": False,
+        })
+        assert sec_resp.status_code == 200, (
+            f"POST /context/security status {sec_resp.status_code}: {sec_resp.text[:200]}"
+        )
+        sec_body = sec_resp.json()
+        assert sec_body["status"] == "ok", f"Expected ok envelope: {sec_body}"
+        sec_data = sec_body["data"]
+        assert sec_data["status"] in ("pass", "warning", "fail"), (
+            f"Unexpected scan status: {sec_data['status']}"
+        )
+        assert "findings" in sec_data
+        assert "summary" in sec_data
+        assert "scanned" in sec_data
+        print(
+            f"  POST /context/security: resolves independently ✓ "
+            f"scan_status={sec_data['status']!r}, "
+            f"note_count={sec_data['scanned']['note_count']}"
+        )
 
 
 # ------------------------------------------------------------------
@@ -6310,7 +6395,7 @@ def test_p14a_delete_feedback_removes_entry():
             # Confirm it is gone from GET /feedback
             resp3 = client.get(f"/feedback?vault={vault_name}")
             assert resp3.status_code == 200
-            entries_after = resp3.json()["entries"]
+            entries_after = resp3.json()["data"]["entries"]
             ids_after = [e.get("id") for e in entries_after]
             assert entry_id not in ids_after, (
                 f"Deleted id {entry_id!r} still present after DELETE"
@@ -6371,7 +6456,7 @@ def test_p14a_get_feedback_reflects_post():
 
             get1 = client.get(f"/feedback?vault={vault_name}")
             assert get1.status_code == 200
-            ids_after_post = [e.get("id") for e in get1.json()["entries"]]
+            ids_after_post = [e.get("id") for e in get1.json()["data"]["entries"]]
             assert entry_id in ids_after_post, "New entry not in GET /feedback after POST"
             print(f"  GET /feedback reflects POST ✓")
 
@@ -6385,7 +6470,7 @@ def test_p14a_get_feedback_reflects_post():
                 "comment": "Updated via PUT.",
             })
             get2 = client.get(f"/feedback?vault={vault_name}")
-            entries_after_put = {e.get("id"): e for e in get2.json()["entries"]}
+            entries_after_put = {e.get("id"): e for e in get2.json()["data"]["entries"]}
             assert entries_after_put[entry_id]["signal"] == "needs_example", (
                 "Signal not updated after PUT"
             )
@@ -6394,7 +6479,7 @@ def test_p14a_get_feedback_reflects_post():
             # DELETE
             client.delete(f"/feedback/{entry_id}", params={"vault": vault_name})
             get3 = client.get(f"/feedback?vault={vault_name}")
-            ids_after_delete = [e.get("id") for e in get3.json()["entries"]]
+            ids_after_delete = [e.get("id") for e in get3.json()["data"]["entries"]]
             assert entry_id not in ids_after_delete, "Entry still present after DELETE"
             print(f"  GET /feedback reflects DELETE ✓")
     finally:
@@ -8241,6 +8326,7 @@ def main():
     test_p5_api_security_invalid_filter()
     test_p5_api_security_empty_filter_no_crash()
     test_p5_api_security_synthetic_fail()
+    test_p5_feedback_envelope_does_not_block_security_state()
     # Export integration tests
     test_p5_export_require_security_pass_false_unchanged()
     test_p5_export_require_security_pass_clean_bundle()

@@ -159,50 +159,61 @@
     securityState   = 'loading'; securityData   = null; securityError   = '';
     expandedTaskIds = new Set();
 
-    const [sResult, vResult, tResult, mResult, fbResult, secResult] = await Promise.all([
-      fetchSummary(vault),
-      fetchValidation(vault),
-      fetchTasks(vault, { limit: 5, include_feedback: true }),
-      fetchMissing(vault),
-      fetchFeedback(vault),
-      fetchSecurity(vault),
-    ]);
+    try {
+      const [sResult, vResult, tResult, mResult, fbResult, secResult] = await Promise.all([
+        fetchSummary(vault),
+        fetchValidation(vault),
+        fetchTasks(vault, { limit: 5, include_feedback: true }),
+        fetchMissing(vault),
+        fetchFeedback(vault),
+        fetchSecurity(vault),
+      ]);
 
-    if (isOk(sResult)) { summaryData = sResult.data; summaryState = 'ok'; }
-    else { summaryError = errorMessage(sResult); summaryState = 'error'; }
+      if (isOk(sResult)) { summaryData = sResult.data; summaryState = 'ok'; }
+      else { summaryError = errorMessage(sResult); summaryState = 'error'; }
 
-    if (isOk(vResult)) { validationData = vResult.data; validationState = 'ok'; }
-    else { validationError = errorMessage(vResult); validationState = 'error'; }
+      if (isOk(vResult)) { validationData = vResult.data; validationState = 'ok'; }
+      else { validationError = errorMessage(vResult); validationState = 'error'; }
 
-    if (isOk(tResult)) { tasksData = tResult.data; tasksState = 'ok'; }
-    else { tasksError = errorMessage(tResult); tasksState = 'error'; }
+      if (isOk(tResult)) { tasksData = tResult.data; tasksState = 'ok'; }
+      else { tasksError = errorMessage(tResult); tasksState = 'error'; }
 
-    if (isOk(mResult)) {
-      missingData = mResult.data;
-      missingState = 'ok';
-    } else {
-      if (mResult.error?.code === 'MISSING_CONCEPTS_EMPTY') {
-        missingError = 'No expected concepts are defined in vault_schema.py.';
-        missingState = 'warning';
+      if (isOk(mResult)) {
+        missingData = mResult.data;
+        missingState = 'ok';
       } else {
-        missingError = errorMessage(mResult);
-        missingState = 'error';
+        if (mResult.error?.code === 'MISSING_CONCEPTS_EMPTY') {
+          missingError = 'No expected concepts are defined in vault_schema.py.';
+          missingState = 'warning';
+        } else {
+          missingError = errorMessage(mResult);
+          missingState = 'error';
+        }
       }
-    }
 
-    if (isOk(fbResult)) {
-      feedbackData = fbResult.data;
-      feedbackState = fbResult.data.status === 'error' ? 'error' : 'ok';
-      if (fbResult.data.status === 'error') {
-        feedbackError = 'Feedback file has validation errors.';
+      if (isOk(fbResult)) {
+        feedbackData = fbResult.data;
+        feedbackState = fbResult.data.status === 'error' ? 'error' : 'ok';
+        if (fbResult.data.status === 'error') {
+          feedbackError = 'Feedback file has validation errors.';
+        }
+      } else {
+        feedbackError = errorMessage(fbResult);
+        feedbackState = 'error';
       }
-    } else {
-      feedbackError = errorMessage(fbResult);
-      feedbackState = 'error';
-    }
 
-    if (isOk(secResult)) { securityData = secResult.data; securityState = 'ok'; }
-    else { securityError = errorMessage(secResult); securityState = 'error'; }
+      if (isOk(secResult)) { securityData = secResult.data; securityState = 'ok'; }
+      else { securityError = errorMessage(secResult); securityState = 'error'; }
+    } catch (err) {
+      // Safety net: clear any states still stuck at 'loading' on unexpected errors.
+      const msg = err instanceof Error ? err.message : 'Unexpected error loading vault data';
+      if (summaryState   === 'loading') { summaryError   = msg; summaryState   = 'error'; }
+      if (validationState=== 'loading') { validationError= msg; validationState= 'error'; }
+      if (tasksState     === 'loading') { tasksError     = msg; tasksState     = 'error'; }
+      if (missingState   === 'loading') { missingError   = msg; missingState   = 'error'; }
+      if (feedbackState  === 'loading') { feedbackError  = msg; feedbackState  = 'error'; }
+      if (securityState  === 'loading') { securityError  = msg; securityState  = 'error'; }
+    }
   }
 
   async function handleVaultChange(event: Event) {
