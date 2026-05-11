@@ -2191,6 +2191,11 @@ def endpoint_app(ui_path: str = ""):
             },
         )
 
+    # Astro static build emits each page as <route>/index.html.
+    # When the candidate is a directory (e.g. ui/dist/notes/), serve its index.html.
+    if candidate.is_dir():
+        candidate = candidate / "index.html"
+
     # SPA fallback: unknown paths serve index.html
     if not candidate.is_file():
         candidate = _UI_DIST / "index.html"

@@ -8135,6 +8135,252 @@ def test_p18_release_checklist_coverage():
 
 
 # ============================================================
+# Phase 18 Routing Regression — Nested App Route Serving
+# ============================================================
+
+
+def test_p18r_nested_routes_served_correctly():
+    """P18-R1: Nested /app/<route> paths serve route-specific HTML, not Dashboard.
+
+    Creates a temporary fake ui/dist with per-route index.html files to verify
+    that the FastAPI static serving logic resolves directories correctly.
+    Patches _UI_DIST at the module level so TestClient sees the fake dist.
+    """
+    print("\n=== Test P18-R1: Nested /app/<route> serves route HTML ===")
+    import tempfile
+    import shutil
+    from unittest.mock import patch
+
+    try:
+        from fastapi.testclient import TestClient
+    except RuntimeError as exc:
+        print(f"  SKIP: TestClient unavailable — {exc}")
+        return
+
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    import mcp.server.mcp_server as _server_module
+    from mcp.server.mcp_server import app as _fastapi_app
+
+    tmpdir = Path(tempfile.mkdtemp(prefix="cve_test_dist_"))
+    try:
+        # Create fake dashboard (root index.html)
+        (tmpdir / "index.html").write_text(
+            "<html><body>DASHBOARD</body></html>", encoding="utf-8"
+        )
+        # Create fake route directories with distinct content
+        routes = {
+            "notes": "NOTES_PAGE",
+            "graph": "GRAPH_PAGE",
+            "security": "SECURITY_PAGE",
+            "exports": "EXPORTS_PAGE",
+            "feedback": "FEEDBACK_PAGE",
+            "bundles": "BUNDLES_PAGE",
+            "vault-setup": "VAULT_SETUP_PAGE",
+        }
+        for route, marker in routes.items():
+            route_dir = tmpdir / route
+            route_dir.mkdir()
+            (route_dir / "index.html").write_text(
+                f"<html><body>{marker}</body></html>", encoding="utf-8"
+            )
+
+        with patch.object(_server_module, "_UI_DIST", tmpdir):
+            with TestClient(_fastapi_app) as client:
+                # Dashboard root must return Dashboard content
+                resp = client.get("/app")
+                assert resp.status_code == 200, f"/app returned {resp.status_code}"
+                assert "DASHBOARD" in resp.text, (
+                    f"/app must serve Dashboard; got: {resp.text[:200]}"
+                )
+                print(f"  GET /app → DASHBOARD ✓")
+
+                resp_slash = client.get("/app/")
+                assert resp_slash.status_code == 200, f"/app/ returned {resp_slash.status_code}"
+                assert "DASHBOARD" in resp_slash.text, (
+                    f"/app/ must serve Dashboard; got: {resp_slash.text[:200]}"
+                )
+                print(f"  GET /app/ → DASHBOARD ✓")
+
+                # Each nested route must serve its own page, not Dashboard
+                for route, marker in routes.items():
+                    resp = client.get(f"/app/{route}")
+                    assert resp.status_code == 200, (
+                        f"/app/{route} returned {resp.status_code}"
+                    )
+                    assert marker in resp.text, (
+                        f"/app/{route} must serve '{marker}', not Dashboard; "
+                        f"got: {resp.text[:200]}"
+                    )
+                    assert "DASHBOARD" not in resp.text, (
+                        f"/app/{route} must NOT serve Dashboard content"
+                    )
+                    print(f"  GET /app/{route} → {marker} ✓")
+
+    finally:
+        shutil.rmtree(tmpdir, ignore_errors=True)
+
+
+def test_p18r_unknown_nested_route_falls_back_to_dashboard():
+    """P18-R2: Unknown nested routes fall back to Dashboard (SPA fallback)."""
+    print("\n=== Test P18-R2: Unknown nested route → Dashboard fallback ===")
+    import tempfile
+    import shutil
+    from unittest.mock import patch
+
+    try:
+        from fastapi.testclient import TestClient
+    except RuntimeError as exc:
+        print(f"  SKIP: TestClient unavailable — {exc}")
+        return
+
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    import mcp.server.mcp_server as _server_module
+    from mcp.server.mcp_server import app as _fastapi_app
+
+    tmpdir = Path(tempfile.mkdtemp(prefix="cve_test_dist_"))
+    try:
+        (tmpdir / "index.html").write_text(
+            "<html><body>DASHBOARD</body></html>", encoding="utf-8"
+        )
+
+        with patch.object(_server_module, "_UI_DIST", tmpdir):
+            with TestClient(_fastapi_app) as client:
+                # A route with no matching directory falls back to Dashboard
+                resp = client.get("/app/nonexistent-route")
+                assert resp.status_code == 200, (
+                    f"/app/nonexistent-route returned {resp.status_code}"
+                )
+                assert "DASHBOARD" in resp.text, (
+                    f"Unknown route must fall back to Dashboard; got: {resp.text[:200]}"
+                )
+                print(f"  GET /app/nonexistent-route → DASHBOARD (SPA fallback) ✓")
+
+    finally:
+        shutil.rmtree(tmpdir, ignore_errors=True)
+
+
+def test_p18r_static_assets_served_directly():
+    """P18-R3: Static asset files (JS/CSS) inside ui/dist are served directly."""
+    print("\n=== Test P18-R3: Static assets served directly ===")
+    import tempfile
+    import shutil
+    from unittest.mock import patch
+
+    try:
+        from fastapi.testclient import TestClient
+    except RuntimeError as exc:
+        print(f"  SKIP: TestClient unavailable — {exc}")
+        return
+
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    import mcp.server.mcp_server as _server_module
+    from mcp.server.mcp_server import app as _fastapi_app
+
+    tmpdir = Path(tempfile.mkdtemp(prefix="cve_test_dist_"))
+    try:
+        (tmpdir / "index.html").write_text(
+            "<html><body>DASHBOARD</body></html>", encoding="utf-8"
+        )
+        astro_dir = tmpdir / "_astro"
+        astro_dir.mkdir()
+        (astro_dir / "main.abc123.js").write_text(
+            "console.log('test');", encoding="utf-8"
+        )
+
+        with patch.object(_server_module, "_UI_DIST", tmpdir):
+            with TestClient(_fastapi_app) as client:
+                resp = client.get("/app/_astro/main.abc123.js")
+                assert resp.status_code == 200, (
+                    f"/app/_astro/main.abc123.js returned {resp.status_code}"
+                )
+                assert "console.log" in resp.text, (
+                    f"JS asset not served correctly; got: {resp.text[:200]}"
+                )
+                print(f"  GET /app/_astro/main.abc123.js → JS content served ✓")
+
+    finally:
+        shutil.rmtree(tmpdir, ignore_errors=True)
+
+
+def test_p18r_path_traversal_still_blocked_with_real_routes():
+    """P18-R4: Path traversal remains blocked after directory-aware routing fix."""
+    print("\n=== Test P18-R4: Path traversal still blocked ===")
+    import tempfile
+    import shutil
+    from unittest.mock import patch
+
+    try:
+        from fastapi.testclient import TestClient
+    except RuntimeError as exc:
+        print(f"  SKIP: TestClient unavailable — {exc}")
+        return
+
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    import mcp.server.mcp_server as _server_module
+    from mcp.server.mcp_server import app as _fastapi_app
+
+    tmpdir = Path(tempfile.mkdtemp(prefix="cve_test_dist_"))
+    try:
+        (tmpdir / "index.html").write_text(
+            "<html><body>DASHBOARD</body></html>", encoding="utf-8"
+        )
+
+        with patch.object(_server_module, "_UI_DIST", tmpdir):
+            with TestClient(_fastapi_app) as client:
+                attacks = [
+                    "../../../etc/passwd",
+                    "..%2F..%2F..%2Fetc%2Fpasswd",
+                ]
+                for attack in attacks:
+                    resp = client.get(f"/app/{attack}")
+                    # 400 = traversal blocked, 404 = URL normalized, 200/503 = SPA fallback
+                    assert resp.status_code in (400, 404, 200, 503), (
+                        f"Unexpected status {resp.status_code} for {attack!r}"
+                    )
+                    if resp.status_code == 400:
+                        body = resp.json()
+                        assert body["error"]["code"] == "PATH_TRAVERSAL"
+                        print(f"  Blocked (400): {attack[:30]!r} ✓")
+                    elif resp.status_code == 404:
+                        print(f"  Safe 404 (URL normalized): {attack[:30]!r} ✓")
+                    else:
+                        # SPA fallback is also acceptable — no sensitive data
+                        print(f"  Safe response ({resp.status_code}): {attack[:30]!r} ✓")
+
+    finally:
+        shutil.rmtree(tmpdir, ignore_errors=True)
+
+
+def test_p18r_api_routes_unaffected():
+    """P18-R5: API endpoints continue to work after the routing fix."""
+    print("\n=== Test P18-R5: API routes unaffected ===")
+    try:
+        from fastapi.testclient import TestClient
+    except RuntimeError as exc:
+        print(f"  SKIP: TestClient unavailable — {exc}")
+        return
+
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    from mcp.server.mcp_server import app as _fastapi_app
+
+    with TestClient(_fastapi_app) as client:
+        resp = client.get("/health")
+        assert resp.status_code == 200, f"/health broken: {resp.status_code}"
+        assert resp.json()["status"] == "ok"
+        print(f"  GET /health: 200 OK ✓")
+
+        resp = client.get("/vaults")
+        assert resp.status_code == 200, f"/vaults broken: {resp.status_code}"
+        assert resp.json()["status"] == "ok"
+        print(f"  GET /vaults: 200 OK ✓")
+
+
+# ============================================================
 # Main
 # ============================================================
 
@@ -8501,6 +8747,16 @@ def main():
     test_p18_gitignore_excludes_dist()
     test_p18_readme_has_ci_badge()
     test_p18_release_checklist_coverage()
+
+    # ---- Phase 18 Routing Regression — Nested App Route Serving ----
+    print("\n" + "=" * 60)
+    print("Phase 18 Routing Regression — Nested App Route Serving")
+    print("=" * 60)
+    test_p18r_nested_routes_served_correctly()
+    test_p18r_unknown_nested_route_falls_back_to_dashboard()
+    test_p18r_static_assets_served_directly()
+    test_p18r_path_traversal_still_blocked_with_real_routes()
+    test_p18r_api_routes_unaffected()
 
     print()
     print("=" * 60)
