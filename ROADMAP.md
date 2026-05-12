@@ -92,7 +92,7 @@ The backend is strong. The local UI has reached a usable application baseline. T
 
 ## Current Active Phase
 
-Phase 30 (UI Release Quality Pass). Phase 30A (screenshot-driven page-by-page UX audit consolidation) is complete. Phase 30B (app shell, theme, layout, and primitive foundation) is complete. Phase 30C is the next implementation slice and has not started. Phases 0 to 26 and Phase 29 (UI/UX Quality and Design System) remain complete: Phase 29A (Roadmap formalisation and UI/UX audit), Phase 29B, Phase 29C, Phase 29D, and Phase 29E all shipped. Phase 27 (Registry and Reuse Layer) and Phase 28 (Optional Semantic Retrieval) remain explicitly deferred and are not started, prepared, or implied by Phase 30.
+Phase 30 (UI Release Quality Pass). Phase 30A (screenshot-driven page-by-page UX audit consolidation) is complete. Phase 30B (app shell, theme, layout, and primitive foundation) is complete. Phase 30C (Dashboard Redesign) is complete. Phase 30D is the next implementation slice and has not started. Phases 0 to 26 and Phase 29 (UI/UX Quality and Design System) remain complete: Phase 29A (Roadmap formalisation and UI/UX audit), Phase 29B, Phase 29C, Phase 29D, and Phase 29E all shipped. Phase 27 (Registry and Reuse Layer) and Phase 28 (Optional Semantic Retrieval) remain explicitly deferred and are not started, prepared, or implied by Phase 30.
 
 ## Phase Status Overview
 
@@ -129,7 +129,7 @@ Phase 30 (UI Release Quality Pass). Phase 30A (screenshot-driven page-by-page UX
 | 29    | UI/UX Quality and Design System         | Complete |
 | 30A   | UI Release Quality Pass - Audit         | Complete |
 | 30B   | UI Foundation (shell, theme, primitives)| Complete |
-| 30C   | Dashboard Redesign                      | Planned  |
+| 30C   | Dashboard Redesign                      | Complete |
 | 30D   | Core Workflow Page Redesigns            | Planned  |
 | 30E   | Review/Governance/Developer Polish      | Planned  |
 | 30F   | Final QA, A11y, Responsive, Light Mode  | Planned  |
@@ -1046,7 +1046,9 @@ feat(ui): app shell layout modes, theme tokens, and foundation primitives (Phase
 
 #### Phase 30C - Dashboard Redesign
 
-**Status:** Planned.
+**Status:** Complete (Phase 30C - 2026-05-12).
+
+**Backend tests:** 818 (18 new Phase 30C tests; all pass).
 
 **Scope:**
 - Promote a canonical vault status band (validation, security, coverage, missing concepts, feedback) as the headline using `cve-status-strip` and `cve-banner`.
@@ -1054,6 +1056,14 @@ feat(ui): app shell layout modes, theme tokens, and foundation primitives (Phase
 - Make every status tile actionable with a single CTA and a last-checked timestamp.
 - Resolve Dashboard / Issue Review duplication (Missing Concepts shown twice, feedback severity vs Pass headline).
 - Light-mode token coverage validated on this page.
+
+**Delivered:**
+- `/app/` now mounts AppLayout with `layoutMode="wide"`.
+- Dashboard rewritten around the Phase 30B primitives: `cve-toolbar` header, single `cve-banner` readiness headline (success / warning / danger / info), five-tile `cve-status-strip` (Validation, Security, Coverage, Missing concepts, Feedback) with deterministic last-checked text and a single CTA per tile deep-linking to `/app/validation`, `/app/security`, `/app/notes`, `/app/graph`, and `/app/feedback` respectively.
+- Two-column `cve-dashboard-grid`: Next best actions (top three pending tasks, CTA to `/app/tasks`) and Vault health (uptime, requests, latency, rate limit, notes indexed, schema hash, index size).
+- Raw JSON demoted: inline `JSON.stringify` / `Show raw JSON` / `cve-raw` blocks removed; a single `cve-details--inspector` block with a `cve-details__developer-link` deep-links to `/app/raw?vault=...`.
+- Issue Review duplication eliminated.
+- New Phase 30C primitives in `ui/src/styles/global.css` (`.cve-link`, `.cve-status-tile--*`, `.cve-status-tile__cta`, `.cve-status-tile__meta`, `.cve-dashboard-grid`, `.cve-kv-row*`, `.cve-next-action*`) use `var(--cve-*)` tokens only - no Tailwind dark literals.
 
 **Out of scope:** Workflow page redesigns (deferred to 30D); Validation / Tasks / Raw implementation (also 30D); Controller redesign (deferred to 30E).
 

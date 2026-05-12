@@ -1,9 +1,12 @@
 ---
 import AppLayout from '../layouts/AppLayout.astro';
 import Dashboard from '../components/Dashboard.svelte';
+// Phase 30C - Dashboard is the command centre entry point and now opts
+// into the wide layout mode so the canonical status band can use the
+// available content width on ultrawide displays.
 ---
 
-<AppLayout title="Dashboard">
+<AppLayout title="Dashboard" layoutMode="wide">
   <!-- Svelte island: client:load hydrates immediately on page load -->
   <Dashboard client:load />
 </AppLayout>

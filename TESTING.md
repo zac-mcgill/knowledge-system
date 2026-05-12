@@ -1,13 +1,13 @@
 # Context Vault Engine - Testing
 
-All tests live in `mcp/test_verify.py`. The suite currently has 800 test functions, all of which are executed by the manual runner in `main()` at the bottom of that file. A passing run prints `ALL VERIFICATION TESTS PASSED`. Historical test counts from earlier phases (272, 382, 429, 467, 507, 548, 553, 564, 587, 607, 625, 650, 675, 695, 706, 721, 740, 763, 787) appear later in this document as part of the phase changelog and are not the current total.
+All tests live in `mcp/test_verify.py`. The suite currently has 818 test functions, all of which are executed by the manual runner in `main()` at the bottom of that file. A passing run prints `ALL VERIFICATION TESTS PASSED`. Historical test counts from earlier phases (272, 382, 429, 467, 507, 548, 553, 564, 587, 607, 625, 650, 675, 695, 706, 721, 740, 763, 787, 800) appear later in this document as part of the phase changelog and are not the current total.
 
 ## Current Verification Summary
 
 A full local verification consists of:
 
 ```bash
-py mcp/test_verify.py           # 800 tests, all must pass
+py mcp/test_verify.py           # 818 tests, all must pass
 py run.py validate              # vault schema-compliance
 py run.py security              # status: pass (or warning, never fail)
 py run.py feedback              # exits 0, valid JSON
@@ -2284,7 +2284,47 @@ The Phase 30B work adds 13 deterministic guardrail tests in `mcp/test_verify.py`
 **Verification steps for Phase 30B:**
 
 ```bash
-py mcp/test_verify.py            # 800 tests, all must pass
+py mcp/test_verify.py            # 818 tests, all must pass
+py run.py validate               # vault still valid
+py run.py security               # status: pass
+py run.py feedback               # exits 0, valid JSON
+py run.py export --overwrite     # status: ok
+cd ui; npm run build             # builds without errors
+```
+
+---
+
+## Phase 30C - Dashboard Redesign
+
+Phase 30C is the first page-level redesign on top of the Phase 30B foundation. It rewrites the `/app/` Dashboard around the new primitives: a `cve-toolbar` header, a single `cve-banner` readiness headline, a five-tile `cve-status-strip` (Validation, Security, Coverage, Missing concepts, Feedback) with deep links into the authoritative workflow routes, a two-column `cve-dashboard-grid` with Next best actions and Vault health, and a `cve-details--inspector` block whose `cve-details__developer-link` demotes raw JSON to `/app/raw`. No backend, API, schema, MCP, or dependency change.
+
+The Phase 30C work adds 18 deterministic guardrail tests in `mcp/test_verify.py`, bringing the total to 818.
+
+| Test | Purpose |
+|---|---|
+| `test_p30c_1_index_declares_wide_layout` | `/app/` mounts AppLayout with `layoutMode="wide"` |
+| `test_p30c_2_dashboard_uses_cve_toolbar` | Dashboard renders the `cve-toolbar` primitive |
+| `test_p30c_3_dashboard_uses_cve_status_strip` | Dashboard renders the `cve-status-strip` with the five canonical tiles |
+| `test_p30c_4_dashboard_uses_cve_banner` | Dashboard renders the `cve-banner` readiness headline with all four severities available |
+| `test_p30c_5_dashboard_cta_validation_route` | Validation tile CTA deep-links to `/app/validation` |
+| `test_p30c_6_dashboard_cta_security_route` | Security tile CTA deep-links to `/app/security` |
+| `test_p30c_7_dashboard_cta_feedback_route` | Feedback tile CTA deep-links to `/app/feedback` |
+| `test_p30c_8_dashboard_cta_coverage_or_missing_route` | Coverage / missing / tasks tile deep-links to `/app/graph`, `/app/notes`, or `/app/tasks` |
+| `test_p30c_9_dashboard_no_inline_raw_json_block` | Dashboard has no inline raw JSON disclosure (no `Show raw JSON`, no `JSON.stringify`, no `cve-raw`) |
+| `test_p30c_10_dashboard_developer_deep_link` | Dashboard exposes the `cve-details__developer-link` contract to `/app/raw` |
+| `test_p30c_11_dashboard_no_tailwind_dark_literals` | Dashboard and `index.astro` use semantic tokens, not Tailwind dark literals |
+| `test_p30c_12_dashboard_last_checked_text` | Dashboard surfaces deterministic last-checked text |
+| `test_p30c_13_dashboard_status_tile_modifiers_in_css` | `global.css` defines Phase 30C status-tile / dashboard-grid / next-action primitives using tokens only |
+| `test_p30c_14_no_dashboard_missing_concepts_duplicate_heading` | Old `Issue Review` duplication is removed |
+| `test_p30c_15_roadmap_phase30c_complete_others_planned` | ROADMAP marks 30C complete; 30D/30E/30F planned; 27/28 deferred |
+| `test_p30c_16_placeholder_pages_not_prematurely_removed` | Validation / Tasks / Raw keep `PlaceholderPage` (real impl is Phase 30D) |
+| `test_p30c_17_no_new_runtime_dependencies` | No React / Vue / icon / animation / charting library introduced |
+| `test_p30c_18_no_em_dashes_in_dashboard_files` | Phase 30C files contain no em dashes |
+
+**Verification steps for Phase 30C:**
+
+```bash
+py mcp/test_verify.py            # 818 tests, all must pass
 py run.py validate               # vault still valid
 py run.py security               # status: pass
 py run.py feedback               # exits 0, valid JSON

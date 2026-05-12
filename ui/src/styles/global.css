@@ -1083,6 +1083,112 @@
     font-weight: 500;
   }
 
+
+  /* ------------------------------------------------------------------
+     Phase 30C - Dashboard primitives
+     ------------------------------------------------------------------
+     Tokenised helpers used by the redesigned Dashboard. No raw Tailwind
+     dark palette literals; everything resolves through --cve-* tokens
+     so the light-mode toggle (Phase 30F) can flip themes without
+     touching the Dashboard component.
+     ------------------------------------------------------------------ */
+  .cve-link {
+    color: var(--cve-info);
+    text-decoration: none;
+  }
+  .cve-link:hover {
+    color: var(--cve-text-strong);
+    text-decoration: underline;
+  }
+  .cve-link:focus-visible {
+    outline: 2px solid var(--cve-focus);
+    outline-offset: 2px;
+    border-radius: var(--cve-radius);
+  }
+  .cve-status-tile--success { border-left: 3px solid var(--cve-success); }
+  .cve-status-tile--warning { border-left: 3px solid var(--cve-warning); }
+  .cve-status-tile--danger  { border-left: 3px solid var(--cve-danger);  }
+  .cve-status-tile--info    { border-left: 3px solid var(--cve-info);    }
+  .cve-status-tile--neutral { border-left: 3px solid var(--cve-border);  }
+  .cve-status-tile__cta {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--cve-space-1);
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--cve-info);
+    text-decoration: none;
+    margin-top: var(--cve-space-1);
+  }
+  .cve-status-tile__cta:hover {
+    color: var(--cve-text-strong);
+    text-decoration: underline;
+  }
+  .cve-status-tile__meta {
+    font-size: 0.6875rem;
+    color: var(--cve-text-faint);
+    letter-spacing: 0.01em;
+    margin-top: var(--cve-space-1);
+  }
+  .cve-dashboard-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--cve-space-4);
+    align-items: start;
+  }
+  @media (min-width: 1024px) {
+    .cve-dashboard-grid {
+      grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+    }
+  }
+  .cve-kv-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: var(--cve-space-3);
+    font-size: 0.875rem;
+    padding: 0.125rem 0;
+  }
+  .cve-kv-row__key { color: var(--cve-text-muted); }
+  .cve-kv-row__value {
+    color: var(--cve-text);
+    font-family: ui-monospace, "Cascadia Code", "Fira Code", Consolas,
+      "Liberation Mono", Menlo, monospace;
+    font-size: 0.8125rem;
+  }
+  .cve-next-actions {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cve-space-2);
+  }
+  .cve-next-action {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--cve-space-3);
+    padding: var(--cve-space-2) var(--cve-space-3);
+    background-color: var(--cve-surface-muted);
+    border: 1px solid var(--cve-border-soft);
+    border-radius: var(--cve-radius);
+  }
+  .cve-next-action__priority {
+    flex-shrink: 0;
+    font-family: ui-monospace, monospace;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--cve-warning);
+    padding-top: 0.125rem;
+  }
+  .cve-next-action__body { min-width: 0; flex: 1; }
+  .cve-next-action__title {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--cve-text-strong);
+  }
+  .cve-next-action__hint {
+    font-size: 0.75rem;
+    color: var(--cve-text-muted);
+    margin-top: 0.125rem;
+  }
   /* ------------------------------------------------------------------
      Phase 30B - tokenised focus-visible coverage for new primitives
      ------------------------------------------------------------------ */

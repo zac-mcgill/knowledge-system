@@ -610,3 +610,21 @@ Deferred to later sub-phases:
 - Phase 30D ships the Notes / Import / Bundles / Exports / Security / Graph / Validation / Tasks / Raw redesigns (and replaces PlaceholderPage on Validation, Tasks, Raw).
 - Phase 30E ships the Review / Governance / Developer polish, including the full `cve-diff` implementation on Pending.
 - Phase 30F wires the user-facing light-mode toggle, finishes responsive and accessibility passes, and adds the final Tailwind-literal scan across migrated pages.
+
+## 21. Phase 30C Implementation Note
+
+Phase 30C (2026-05-12) ships the first page-level redesign on top of the Phase 30B foundation: the `/app/` Dashboard. Concretely:
+
+- `/app/` now mounts AppLayout with `layoutMode="wide"`. The Dashboard fills the wide content column instead of the narrower `standard` shell.
+- `ui/src/components/Dashboard.svelte` was rewritten around the Phase 30B primitives. The new structure is: a `cve-toolbar` header (title, vault selector, refresh action), a single `cve-banner` readiness headline whose severity is derived from the actual blocker / warning state (success / warning / danger / info, never colour-only), a five-tile `cve-status-strip` covering Validation, Security, Coverage, Missing concepts, and Feedback (each with a value, hint, deterministic last-checked text, and one CTA deep-linking to `/app/validation`, `/app/security`, `/app/notes`, `/app/graph`, and `/app/feedback` respectively), and a `cve-dashboard-grid` two-column body with Next best actions (top three tasks deep-linking to `/app/tasks`) and Vault health (key / value rows for uptime, requests served, average latency, rate limit, notes indexed, schema hash, and index size).
+- Raw JSON is no longer rendered inline. The previous `Show raw JSON` disclosures and `<pre>{JSON.stringify(...)}</pre>` blocks have been removed. A single `cve-details--inspector` block at the foot of the Dashboard exposes a `cve-details__developer-link` to `/app/raw?vault=<id>`, matching the Phase 30B Developer deep-link contract.
+- The old Issue Review section that duplicated Missing Concepts and tabbed analysis content has been removed. The Dashboard surfaces a single Missing concepts status tile and delegates the detailed queue to `/app/graph` and `/app/notes`.
+- Last-checked text is deterministic. Because the JSON API does not expose per-call timestamps, the Dashboard renders `Checked this session` / `Not yet checked` / `No timestamp exposed by API` rather than synthesising clock values at render time.
+- `ui/src/styles/global.css` gained a Phase 30C primitive block defining `.cve-link`, `.cve-status-tile--success/--warning/--danger/--info/--neutral`, `.cve-status-tile__cta`, `.cve-status-tile__meta`, `.cve-dashboard-grid` (responsive 2fr/1fr at 1024px+), `.cve-kv-row*`, and `.cve-next-action*`. All declarations use `var(--cve-*)` tokens only - no Tailwind dark literals, no light-mode literals.
+- `mcp/test_verify.py` adds 18 deterministic guardrail tests; total test count rises from 800 to 818.
+
+Deferred to later sub-phases:
+
+- Phase 30D ships the Notes / Import / Bundles / Exports / Security / Graph / Validation / Tasks / Raw redesigns and replaces `PlaceholderPage` on Validation, Tasks, and Raw.
+- Phase 30E ships the Review / Governance / Developer polish, including the full `cve-diff` implementation on Pending.
+- Phase 30F wires the user-facing light-mode toggle, finishes responsive and accessibility passes, and adds the final Tailwind-literal scan across migrated pages.

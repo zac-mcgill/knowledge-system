@@ -11653,6 +11653,26 @@ def main():
     test_p30b_12_placeholder_pages_not_removed()
     test_p30b_13_package_json_no_new_runtime_deps()
 
+    # Phase 30C - Dashboard Redesign
+    test_p30c_1_index_declares_wide_layout()
+    test_p30c_2_dashboard_uses_cve_toolbar()
+    test_p30c_3_dashboard_uses_cve_status_strip()
+    test_p30c_4_dashboard_uses_cve_banner()
+    test_p30c_5_dashboard_cta_validation_route()
+    test_p30c_6_dashboard_cta_security_route()
+    test_p30c_7_dashboard_cta_feedback_route()
+    test_p30c_8_dashboard_cta_coverage_or_missing_route()
+    test_p30c_9_dashboard_no_inline_raw_json_block()
+    test_p30c_10_dashboard_developer_deep_link()
+    test_p30c_11_dashboard_no_tailwind_dark_literals()
+    test_p30c_12_dashboard_last_checked_text()
+    test_p30c_13_dashboard_status_tile_modifiers_in_css()
+    test_p30c_14_no_dashboard_missing_concepts_duplicate_heading()
+    test_p30c_15_roadmap_phase30c_complete_others_planned()
+    test_p30c_16_placeholder_pages_not_prematurely_removed()
+    test_p30c_17_no_new_runtime_dependencies()
+    test_p30c_18_no_em_dashes_in_dashboard_files()
+
     print()
     print("=" * 60)
     print("ALL VERIFICATION TESTS PASSED")
@@ -19267,9 +19287,9 @@ def _repo_root():
 
 
 def test_doc_drift_readme_test_count():
-    """DOC-DRIFT-1: README quotes the current 800-test total, no stale counts."""
+    """DOC-DRIFT-1: README quotes the current 818-test total, no stale counts."""
     readme = (_repo_root() / "README.md").read_text(encoding="utf-8")
-    assert "800" in readme, "README.md must mention the current test count 800"
+    assert "818" in readme, "README.md must mention the current test count 818"
     stale_phrases = [
         "553 deterministic tests",
         "548 deterministic tests",
@@ -19292,29 +19312,31 @@ def test_doc_drift_readme_test_count():
         "763 tests.",
         "787 deterministic tests",
         "787 tests.",
+        "800 deterministic tests",
+        "800 tests.",
     ]
     for phrase in stale_phrases:
         assert phrase not in readme, f"README.md still mentions stale phrase {phrase!r}"
-    print(f"  README mentions 800 tests, no stale counts present ✓")
+    print(f"  README mentions 818 tests, no stale counts present ✓")
 
 
 def test_doc_drift_testing_test_count():
-    """DOC-DRIFT-2: TESTING.md current total is 800 and historical markers retained."""
+    """DOC-DRIFT-2: TESTING.md current total is 818 and historical markers retained."""
     text = (_repo_root() / "TESTING.md").read_text(encoding="utf-8")
-    assert "800 test functions" in text, "TESTING.md must state 800 test functions"
-    for marker in ("429", "467", "507", "548", "564", "587", "607", "625", "650", "675", "695", "706", "721", "740", "763", "787"):
+    assert "818 test functions" in text, "TESTING.md must state 818 test functions"
+    for marker in ("429", "467", "507", "548", "564", "587", "607", "625", "650", "675", "695", "706", "721", "740", "763", "787", "800"):
         assert marker in text, f"TESTING.md must retain historical test-count marker {marker}"
-    print(f"  TESTING.md states 800 functions and keeps historical markers ✓")
+    print(f"  TESTING.md states 818 functions and keeps historical markers ✓")
 
 
 def test_doc_drift_release_checklist_test_count():
-    """DOC-DRIFT-3: RELEASE_CHECKLIST references 800 tests and required commands."""
+    """DOC-DRIFT-3: RELEASE_CHECKLIST references 818 tests and required commands."""
     text = (_repo_root() / "RELEASE_CHECKLIST.md").read_text(encoding="utf-8")
-    assert "800" in text, "RELEASE_CHECKLIST.md must reference the 800-test target"
+    assert "818" in text, "RELEASE_CHECKLIST.md must reference the 818-test target"
     for req in ("test_verify.py", "run.py validate", "run.py security",
                 "run.py export", "GitHub Release"):
         assert req in text, f"RELEASE_CHECKLIST.md must contain {req!r}"
-    print(f"  RELEASE_CHECKLIST mentions 800 tests and required commands ✓")
+    print(f"  RELEASE_CHECKLIST mentions 818 tests and required commands ✓")
 
 
 def test_doc_drift_roadmap_active_phase():
@@ -20703,16 +20725,18 @@ def test_p29e_19_readme_states_phase29_complete():
 
 def test_p29e_20_release_checklist_test_count_updated():
     """P29E-20: RELEASE_CHECKLIST.md references the current test count.
-    Phase 30B bumped the total from 787 to 800."""
+    Phase 30C bumped the total from 800 to 818."""
     print("\n=== Test P29E-20: RELEASE_CHECKLIST test count ===")
     text = (_repo_root() / "RELEASE_CHECKLIST.md").read_text(encoding="utf-8")
-    assert "800" in text, "RELEASE_CHECKLIST.md must reference the current 800-test target"
+    assert "818" in text, "RELEASE_CHECKLIST.md must reference the current 818-test target"
     # The previous counts must not linger in the checklist after this phase.
     assert "all 763 tests green" not in text, \
         "RELEASE_CHECKLIST.md must not still say 'all 763 tests green'"
     assert "all 787 tests green" not in text, \
         "RELEASE_CHECKLIST.md must not still say 'all 787 tests green'"
-    print("  RELEASE_CHECKLIST.md references 800 tests ✓")
+    assert "all 800 tests green" not in text, \
+        "RELEASE_CHECKLIST.md must not still say 'all 800 tests green'"
+    print("  RELEASE_CHECKLIST.md references 818 tests ✓")
 
 
 def test_p29e_21_ui_ux_audit_has_phase29e_note():
@@ -21009,5 +21033,296 @@ def test_p30b_13_package_json_no_new_runtime_deps():
     print("  No new runtime dependencies in Phase 30B ✓")
 
 
+# ============================================================
+# Phase 30C - Dashboard Redesign
+# ============================================================
+
+_P30C_DASHBOARD_PATH = "ui/src/components/Dashboard.svelte"
+_P30C_INDEX_PATH = "ui/src/pages/index.astro"
+
+
+def _p30c_dashboard_text() -> str:
+    return _read_text(_P30C_DASHBOARD_PATH)
+
+
+def test_p30c_1_index_declares_wide_layout():
+    """P30C-1: /app/ Dashboard route declares layoutMode=\"wide\"."""
+    print("\n=== Test P30C-1: index.astro layoutMode=\"wide\" ===")
+    text = _read_text(_P30C_INDEX_PATH)
+    assert 'layoutMode="wide"' in text, \
+        "ui/src/pages/index.astro must declare layoutMode=\"wide\" for the Dashboard"
+    print("  index.astro uses wide layout mode ✓")
+
+
+def test_p30c_2_dashboard_uses_cve_toolbar():
+    """P30C-2: Dashboard mounts the Phase 30B cve-toolbar primitive."""
+    print("\n=== Test P30C-2: Dashboard uses cve-toolbar ===")
+    text = _p30c_dashboard_text()
+    assert "cve-toolbar" in text, \
+        "Dashboard.svelte must use the cve-toolbar primitive"
+    assert "cve-toolbar__main" in text, \
+        "Dashboard.svelte must use cve-toolbar__main"
+    assert "cve-toolbar__title" in text, \
+        "Dashboard.svelte must use cve-toolbar__title"
+    print("  Dashboard uses cve-toolbar primitive ✓")
+
+
+def test_p30c_3_dashboard_uses_cve_status_strip():
+    """P30C-3: Dashboard exposes a canonical cve-status-strip band."""
+    print("\n=== Test P30C-3: Dashboard uses cve-status-strip ===")
+    text = _p30c_dashboard_text()
+    assert "cve-status-strip" in text, \
+        "Dashboard.svelte must use the cve-status-strip primitive"
+    assert "cve-status-tile" in text, \
+        "Dashboard.svelte must use cve-status-tile inside the strip"
+    # Five canonical concerns must each have a tile label.
+    for label in ("Validation", "Security", "Coverage",
+                  "Missing concepts", "Feedback"):
+        assert label in text, \
+            f"Dashboard.svelte must label a status tile for {label!r}"
+    print("  Dashboard uses cve-status-strip with all five canonical tiles ✓")
+
+
+def test_p30c_4_dashboard_uses_cve_banner():
+    """P30C-4: Dashboard renders a readiness cve-banner."""
+    print("\n=== Test P30C-4: Dashboard uses cve-banner ===")
+    text = _p30c_dashboard_text()
+    assert "cve-banner" in text, \
+        "Dashboard.svelte must use the cve-banner primitive for the headline"
+    # The readiness banner must be able to express all four severities so
+    # the Dashboard can communicate blocker / warning / success without
+    # colour alone.
+    for variant in ("cve-banner--success", "cve-banner--warning",
+                    "cve-banner--danger", "cve-banner--info"):
+        assert variant in text, \
+            f"Dashboard.svelte must support banner variant {variant!r}"
+    print("  Dashboard uses cve-banner with success/warning/danger/info ✓")
+
+
+def test_p30c_5_dashboard_cta_validation_route():
+    """P30C-5: Validation tile deep-links to /app/validation."""
+    print("\n=== Test P30C-5: Dashboard CTA -> /app/validation ===")
+    text = _p30c_dashboard_text()
+    assert '/app/validation' in text, \
+        "Dashboard.svelte must include a CTA link to /app/validation"
+    print("  Dashboard links to /app/validation ✓")
+
+
+def test_p30c_6_dashboard_cta_security_route():
+    """P30C-6: Security tile deep-links to /app/security."""
+    print("\n=== Test P30C-6: Dashboard CTA -> /app/security ===")
+    text = _p30c_dashboard_text()
+    assert '/app/security' in text, \
+        "Dashboard.svelte must include a CTA link to /app/security"
+    print("  Dashboard links to /app/security ✓")
+
+
+def test_p30c_7_dashboard_cta_feedback_route():
+    """P30C-7: Feedback tile deep-links to /app/feedback."""
+    print("\n=== Test P30C-7: Dashboard CTA -> /app/feedback ===")
+    text = _p30c_dashboard_text()
+    assert '/app/feedback' in text, \
+        "Dashboard.svelte must include a CTA link to /app/feedback"
+    print("  Dashboard links to /app/feedback ✓")
+
+
+def test_p30c_8_dashboard_cta_coverage_or_missing_route():
+    """P30C-8: Coverage / missing / tasks tile deep-links to an
+    authoritative downstream route."""
+    print("\n=== Test P30C-8: Dashboard CTA -> coverage/missing/tasks route ===")
+    text = _p30c_dashboard_text()
+    candidates = ('/app/graph', '/app/notes', '/app/tasks')
+    matched = [c for c in candidates if c in text]
+    assert matched, \
+        ("Dashboard.svelte must deep-link to at least one of "
+         f"{candidates} for coverage/missing/tasks actions")
+    print(f"  Dashboard links to coverage/missing/tasks routes: {matched} ✓")
+
+
+def test_p30c_9_dashboard_no_inline_raw_json_block():
+    """P30C-9: Dashboard does not render large raw JSON inline.
+    The previous design exposed many `Show raw JSON` disclosures and
+    inline `<pre>{JSON.stringify(...)}</pre>` blocks. Phase 30C demotes
+    them to the Developer route."""
+    print("\n=== Test P30C-9: no inline raw JSON in Dashboard ===")
+    text = _p30c_dashboard_text()
+    assert "Show raw JSON" not in text, \
+        "Dashboard.svelte must not expose 'Show raw JSON' as a primary control"
+    assert "JSON.stringify" not in text, \
+        "Dashboard.svelte must not stringify JSON inline; use the Developer route"
+    assert "cve-raw" not in text, \
+        "Dashboard.svelte must not render inline cve-raw blocks"
+    print("  Dashboard has no inline raw JSON disclosure ✓")
+
+
+def test_p30c_10_dashboard_developer_deep_link():
+    """P30C-10: Dashboard exposes a Developer deep link via the Phase
+    30B developer-link contract."""
+    print("\n=== Test P30C-10: Dashboard developer deep link ===")
+    text = _p30c_dashboard_text()
+    assert "cve-details--inspector" in text, \
+        "Dashboard.svelte must use cve-details--inspector for diagnostic detail"
+    assert "cve-details__developer-link" in text, \
+        "Dashboard.svelte must use the cve-details__developer-link contract"
+    assert "/app/raw" in text, \
+        "Dashboard.svelte developer link must target /app/raw"
+    print("  Dashboard exposes Developer deep link contract ✓")
+
+
+def test_p30c_11_dashboard_no_tailwind_dark_literals():
+    """P30C-11: Migrated Dashboard files use semantic tokens, not raw
+    Tailwind dark palette literals."""
+    print("\n=== Test P30C-11: no Tailwind dark literals on Dashboard ===")
+    files = [_P30C_DASHBOARD_PATH, _P30C_INDEX_PATH]
+    forbidden = [
+        "bg-zinc-", "text-zinc-", "border-zinc-",
+        "bg-emerald-9", "bg-amber-9", "bg-rose-9", "bg-sky-9",
+        "bg-red-9", "text-red-4", "text-emerald-4", "text-amber-4",
+    ]
+    for path in files:
+        body = _read_text(path)
+        offenders = [f for f in forbidden if f in body]
+        assert not offenders, \
+            f"{path} must not contain Tailwind dark literals: {offenders}"
+    print("  Dashboard files contain no Tailwind dark literals ✓")
+
+
+def test_p30c_12_dashboard_last_checked_text():
+    """P30C-12: Dashboard surfaces deterministic last-checked text.
+    The API does not expose per-call timestamps, so the Dashboard uses a
+    deterministic UI fallback string instead of generating one at
+    render time."""
+    print("\n=== Test P30C-12: Dashboard last-checked fallback ===")
+    text = _p30c_dashboard_text()
+    fallbacks = ("Checked this session",
+                 "Not yet checked",
+                 "No timestamp exposed by API")
+    matched = [f for f in fallbacks if f in text]
+    assert matched, \
+        ("Dashboard.svelte must include a deterministic last-checked "
+         f"fallback (one of {fallbacks})")
+    print(f"  Dashboard last-checked fallback present: {matched} ✓")
+
+
+def test_p30c_13_dashboard_status_tile_modifiers_in_css():
+    """P30C-13: Phase 30C status-tile severity helpers exist in
+    global.css and use semantic tokens only."""
+    print("\n=== Test P30C-13: Phase 30C primitives in global.css ===")
+    css = _read_text("ui/src/styles/global.css")
+    marker = "Phase 30C - Dashboard primitives"
+    idx = css.find(marker)
+    assert idx >= 0, "global.css must include a Phase 30C primitive section"
+    block = css[idx:]
+    for cls in (".cve-status-tile--success",
+                ".cve-status-tile--warning",
+                ".cve-status-tile--danger",
+                ".cve-status-tile__cta",
+                ".cve-dashboard-grid",
+                ".cve-next-action"):
+        assert cls in block, \
+            f"Phase 30C section must define {cls}"
+    # Tokenised only - no raw Tailwind dark literals.
+    forbidden = ["bg-zinc-", "text-zinc-", "border-zinc-",
+                 "bg-emerald-9", "bg-amber-9", "bg-rose-9", "bg-sky-9"]
+    offenders = [f for f in forbidden if f in block]
+    assert not offenders, \
+        f"Phase 30C CSS must not introduce Tailwind dark literals: {offenders}"
+    print("  Phase 30C CSS primitives present and tokenised ✓")
+
+
+def test_p30c_14_no_dashboard_missing_concepts_duplicate_heading():
+    """P30C-14: Dashboard does not render the old Issue Review section
+    that duplicated Missing Concepts and tabbed analysis content."""
+    print("\n=== Test P30C-14: no Issue Review duplication on Dashboard ===")
+    text = _p30c_dashboard_text()
+    # The old design carried both 'Missing Concepts' card and an Issue
+    # Review tab titled 'Missing Concepts'. Phase 30C keeps a single
+    # 'Missing concepts' status tile and delegates the detailed queue to
+    # /app/graph and /app/notes. We assert duplication is gone by
+    # checking the old Issue Review markers are absent and the
+    # capital-case heading does not appear as a literal section header
+    # twice (the label appears at most once inside the status tile).
+    label_uses = text.count('>Missing concepts<')
+    assert label_uses <= 1, \
+        "Dashboard.svelte must not render 'Missing concepts' as a heading more than once"
+    assert "Issue Review" not in text, \
+        "Dashboard.svelte must not render the old 'Issue Review' section"
+    assert "activeIssueTab" not in text, \
+        "Dashboard.svelte must not retain the old Issue Review tab state"
+    print("  Dashboard removes Issue Review duplication ✓")
+
+
+def test_p30c_15_roadmap_phase30c_complete_others_planned():
+    """P30C-15: ROADMAP marks Phase 30C complete and keeps 30D/30E/30F
+    planned; Phase 27 and 28 remain deferred."""
+    print("\n=== Test P30C-15: ROADMAP phase status ===")
+    text = _read_text("ROADMAP.md")
+    assert "| 30C   | Dashboard Redesign" in text and "Complete" in text, \
+        "ROADMAP.md table must mark Phase 30C as Complete"
+    assert "| 30D   | Core Workflow Page Redesigns            | Planned" in text, \
+        "ROADMAP.md must keep Phase 30D Planned"
+    assert "| 30E   | Review/Governance/Developer Polish      | Planned" in text, \
+        "ROADMAP.md must keep Phase 30E Planned"
+    assert "| 30F   | Final QA, A11y, Responsive, Light Mode  | Planned" in text, \
+        "ROADMAP.md must keep Phase 30F Planned"
+    # Phase 27 and 28 stay deferred.
+    assert "| 27" in text and "Deferred" in text, \
+        "ROADMAP.md must keep Phase 27 deferred"
+    assert "| 28" in text and "Deferred" in text, \
+        "ROADMAP.md must keep Phase 28 deferred"
+    print("  ROADMAP marks 30C complete, others planned/deferred ✓")
+
+
+def test_p30c_16_placeholder_pages_not_prematurely_removed():
+    """P30C-16: Validation, Tasks, and Raw pages still use
+    PlaceholderPage. Their real implementations land in Phase 30D."""
+    print("\n=== Test P30C-16: placeholders preserved for 30D ===")
+    for path in ("ui/src/pages/validation.astro",
+                 "ui/src/pages/tasks.astro",
+                 "ui/src/pages/raw.astro"):
+        text = _read_text(path)
+        assert "PlaceholderPage" in text, \
+            f"{path} must still use PlaceholderPage in Phase 30C"
+    print("  Validation/Tasks/Raw placeholders preserved ✓")
+
+
+def test_p30c_17_no_new_runtime_dependencies():
+    """P30C-17: ui/package.json does not pick up React/Vue/icon/animation
+    libraries in Phase 30C."""
+    print("\n=== Test P30C-17: ui/package.json deps unchanged ===")
+    import json
+    pkg = json.loads(_read_text("ui/package.json"))
+    deps = set((pkg.get("dependencies") or {}).keys())
+    dev_deps = set((pkg.get("devDependencies") or {}).keys())
+    forbidden = {"react", "react-dom", "vue", "lucide-react",
+                 "@heroicons/react", "framer-motion", "react-icons",
+                 "@radix-ui/react-icons", "chart.js", "d3", "recharts"}
+    sneaked_in = (deps | dev_deps) & forbidden
+    assert not sneaked_in, \
+        f"ui/package.json must not introduce {sorted(sneaked_in)} in Phase 30C"
+    print("  No new runtime dependencies in Phase 30C ✓")
+
+
+def test_p30c_18_no_em_dashes_in_dashboard_files():
+    """P30C-18: Files touched by Phase 30C contain no em dashes."""
+    print("\n=== Test P30C-18: no em dashes in Phase 30C files ===")
+    files = [
+        _P30C_DASHBOARD_PATH,
+        _P30C_INDEX_PATH,
+        "ui/src/styles/global.css",
+        "ROADMAP.md",
+        "UI_UX_AUDIT.md",
+        "TESTING.md",
+        "README.md",
+        "RELEASE_CHECKLIST.md",
+    ]
+    offenders = [f for f in files
+                 if "\u2014" in _read_text(f)]
+    assert not offenders, \
+        f"Phase 30C files must not contain em dashes; offenders: {offenders}"
+    print("  No em dashes in Phase 30C files ✓")
+
+
 if __name__ == "__main__":
     main()
+
