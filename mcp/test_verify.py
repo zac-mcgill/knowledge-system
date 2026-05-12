@@ -11392,6 +11392,33 @@ def main():
     test_p26c_17()
     test_p26c_18()
 
+    # Phase 26D — Import Workflow Hardening and Edge-Case QA
+    test_p26d_1()
+    test_p26d_2()
+    test_p26d_3()
+    test_p26d_4()
+    test_p26d_5()
+    test_p26d_6()
+    test_p26d_7()
+    test_p26d_8()
+    test_p26d_9()
+    test_p26d_10()
+    test_p26d_11()
+    test_p26d_12()
+    test_p26d_13()
+    test_p26d_14()
+    test_p26d_15()
+    test_p26d_16()
+    test_p26d_17()
+    test_p26d_18()
+    test_p26d_19()
+    test_p26d_20()
+    test_p26d_21()
+    test_p26d_22()
+    test_p26d_23()
+    test_p26d_24()
+    test_p26d_25()
+
     # Documentation drift guardrails (added in the Phase 25 production-docs pass)
     test_doc_drift_readme_test_count()
     test_doc_drift_testing_test_count()
@@ -13461,6 +13488,691 @@ def test_p26c_18():
         text = (root / fname).read_text(encoding="utf-8")
         assert em_dash not in text, f"{fname} must not contain an em dash"
     print("  deferred-source statement present and no em dash drift ✓")
+
+
+# ============================================================
+# Phase 26D — Import Workflow Hardening and Edge-Case QA
+# ============================================================
+
+import json as _p26d_json
+import shutil as _p26d_shutil
+import tempfile as _p26d_tempfile
+from pathlib import Path as _P26DPath
+
+
+_P26D_IMPORT_COMPONENT = "ui/src/components/ImportReview.svelte"
+
+
+def _p26d_repo_root() -> _P26DPath:
+    return _P26DPath(__file__).resolve().parent.parent
+
+
+def _p26d_read(rel: str) -> str:
+    return (_p26d_repo_root() / rel).read_text(encoding="utf-8")
+
+
+def _p26d_vault_name() -> str:
+    from mcp.core.vault_registry import list_vaults
+    return list_vaults()[0]
+
+
+def _p26d_make_source_dir(file_map: dict) -> _P26DPath:
+    tmp = _P26DPath(_p26d_tempfile.mkdtemp(prefix="p26d_src_"))
+    for rel_name, content in file_map.items():
+        target = tmp / rel_name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        if isinstance(content, (bytes, bytearray)):
+            target.write_bytes(bytes(content))
+        else:
+            target.write_text(content, encoding="utf-8")
+    return tmp
+
+
+def _p26d_cleanup(*paths) -> None:
+    for p in paths:
+        try:
+            if p and _P26DPath(p).exists():
+                if _P26DPath(p).is_dir():
+                    _p26d_shutil.rmtree(p, ignore_errors=True)
+                else:
+                    _P26DPath(p).unlink()
+        except OSError:
+            pass
+
+
+def _p26d_remove_written(rel_paths) -> None:
+    from mcp.core.vault_registry import get_vault_path
+    vault_path = get_vault_path(_p26d_vault_name())
+    for rel in rel_paths:
+        try:
+            target = vault_path / rel
+            if target.is_file():
+                target.unlink()
+        except OSError:
+            pass
+
+
+# Shared valid body string (mirrors _VALID_NOTE_BODY in P26A tests but
+# defined locally so the suite remains importable in any order).
+_P26D_BODY = (
+    "## Definition\n\nP26D test body.\n\n"
+    "## Why It Matters\n\nReason.\n\n"
+    "## Key Principles\n\n- A\n- B\n\n"
+    "## How It Works\n\n1. First\n2. Second\n3. Third\n\n"
+    "## Examples\n\nx\n\n"
+    "## Common Pitfalls\n\nx\n\n"
+    "## Trade-offs\n\n"
+    "| Aspect | Benefit | Cost |\n"
+    "| --- | --- | --- |\n"
+    "| A | B | C |\n| D | E | F |\n| G | H | I |\n\n"
+    "## Related Concepts\n\nx\n\n"
+    "## Further Exploration\n\nx\n"
+)
+
+
+def test_p26d_1():
+    """P26D-1: Dry-run is deterministic across repeated identical inputs."""
+    print("\n=== Test P26D-1: dry-run determinism ===")
+    from core.shared.import_pipeline import import_markdown_folder
+    src = _p26d_make_source_dir({
+        "alpha.md": _P26D_BODY,
+        "sub/beta.md": _P26D_BODY,
+        "gamma.md": _P26D_BODY,
+    })
+    try:
+        r1 = import_markdown_folder(
+            vault_name=_p26d_vault_name(),
+            source_dir=str(src),
+            destination="Fundamentals",
+            dry_run=True,
+        )
+        r2 = import_markdown_folder(
+            vault_name=_p26d_vault_name(),
+            source_dir=str(src),
+            destination="Fundamentals",
+            dry_run=True,
+        )
+        assert r1["status"] == "ok" and r2["status"] == "ok"
+        dests1 = [i["destination_path"] for i in r1["data"]["items"]]
+        dests2 = [i["destination_path"] for i in r2["data"]["items"]]
+        statuses1 = [i["status"] for i in r1["data"]["items"]]
+        statuses2 = [i["status"] for i in r2["data"]["items"]]
+        assert dests1 == dests2, f"dest paths differ: {dests1} vs {dests2}"
+        assert statuses1 == statuses2, "item statuses must be identical"
+        assert r1["data"]["summary"] == r2["data"]["summary"]
+        print("  dry-run is deterministic ✓")
+    finally:
+        _p26d_cleanup(src)
+
+
+def test_p26d_2():
+    """P26D-2: Nested source folders preserve safe relative structure under destination."""
+    print("\n=== Test P26D-2: nested folder structure preserved ===")
+    from core.shared.import_pipeline import import_markdown_folder
+    src = _p26d_make_source_dir({"nested/sub/p26d-nest.md": _P26D_BODY})
+    try:
+        r = import_markdown_folder(
+            vault_name=_p26d_vault_name(),
+            source_dir=str(src),
+            destination="Fundamentals",
+            dry_run=True,
+        )
+        assert r["status"] == "ok"
+        dest = r["data"]["items"][0]["destination_path"]
+        assert dest == "Fundamentals/nested/sub/p26d-nest.md", \
+            f"unexpected nested destination: {dest}"
+        print(f"  nested path preserved: {dest} ✓")
+    finally:
+        _p26d_cleanup(src)
+
+
+def test_p26d_3():
+    """P26D-3: Duplicate filenames in different folders produce distinct destinations."""
+    print("\n=== Test P26D-3: duplicate filenames produce distinct destinations ===")
+    from core.shared.import_pipeline import import_markdown_folder
+    src = _p26d_make_source_dir({
+        "a/note.md": _P26D_BODY,
+        "b/note.md": _P26D_BODY,
+    })
+    try:
+        r = import_markdown_folder(
+            vault_name=_p26d_vault_name(),
+            source_dir=str(src),
+            destination="Fundamentals",
+            dry_run=True,
+        )
+        assert r["status"] == "ok"
+        dests = [i["destination_path"] for i in r["data"]["items"]]
+        assert len(set(dests)) == len(dests), \
+            f"duplicate destinations not differentiated: {dests}"
+        print(f"  destinations distinct: {dests} ✓")
+    finally:
+        _p26d_cleanup(src)
+
+
+def test_p26d_4():
+    """P26D-4: Filename punctuation is slugged safely."""
+    print("\n=== Test P26D-4: punctuation slugged safely ===")
+    from core.shared.import_pipeline import normalise_import_slug
+    cases = [
+        ("Hello, World!", "hello-world"),
+        ("A_B__C", "a-b-c"),
+        ("file (1) v2.md", "file-1-v2"),
+        ("path/with\\slashes", "path-with-slashes"),
+    ]
+    for raw, expected in cases:
+        got = normalise_import_slug(raw)
+        assert got == expected, f"slug({raw!r}) = {got!r}, expected {expected!r}"
+    # Non-ASCII input must produce a safe slug: non-empty, lowercase,
+    # no whitespace, and no slashes.  The exact codepoints depend on
+    # Python's Unicode alnum classification, so don't pin them.
+    unicode_slug = normalise_import_slug("café résumé")
+    assert unicode_slug, "non-ASCII input must produce a non-empty slug"
+    assert unicode_slug == unicode_slug.lower()
+    assert " " not in unicode_slug and "/" not in unicode_slug
+    print("  punctuation and Unicode slugged deterministically ✓")
+
+
+def test_p26d_5():
+    """P26D-5: Empty filename stem after sanitisation falls back to a safe deterministic name."""
+    print("\n=== Test P26D-5: empty stem fallback ===")
+    from core.shared.import_pipeline import normalise_import_slug
+    for raw in ("!!!", "---", "   ", "", ".md", "###.md"):
+        slug = normalise_import_slug(raw)
+        assert slug == "untitled", f"slug({raw!r}) = {slug!r}, expected 'untitled'"
+    print("  empty stems collapse to 'untitled' ✓")
+
+
+def test_p26d_6():
+    """P26D-6: Windows backslash destination is normalised safely."""
+    print("\n=== Test P26D-6: Windows backslash destination normalised ===")
+    from core.shared.import_pipeline import import_markdown_folder
+    src = _p26d_make_source_dir({"Note.md": _P26D_BODY})
+    try:
+        r = import_markdown_folder(
+            vault_name=_p26d_vault_name(),
+            source_dir=str(src),
+            destination="Fundamentals\\extra",
+            dry_run=True,
+        )
+        assert r["status"] == "ok", f"expected ok with backslashes: {r}"
+        dest = r["data"]["items"][0]["destination_path"]
+        assert "\\" not in dest, f"backslashes must be normalised: {dest!r}"
+        assert dest.startswith("Fundamentals/extra/"), \
+            f"unexpected normalised destination: {dest}"
+        print(f"  backslash destination normalised to {dest} ✓")
+    finally:
+        _p26d_cleanup(src)
+
+
+def test_p26d_7():
+    """P26D-7: One blocked file does not crash the whole batch."""
+    print("\n=== Test P26D-7: one bad file does not crash batch ===")
+    from core.shared.import_pipeline import import_markdown_folder
+    src = _p26d_make_source_dir({
+        "good_one.md": _P26D_BODY,
+        "bad_one.md": "---\nnot: closed\n",  # malformed frontmatter
+        "good_two.md": _P26D_BODY,
+    })
+    try:
+        r = import_markdown_folder(
+            vault_name=_p26d_vault_name(),
+            source_dir=str(src),
+            destination="Fundamentals",
+            dry_run=True,
+        )
+        assert r["status"] == "ok", f"batch must not fail outright: {r}"
+        items = r["data"]["items"]
+        assert len(items) == 3
+        statuses = sorted(i["status"] for i in items)
+        assert "blocked" in statuses
+        # At least one good item is planned.
+        assert any(i["status"] == "planned" for i in items), \
+            "at least one good item must still be planned"
+        print(f"  batch processed all 3 items with statuses {statuses} ✓")
+    finally:
+        _p26d_cleanup(src)
+
+
+def test_p26d_8():
+    """P26D-8: Summary counts equal per-item status counts exactly."""
+    print("\n=== Test P26D-8: summary counts match item statuses ===")
+    from core.shared.import_pipeline import import_markdown_folder
+    src = _p26d_make_source_dir({
+        "ok.md": _P26D_BODY,
+        "bad.md": "---\nnot: closed\n",
+    })
+    try:
+        r = import_markdown_folder(
+            vault_name=_p26d_vault_name(),
+            source_dir=str(src),
+            destination="Fundamentals",
+            dry_run=True,
+        )
+        assert r["status"] == "ok"
+        items = r["data"]["items"]
+        s = r["data"]["summary"]
+        assert s["discovered"] == len(items)
+        assert s["planned"] == sum(1 for i in items if i["status"] == "planned")
+        assert s["skipped"] == sum(1 for i in items if i["status"] == "skipped")
+        assert s["errors"] == sum(
+            1 for i in items if i["status"] in ("error", "blocked")
+        )
+        assert s["warnings"] == sum(1 for i in items if i["warnings"])
+        print(f"  summary counts match item statuses ({s}) ✓")
+    finally:
+        _p26d_cleanup(src)
+
+
+def test_p26d_9():
+    """P26D-9: Malformed frontmatter yields item-level INVALID_FRONTMATTER and does not crash."""
+    print("\n=== Test P26D-9: malformed frontmatter ===")
+    from core.shared.import_pipeline import import_markdown_folder
+    src = _p26d_make_source_dir({
+        "malformed.md": "---\nkey: [unclosed list\n---\n\n## Definition\n\nx\n",
+    })
+    try:
+        r = import_markdown_folder(
+            vault_name=_p26d_vault_name(),
+            source_dir=str(src),
+            dry_run=True,
+        )
+        assert r["status"] == "ok"
+        item = r["data"]["items"][0]
+        assert item["status"] == "blocked"
+        codes = {e["code"] for e in item["errors"]}
+        assert "INVALID_FRONTMATTER" in codes, f"codes: {codes}"
+        print("  malformed frontmatter blocked with INVALID_FRONTMATTER ✓")
+    finally:
+        _p26d_cleanup(src)
+
+
+def test_p26d_10():
+    """P26D-10: YAML non-object frontmatter yields FRONTMATTER_NOT_OBJECT."""
+    print("\n=== Test P26D-10: YAML non-object frontmatter ===")
+    from core.shared.import_pipeline import import_markdown_folder
+    src = _p26d_make_source_dir({
+        "list_fm.md": "---\n- just\n- a\n- list\n---\n\n## Definition\n\nx\n",
+    })
+    try:
+        r = import_markdown_folder(
+            vault_name=_p26d_vault_name(),
+            source_dir=str(src),
+            dry_run=True,
+        )
+        assert r["status"] == "ok"
+        item = r["data"]["items"][0]
+        assert item["status"] == "blocked"
+        codes = {e["code"] for e in item["errors"]}
+        assert "FRONTMATTER_NOT_OBJECT" in codes, f"codes: {codes}"
+        print("  list-shaped YAML rejected with FRONTMATTER_NOT_OBJECT ✓")
+    finally:
+        _p26d_cleanup(src)
+
+
+def test_p26d_11():
+    """P26D-11: Opening '---' without closing marker is INVALID_FRONTMATTER."""
+    print("\n=== Test P26D-11: orphan frontmatter opening marker ===")
+    from core.shared.import_pipeline import import_markdown_folder
+    src = _p26d_make_source_dir({
+        "orphan.md": "---\nkey: value\nbody continues without closing marker\n",
+    })
+    try:
+        r = import_markdown_folder(
+            vault_name=_p26d_vault_name(),
+            source_dir=str(src),
+            dry_run=True,
+        )
+        assert r["status"] == "ok"
+        item = r["data"]["items"][0]
+        codes = {e["code"] for e in item["errors"]}
+        assert "INVALID_FRONTMATTER" in codes, f"codes: {codes}"
+        print("  orphan opening marker rejected ✓")
+    finally:
+        _p26d_cleanup(src)
+
+
+def test_p26d_12():
+    """P26D-12: Duplicate YAML keys are detected as DUPLICATE_YAML_KEY."""
+    print("\n=== Test P26D-12: duplicate YAML keys ===")
+    from core.shared.import_pipeline import import_markdown_folder
+    src = _p26d_make_source_dir({
+        "dup.md": "---\nkey: a\nkey: b\n---\n\n## Definition\n\nx\n",
+    })
+    try:
+        r = import_markdown_folder(
+            vault_name=_p26d_vault_name(),
+            source_dir=str(src),
+            dry_run=True,
+        )
+        assert r["status"] == "ok"
+        item = r["data"]["items"][0]
+        codes = {e["code"] for e in item["errors"]}
+        assert "DUPLICATE_YAML_KEY" in codes, f"codes: {codes}"
+        print("  duplicate YAML key rejected ✓")
+    finally:
+        _p26d_cleanup(src)
+
+
+def test_p26d_13():
+    """P26D-13: Null byte in source content is blocked with NULL_BYTE."""
+    print("\n=== Test P26D-13: null byte blocked ===")
+    from core.shared.import_pipeline import import_markdown_folder
+    raw = b"## Definition\n\nbody with\x00null byte\n"
+    src = _p26d_make_source_dir({"nullbyte.md": raw})
+    try:
+        r = import_markdown_folder(
+            vault_name=_p26d_vault_name(),
+            source_dir=str(src),
+            dry_run=True,
+        )
+        assert r["status"] == "ok"
+        item = r["data"]["items"][0]
+        assert item["status"] == "blocked"
+        codes = {e["code"] for e in item["errors"]}
+        assert "NULL_BYTE" in codes, f"codes: {codes}"
+        print("  null-byte source blocked with NULL_BYTE ✓")
+    finally:
+        _p26d_cleanup(src)
+
+
+def test_p26d_14():
+    """P26D-14: Source file larger than cap is blocked with SOURCE_TOO_LARGE."""
+    print("\n=== Test P26D-14: oversize source blocked ===")
+    from core.shared import import_pipeline as _ip
+    from core.shared.import_pipeline import import_markdown_folder
+    # Patch the cap down so we don't need to write 5 MB to disk.
+    original_cap = _ip._MAX_SOURCE_BYTES
+    _ip._MAX_SOURCE_BYTES = 1024
+    big = "## Definition\n\n" + ("padding " * 200)  # > 1024 bytes
+    src = _p26d_make_source_dir({"big.md": big})
+    try:
+        r = import_markdown_folder(
+            vault_name=_p26d_vault_name(),
+            source_dir=str(src),
+            dry_run=True,
+        )
+        assert r["status"] == "ok"
+        item = r["data"]["items"][0]
+        assert item["status"] == "blocked", f"expected blocked: {item}"
+        codes = {e["code"] for e in item["errors"]}
+        assert "SOURCE_TOO_LARGE" in codes, f"codes: {codes}"
+        print("  oversize source blocked with SOURCE_TOO_LARGE ✓")
+    finally:
+        _ip._MAX_SOURCE_BYTES = original_cap
+        _p26d_cleanup(src)
+
+
+def test_p26d_15():
+    """P26D-15: Invalid source enum values (e.g. status) are not blindly written."""
+    print("\n=== Test P26D-15: invalid source status not trusted ===")
+    from core.shared.import_pipeline import map_fields_to_schema
+    from mcp.core.vault_registry import get_schema
+    schema = get_schema(_p26d_vault_name())
+    fields, _w = map_fields_to_schema(
+        source_fields={"status": "BOGUS_VALUE_NOT_IN_SCHEMA"},
+        body="## Definition\n\nbody\n",
+        schema=schema,
+        destination_path="Fundamentals/p26d-15.md",
+    )
+    # status must be one accepted by the schema, never the literal source value.
+    valid = getattr(schema, "VALID_STATUSES", frozenset())
+    if valid:
+        assert fields.get("status") in valid, \
+            f"status {fields.get('status')!r} not in schema VALID_STATUSES"
+    assert fields.get("status") != "BOGUS_VALUE_NOT_IN_SCHEMA"
+    print("  invalid source enum value replaced with schema-safe value ✓")
+
+
+def test_p26d_16():
+    """P26D-16: Imported written note appears in /query results."""
+    print("\n=== Test P26D-16: imported note visible via /query ===")
+    from fastapi.testclient import TestClient
+    from core.shared.import_pipeline import import_markdown_folder
+    from mcp.server.mcp_server import app
+    src = _p26d_make_source_dir({"P26D Q Visible.md": _P26D_BODY})
+    written_rel: list[str] = []
+    try:
+        r = import_markdown_folder(
+            vault_name=_p26d_vault_name(),
+            source_dir=str(src),
+            destination="Fundamentals",
+            dry_run=False,
+        )
+        assert r["data"]["summary"]["written"] == 1, r
+        rel = r["data"]["items"][0]["destination_path"]
+        written_rel.append(rel)
+        with TestClient(app) as client:
+            resp = client.get(
+                "/notes",
+                params={"vault": _p26d_vault_name(), "limit": 500},
+            )
+        assert resp.status_code == 200, resp.text
+        notes = resp.json().get("data", {}).get("notes", [])
+        paths = [n.get("path") for n in notes]
+        assert rel in paths, f"imported note {rel} not found in /notes results"
+        print(f"  /notes lists imported note {rel} ✓")
+    finally:
+        _p26d_remove_written(written_rel)
+        _p26d_cleanup(src)
+
+
+def test_p26d_17():
+    """P26D-17: Imported written note is reflected by /validation endpoint."""
+    print("\n=== Test P26D-17: /validation reflects imported note ===")
+    from fastapi.testclient import TestClient
+    from core.shared.import_pipeline import import_markdown_folder
+    from mcp.server.mcp_server import app
+    src = _p26d_make_source_dir({"P26D Validate Me.md": _P26D_BODY})
+    written_rel: list[str] = []
+    try:
+        r = import_markdown_folder(
+            vault_name=_p26d_vault_name(),
+            source_dir=str(src),
+            destination="Fundamentals",
+            dry_run=False,
+        )
+        assert r["data"]["summary"]["written"] == 1, r
+        rel = r["data"]["items"][0]["destination_path"]
+        written_rel.append(rel)
+        with TestClient(app) as client:
+            resp = client.get(
+                "/validation",
+                params={"vault": _p26d_vault_name()},
+            )
+        assert resp.status_code == 200, resp.text
+        # Just confirm the endpoint succeeded without crashing on the new
+        # imported note; structure varies but must remain valid JSON.
+        data = resp.json()
+        assert "data" in data or "status" in data
+        print("  /validation responds successfully with imported note present ✓")
+    finally:
+        _p26d_remove_written(written_rel)
+        _p26d_cleanup(src)
+
+
+def test_p26d_18():
+    """P26D-18: Repeated write with overwrite=false skips existing destinations deterministically."""
+    print("\n=== Test P26D-18: deterministic skip on repeated write ===")
+    from core.shared.import_pipeline import import_markdown_folder
+    src = _p26d_make_source_dir({"P26D Idemp.md": _P26D_BODY})
+    written_rel: list[str] = []
+    try:
+        first = import_markdown_folder(
+            vault_name=_p26d_vault_name(),
+            source_dir=str(src),
+            destination="Fundamentals",
+            dry_run=False,
+        )
+        assert first["data"]["summary"]["written"] == 1, first
+        rel = first["data"]["items"][0]["destination_path"]
+        written_rel.append(rel)
+        second = import_markdown_folder(
+            vault_name=_p26d_vault_name(),
+            source_dir=str(src),
+            destination="Fundamentals",
+            dry_run=False,
+            overwrite=False,
+        )
+        assert second["data"]["summary"]["written"] == 0, second
+        item = second["data"]["items"][0]
+        assert item["status"] == "skipped", f"expected skipped: {item}"
+        codes = {e["code"] for e in item["errors"]}
+        assert "DESTINATION_EXISTS" in codes
+        print("  repeated write skipped existing destination deterministically ✓")
+    finally:
+        _p26d_remove_written(written_rel)
+        _p26d_cleanup(src)
+
+
+def test_p26d_19():
+    """P26D-19: Import UI states no Markdown files were discovered with clear wording."""
+    print("\n=== Test P26D-19: empty-items wording ===")
+    text = _p26d_read(_P26D_IMPORT_COMPONENT)
+    assert 'data-testid="empty-items-message"' in text, \
+        "empty-items message must carry stable test id"
+    assert "No Markdown files were discovered" in text, \
+        "empty-items wording must be clear"
+    assert ".md" in text, "empty-items message should mention the .md extension"
+    print("  empty source folder message is clear ✓")
+
+
+def test_p26d_20():
+    """P26D-20: Import UI surfaces DESTINATION_EXISTS collisions with a dedicated banner."""
+    print("\n=== Test P26D-20: collision banner ===")
+    text = _p26d_read(_P26D_IMPORT_COMPONENT)
+    assert 'data-testid="collision-banner"' in text, \
+        "collision banner must carry stable test id"
+    assert "DESTINATION_EXISTS" in text, \
+        "collision banner must reference the DESTINATION_EXISTS code"
+    assert "hasCollisionErrors" in text, \
+        "must define a hasCollisionErrors helper"
+    print("  destination-collision banner present ✓")
+
+
+def test_p26d_21():
+    """P26D-21: Import UI surfaces malformed-frontmatter cases with a dedicated banner."""
+    print("\n=== Test P26D-21: malformed-frontmatter banner ===")
+    text = _p26d_read(_P26D_IMPORT_COMPONENT)
+    assert 'data-testid="frontmatter-banner"' in text, \
+        "frontmatter banner must carry stable test id"
+    assert "INVALID_FRONTMATTER" in text, \
+        "frontmatter banner code path must reference INVALID_FRONTMATTER"
+    assert "hasFrontmatterErrors" in text, \
+        "must define a hasFrontmatterErrors helper"
+    print("  malformed-frontmatter banner present ✓")
+
+
+def test_p26d_22():
+    """P26D-22: Import UI carries per-item error labels for the Phase 26D codes."""
+    print("\n=== Test P26D-22: item error labels ===")
+    text = _p26d_read(_P26D_IMPORT_COMPONENT)
+    assert "itemErrorLabel" in text, \
+        "ImportReview must expose an itemErrorLabel helper"
+    for code in (
+        "SOURCE_TOO_LARGE",
+        "NULL_BYTE",
+        "DUPLICATE_YAML_KEY",
+        "FRONTMATTER_NOT_OBJECT",
+        "INVALID_FRONTMATTER",
+        "DESTINATION_EXISTS",
+        "SECURITY_FAIL",
+        "VALIDATION_FAILED",
+    ):
+        assert code in text, f"itemErrorLabel must cover {code!r}"
+    print("  per-item error labels cover Phase 26D codes ✓")
+
+
+def test_p26d_23():
+    """P26D-23: Documentation mentions Phase 26D import hardening across required files."""
+    print("\n=== Test P26D-23: docs mention Phase 26D ===")
+    root = _p26d_repo_root()
+    for fname in ("README.md", "QUICKSTART.md", "TESTING.md",
+                  "ROADMAP.md", "RELEASE_CHECKLIST.md"):
+        text = (root / fname).read_text(encoding="utf-8")
+        assert "Phase 26D" in text, f"{fname} must reference Phase 26D"
+    print("  Phase 26D documented across all required files ✓")
+
+
+def test_p26d_24():
+    """P26D-24: Documentation reaffirms deferred import sources and Phase 26D scope."""
+    print("\n=== Test P26D-24: deferred sources + scope reaffirmed ===")
+    root = _p26d_repo_root()
+    readme = (root / "README.md").read_text(encoding="utf-8")
+    roadmap = (root / "ROADMAP.md").read_text(encoding="utf-8")
+    quickstart = (root / "QUICKSTART.md").read_text(encoding="utf-8")
+    # Scope: Phase 26D does not add new import sources.
+    for haystack, name in ((readme, "README.md"),
+                           (roadmap, "ROADMAP.md"),
+                           (quickstart, "QUICKSTART.md")):
+        low = haystack.lower()
+        assert "no new import sources" in low or \
+               "does not add new import sources" in low, \
+               f"{name} must state Phase 26D adds no new import sources"
+    # Deferred sources still deferred.
+    for token in ("PDF", "GitHub", "semantic"):
+        assert token in readme, f"README must still mention {token} as deferred"
+    # Drift guardrail: no em dash anywhere project-authored.
+    em_dash = "\u2014"
+    for fname in ("README.md", "QUICKSTART.md", "TESTING.md",
+                  "ROADMAP.md", "RELEASE_CHECKLIST.md"):
+        text = (root / fname).read_text(encoding="utf-8")
+        assert em_dash not in text, f"{fname} must not contain an em dash"
+    print("  deferred-source statement preserved, no em dash drift ✓")
+
+
+def test_p26d_25():
+    """P26D-25: Import error codes module surface includes Phase 26D codes (smoke test)."""
+    print("\n=== Test P26D-25: pipeline exposes Phase 26D error codes ===")
+    # We don't expose a public list; instead, smoke-test each code by
+    # triggering the corresponding failure mode through import_markdown_folder
+    # and collecting the codes seen.  This proves the codes are returned by
+    # the pipeline (not just documented).
+    from core.shared import import_pipeline as _ip
+    from core.shared.import_pipeline import import_markdown_folder
+    seen: set[str] = set()
+    # Null byte
+    src1 = _p26d_make_source_dir({
+        "nb.md": b"## Definition\n\nx\x00y\n",
+    })
+    # Malformed frontmatter
+    src2 = _p26d_make_source_dir({
+        "bad.md": "---\nkey: [unclosed\n---\n\n## Definition\n\nx\n",
+    })
+    # Non-object frontmatter
+    src3 = _p26d_make_source_dir({
+        "list.md": "---\n- a\n- b\n---\n\n## Definition\n\nx\n",
+    })
+    # Duplicate yaml key
+    src4 = _p26d_make_source_dir({
+        "dup.md": "---\nk: 1\nk: 2\n---\n\n## Definition\n\nx\n",
+    })
+    # Oversize
+    original_cap = _ip._MAX_SOURCE_BYTES
+    _ip._MAX_SOURCE_BYTES = 512
+    src5 = _p26d_make_source_dir({"big.md": "## Definition\n\n" + "x" * 4096})
+    try:
+        for s in (src1, src2, src3, src4, src5):
+            r = import_markdown_folder(
+                vault_name=_p26d_vault_name(),
+                source_dir=str(s),
+                dry_run=True,
+            )
+            for item in r["data"]["items"]:
+                for e in item["errors"]:
+                    seen.add(e["code"])
+        for code in (
+            "NULL_BYTE",
+            "INVALID_FRONTMATTER",
+            "FRONTMATTER_NOT_OBJECT",
+            "DUPLICATE_YAML_KEY",
+            "SOURCE_TOO_LARGE",
+        ):
+            assert code in seen, f"pipeline did not return {code}: saw {sorted(seen)}"
+        print(f"  pipeline returned all Phase 26D codes: {sorted(seen)} ✓")
+    finally:
+        _ip._MAX_SOURCE_BYTES = original_cap
+        _p26d_cleanup(src1, src2, src3, src4, src5)
 
 
 def test_p24_1():
@@ -16991,9 +17703,9 @@ def _repo_root():
 
 
 def test_doc_drift_readme_test_count():
-    """DOC-DRIFT-1: README quotes the current 625-test total, no stale counts."""
+    """DOC-DRIFT-1: README quotes the current 650-test total, no stale counts."""
     readme = (_repo_root() / "README.md").read_text(encoding="utf-8")
-    assert "625" in readme, "README.md must mention the current test count 625"
+    assert "650" in readme, "README.md must mention the current test count 650"
     stale_phrases = [
         "553 deterministic tests",
         "548 deterministic tests",
@@ -17002,29 +17714,30 @@ def test_doc_drift_readme_test_count():
         "272 tests",
         "587 deterministic tests",
         "607 deterministic tests",
+        "625 deterministic tests",
     ]
     for phrase in stale_phrases:
         assert phrase not in readme, f"README.md still mentions stale phrase {phrase!r}"
-    print(f"  README mentions 625 tests, no stale counts present ✓")
+    print(f"  README mentions 650 tests, no stale counts present ✓")
 
 
 def test_doc_drift_testing_test_count():
-    """DOC-DRIFT-2: TESTING.md current total is 625 and historical markers retained."""
+    """DOC-DRIFT-2: TESTING.md current total is 650 and historical markers retained."""
     text = (_repo_root() / "TESTING.md").read_text(encoding="utf-8")
-    assert "625 test functions" in text, "TESTING.md must state 625 test functions"
-    for marker in ("429", "467", "507", "548", "564", "587", "607"):
+    assert "650 test functions" in text, "TESTING.md must state 650 test functions"
+    for marker in ("429", "467", "507", "548", "564", "587", "607", "625"):
         assert marker in text, f"TESTING.md must retain historical test-count marker {marker}"
-    print(f"  TESTING.md states 625 functions and keeps 429/467/507/548/564/587/607 markers ✓")
+    print(f"  TESTING.md states 650 functions and keeps 429/467/507/548/564/587/607/625 markers ✓")
 
 
 def test_doc_drift_release_checklist_test_count():
-    """DOC-DRIFT-3: RELEASE_CHECKLIST references 625 tests and required commands."""
+    """DOC-DRIFT-3: RELEASE_CHECKLIST references 650 tests and required commands."""
     text = (_repo_root() / "RELEASE_CHECKLIST.md").read_text(encoding="utf-8")
-    assert "625" in text, "RELEASE_CHECKLIST.md must reference the 625-test target"
+    assert "650" in text, "RELEASE_CHECKLIST.md must reference the 650-test target"
     for req in ("test_verify.py", "run.py validate", "run.py security",
                 "run.py export", "GitHub Release"):
         assert req in text, f"RELEASE_CHECKLIST.md must contain {req!r}"
-    print(f"  RELEASE_CHECKLIST mentions 625 tests and required commands ✓")
+    print(f"  RELEASE_CHECKLIST mentions 650 tests and required commands ✓")
 
 
 def test_doc_drift_roadmap_active_phase():

@@ -611,7 +611,7 @@ Optional `trust_level`, `source_type`, `last_reviewed`, `review_after` frontmatt
 
 ### Phase 26 - Import Pipelines
 
-**Status: Active - Phase 26A, Phase 26B, and Phase 26C complete. Other import sources remain deferred.**
+**Status: Active - Phase 26A, Phase 26B, Phase 26C, and Phase 26D complete. Other import sources remain deferred.**
 
 #### Purpose
 
@@ -619,7 +619,7 @@ Make it easier to ingest existing knowledge without bypassing schema controls.
 
 #### Import Sources
 
-- Markdown folder (Phase 26A backend, Phase 26B review UI, Phase 26C post-import review integration - implemented)
+- Markdown folder (Phase 26A backend, Phase 26B review UI, Phase 26C post-import review integration, Phase 26D edge-case hardening - implemented)
 - Obsidian vault (deferred)
 - GitHub repo docs (deferred)
 - Copilot/agent reports (deferred)
@@ -651,6 +651,7 @@ Make it easier to ingest existing knowledge without bypassing schema controls.
 - No unsafe path writes. (Phase 26A - done)
 - User can preview and confirm imports through the browser before writing. (Phase 26B - done)
 - After import, the user can review imported notes in context (filters, trust metadata, validation, tasks) without any automatic trust promotion or LLM rewriting. (Phase 26C - done)
+- The Markdown import pipeline handles real-world edge cases (malformed YAML, duplicate keys, null bytes, oversize files, nested folders, duplicate filenames, Windows backslashes, destination collisions) deterministically and with clear item-level error codes, without crashing the batch and without adding new import sources. (Phase 26D - done)
 
 #### Phase 26A Summary
 
@@ -674,6 +675,16 @@ Phase 26C extends the Phase 26B Import Review UI with a post-import review path 
 
 ```
 feat(ui): add post-import review workflow
+```
+
+#### Phase 26D Summary
+
+Phase 26D hardens the Markdown import workflow against real-world edge cases without adding any new import sources. The pipeline now reports `INVALID_FRONTMATTER` for orphan opening markers, `FRONTMATTER_NOT_OBJECT` for non-mapping YAML, `DUPLICATE_YAML_KEY` for duplicate mapping keys, `NULL_BYTE` for sources containing null bytes, and `SOURCE_TOO_LARGE` for sources exceeding the 5 MB cap, all at the item level so one bad file no longer crashes the batch. Dry-run is deterministic across repeated identical inputs, summary counts (`discovered`, `planned`, `written`, `skipped`, `errors`, `warnings`) match per-item statuses exactly, and repeated writes with `overwrite=false` skip existing destinations deterministically with `DESTINATION_EXISTS`. Filename punctuation, non-ASCII characters, and empty stems collapse deterministically to safe slugs (with an `untitled` fallback). Nested source folders preserve their relative structure under the destination, duplicate filenames in different folders produce distinct destinations, and Windows backslash destinations are normalised into forward slashes. Section booleans are still recomputed from the body and invalid source enum values are still replaced with schema-safe values. The Import Review UI now surfaces a dedicated `DESTINATION_EXISTS` collision banner, a dedicated malformed-frontmatter banner, a clearer empty-items message that names the `.md` extension and the Markdown-only scope, and per-item plain-language labels for every Phase 26D error code. Phase 26D adds no new import sources, no semantic mapping, no LLM extraction, no automatic trust promotion, and no automatic content rewriting. PDF, browser article, GitHub repo, Obsidian-specific, chat transcript, semantic, and LLM-extraction imports remain deferred.
+
+#### Suggested Commit
+
+```
+test(import): harden markdown import workflow edge cases
 ```
 
 ---

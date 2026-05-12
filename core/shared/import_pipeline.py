@@ -226,26 +226,72 @@ def discover_markdown_sources(source_dir: Path) -> list[Path]:
     return found
 
 
+class _SourceTooLargeError(ValueError):
+    """Raised when a source markdown file exceeds the size cap."""
+
+
+class _NullByteError(ValueError):
+    """Raised when a source markdown file contains a null byte."""
+
+
 def read_markdown_source(path: Path) -> dict:
     """Read a markdown source file and return its raw content metadata.
 
-    Returns a dict with ``path``, ``size``, ``content`` keys.  Raises if
-    the file is too large or unreadable.
+    Returns a dict with ``path``, ``size``, ``content`` keys.  Raises
+    ``_SourceTooLargeError`` if the file exceeds ``_MAX_SOURCE_BYTES``,
+    ``_NullByteError`` if the raw bytes contain a NUL byte, and
+    ``FileNotFoundError`` if the path is not a regular file.
     """
     if not path.is_file():
         raise FileNotFoundError(f"Source markdown file not found: {path}")
     size = path.stat().st_size
     if size > _MAX_SOURCE_BYTES:
-        raise ValueError(
+        raise _SourceTooLargeError(
             f"Source markdown file too large ({size} bytes > "
             f"{_MAX_SOURCE_BYTES}): {path}"
         )
     raw = path.read_bytes()
     if raw.startswith(b"\xef\xbb\xbf"):
         raw = raw[3:]
+    if b"\x00" in raw:
+        raise _NullByteError(
+            f"Source markdown file contains a null byte: {path}"
+        )
     text = raw.decode("utf-8", errors="replace")
     text = text.replace("\r\n", "\n").replace("\r", "\n")
     return {"path": str(path), "size": size, "content": text}
+
+
+class _DuplicateYAMLKeyError(ValueError):
+    """Raised when YAML frontmatter contains a duplicate mapping key."""
+
+
+class _DuplicateKeySafeLoader(yaml.SafeLoader):
+    """SafeLoader that rejects duplicate keys in mappings.
+
+    PyYAML's default SafeLoader silently keeps the last value for a
+    duplicated mapping key.  For import frontmatter we want to refuse
+    such input so that ambiguous source files do not silently overwrite
+    fields during import.
+    """
+
+
+def _construct_mapping_no_duplicates(loader, node, deep=False):  # type: ignore[no-untyped-def]
+    mapping: dict[Any, Any] = {}
+    for key_node, value_node in node.value:
+        key = loader.construct_object(key_node, deep=deep)
+        if key in mapping:
+            raise _DuplicateYAMLKeyError(
+                f"duplicate YAML key in frontmatter: {key!r}"
+            )
+        mapping[key] = loader.construct_object(value_node, deep=deep)
+    return mapping
+
+
+_DuplicateKeySafeLoader.add_constructor(  # type: ignore[arg-type]
+    yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG,
+    _construct_mapping_no_duplicates,
+)
 
 
 def split_frontmatter_and_body(content: str) -> tuple[dict, str]:
@@ -253,7 +299,11 @@ def split_frontmatter_and_body(content: str) -> tuple[dict, str]:
 
     - If no leading ``---`` YAML frontmatter block is present, returns
       ``({}, content)``.
+    - If an opening ``---`` marker is present without a closing marker,
+      raises ``ValueError`` (the file is structurally malformed).
     - Malformed YAML or non-mapping frontmatter raises ``ValueError``.
+    - Duplicate mapping keys raise ``_DuplicateYAMLKeyError`` (subclass
+      of ``ValueError``).
     - All field values are coerced to strings or bools, matching the
       project's existing ``parse_yaml_frontmatter`` semantics.
     """
@@ -265,7 +315,10 @@ def split_frontmatter_and_body(content: str) -> tuple[dict, str]:
         if content.endswith("\n---"):
             close_idx = len(content) - 4
         else:
-            return {}, content
+            raise ValueError(
+                "Malformed YAML frontmatter: opening '---' marker has no "
+                "matching closing '---' marker"
+            )
 
     yaml_text = content[4:close_idx]
     remainder_start = close_idx + len("\n---\n")
@@ -276,7 +329,9 @@ def split_frontmatter_and_body(content: str) -> tuple[dict, str]:
         body = body[1:]
 
     try:
-        parsed = yaml.safe_load(yaml_text)
+        parsed = yaml.load(yaml_text, Loader=_DuplicateKeySafeLoader)
+    except _DuplicateYAMLKeyError:
+        raise
     except yaml.YAMLError as exc:
         raise ValueError(f"Malformed YAML frontmatter: {exc}") from exc
 
@@ -602,6 +657,22 @@ def build_import_plan(
         # Read content
         try:
             read = read_markdown_source(source_path)
+        except _SourceTooLargeError as exc:
+            item["status"] = "blocked"
+            item["action"] = "skip"
+            item["errors"].append(
+                {"code": "SOURCE_TOO_LARGE", "message": str(exc)}
+            )
+            items.append(item)
+            continue
+        except _NullByteError as exc:
+            item["status"] = "blocked"
+            item["action"] = "skip"
+            item["errors"].append(
+                {"code": "NULL_BYTE", "message": str(exc)}
+            )
+            items.append(item)
+            continue
         except Exception as exc:
             item["status"] = "error"
             item["action"] = "skip"
@@ -634,12 +705,22 @@ def build_import_plan(
         # Split source frontmatter and body
         try:
             source_fields, body = split_frontmatter_and_body(content)
-        except ValueError as exc:
+        except _DuplicateYAMLKeyError as exc:
             item["status"] = "blocked"
             item["action"] = "skip"
             item["errors"].append(
-                {"code": "INVALID_FRONTMATTER", "message": str(exc)}
+                {"code": "DUPLICATE_YAML_KEY", "message": str(exc)}
             )
+            items.append(item)
+            continue
+        except ValueError as exc:
+            code = "INVALID_FRONTMATTER"
+            msg = str(exc)
+            if "expected mapping" in msg:
+                code = "FRONTMATTER_NOT_OBJECT"
+            item["status"] = "blocked"
+            item["action"] = "skip"
+            item["errors"].append({"code": code, "message": msg})
             items.append(item)
             continue
 
@@ -691,8 +772,8 @@ def build_import_plan(
         "discovered": len(sources),
         "planned": sum(1 for i in items if i["status"] == "planned"),
         "written": 0,
-        "skipped": 0,
-        "errors": sum(1 for i in items if i["status"] == "error" or i["errors"]),
+        "skipped": sum(1 for i in items if i["status"] == "skipped"),
+        "errors": sum(1 for i in items if i["status"] in ("error", "blocked")),
         "warnings": sum(1 for i in items if i["warnings"]),
     }
 
@@ -828,6 +909,9 @@ def execute_import_plan(
     )
     summary["errors"] = sum(
         1 for i in plan["items"] if i["status"] in ("error", "blocked")
+    )
+    summary["planned"] = sum(
+        1 for i in plan["items"] if i["status"] == "planned"
     )
     summary["warnings"] = sum(1 for i in plan["items"] if i["warnings"])
 

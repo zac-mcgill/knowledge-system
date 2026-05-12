@@ -1503,6 +1503,18 @@ The Notes page (`/app/notes`) now uses `source_type` and `trust_level` from the 
 
 Phase 26C does not change the Phase 26A backend behaviour or the Phase 26B safety gates. Preview is still required before writing, an explicit confirmation checkbox is still required, and the preview is still marked stale when vault, source, destination, or overwrite changes.
 
+### Import Workflow Hardening (Phase 26D)
+
+Phase 26D tightens the existing Markdown import lifecycle against real-world edge cases. It does not add new import sources. PDF, browser article, GitHub repo, Obsidian-specific, chat transcript, semantic mapping, and LLM extraction imports remain deferred. Imported content still requires human review; trust metadata is never promoted automatically and no LLM rewriting is performed.
+
+The Phase 26D hardening covers:
+
+- **Filename and destination edge cases.** Duplicate source filenames in different folders produce distinct destinations. Filename punctuation is slugged deterministically. Filenames whose stem collapses to nothing after sanitisation fall back to `untitled`. Nested source folders preserve their relative structure under the destination. Windows backslash destinations are normalised into forward slashes. Destinations that resolve outside the vault, inside `Vault Files/`, or contain `..` are rejected with `UNSAFE_DESTINATION`. Existing files at the resolved destination are never overwritten silently and surface as `DESTINATION_EXISTS` when `overwrite` is `false`.
+- **Markdown and frontmatter edge cases.** An opening `---` marker without a matching closing marker is now reported as `INVALID_FRONTMATTER` instead of being silently treated as no frontmatter. Non-mapping YAML frontmatter (lists, scalars, null) is reported as `FRONTMATTER_NOT_OBJECT`. Duplicate YAML keys are detected and reported as `DUPLICATE_YAML_KEY`. Files containing a null byte are blocked with `NULL_BYTE`. Files exceeding the 5 MB cap are blocked with `SOURCE_TOO_LARGE`. Unknown source frontmatter fields are dropped and surfaced as warnings. Source booleans for tracked sections are never trusted: they are recomputed from the body. Invalid source enum values (such as a `status` field with an unknown value) are replaced with a schema-safe value, never written through.
+- **Batch behaviour.** Dry-run is deterministic across repeated calls with identical inputs. A single bad file does not crash the batch: it is reported as an item-level error and the rest of the batch proceeds. Summary counts (`discovered`, `planned`, `written`, `skipped`, `errors`, `warnings`) match the per-item statuses exactly. Repeated writes with `overwrite=false` skip existing destinations deterministically.
+- **Item-level error codes.** The pipeline returns one of the following codes per item where applicable: `READ_FAILED`, `SOURCE_TOO_LARGE`, `NULL_BYTE`, `INVALID_FRONTMATTER`, `FRONTMATTER_NOT_OBJECT`, `DUPLICATE_YAML_KEY`, `DESTINATION_EXISTS`, `UNSAFE_DESTINATION`, `SECURITY_FAIL`, `VALIDATION_FAILED`, `SERIALISE_FAILED`, `WRITE_FAILED`.
+- **UI guards.** The Import Review page now renders a dedicated banner when any item reports `DESTINATION_EXISTS`, and a separate banner when any item reports a malformed-frontmatter code. The empty-items message names the `.md` extension and the Markdown-only scope. Each per-item error code is rendered with a short, plain-language label in addition to its raw code.
+
 ---
 
 ## 31. Run Verification Tests (Optional)

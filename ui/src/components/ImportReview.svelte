@@ -256,6 +256,25 @@
     return '';
   }
 
+  // Phase 26D: per-item error code labels.  Keep wording short, concrete,
+  // and aligned with the error codes returned by the backend importer.
+  function itemErrorLabel(code: string): string {
+    if (code === 'READ_FAILED') return 'Could not read source file';
+    if (code === 'SOURCE_TOO_LARGE') return 'Source file exceeds the 5 MB size cap';
+    if (code === 'NULL_BYTE') return 'Source file contains a null byte and was blocked';
+    if (code === 'INVALID_FRONTMATTER') return 'YAML frontmatter is malformed';
+    if (code === 'FRONTMATTER_NOT_OBJECT') return 'YAML frontmatter is not a mapping';
+    if (code === 'DUPLICATE_YAML_KEY') return 'YAML frontmatter has a duplicate key';
+    if (code === 'DESTINATION_EXISTS')
+      return 'A note already exists at the destination; re-run with overwrite to replace it';
+    if (code === 'UNSAFE_DESTINATION') return 'Destination path is unsafe';
+    if (code === 'SECURITY_FAIL') return 'Security scan blocked the import';
+    if (code === 'VALIDATION_FAILED') return 'Validation rejected the imported note';
+    if (code === 'SERIALISE_FAILED') return 'Could not serialise the imported note';
+    if (code === 'WRITE_FAILED') return 'Filesystem write failed';
+    return code;
+  }
+
   function itemStatusClass(status: string): string {
     if (status === 'written') return 'bg-emerald-950 text-emerald-300 border-emerald-800';
     if (status === 'planned') return 'bg-sky-950 text-sky-300 border-sky-800';
@@ -289,6 +308,26 @@
   function blockedCount(resp: ImportMarkdownFolderResponse | null): number {
     if (!resp) return 0;
     return resp.items.filter(i => i.status === 'blocked').length;
+  }
+
+  // Phase 26D: per-item banner helpers so users see the specific failure
+  // modes (collision, malformed frontmatter) called out near the items list.
+  function hasCollisionErrors(resp: ImportMarkdownFolderResponse | null): boolean {
+    if (!resp) return false;
+    return resp.items.some(i =>
+      (i.errors ?? []).some(e => e.code === 'DESTINATION_EXISTS')
+    );
+  }
+
+  function hasFrontmatterErrors(resp: ImportMarkdownFolderResponse | null): boolean {
+    if (!resp) return false;
+    return resp.items.some(i =>
+      (i.errors ?? []).some(
+        e => e.code === 'INVALID_FRONTMATTER'
+          || e.code === 'FRONTMATTER_NOT_OBJECT'
+          || e.code === 'DUPLICATE_YAML_KEY'
+      )
+    );
   }
 </script>
 
@@ -554,10 +593,30 @@
         </div>
 
         {#if activeItems(display).length === 0}
-          <p class="text-sm text-zinc-500">
+          <p class="text-sm text-zinc-500" data-testid="empty-items-message">
             No Markdown files were discovered in the source folder.
+            Confirm that the folder contains files with the
+            <code class="text-zinc-300">.md</code> extension and that the path
+            is correct on the backend host. Non-Markdown files (PDF, DOCX,
+            HTML, etc.) are intentionally ignored: Phase 26D supports
+            Markdown folder import only.
           </p>
         {:else}
+          {#if hasCollisionErrors(display)}
+            <p class="mb-3 text-xs text-amber-300" data-testid="collision-banner">
+              One or more items would overwrite existing notes (code
+              <code class="text-amber-200">DESTINATION_EXISTS</code>).
+              Re-run with overwrite enabled to replace them, or rename the
+              source file to import alongside the existing note.
+            </p>
+          {/if}
+          {#if hasFrontmatterErrors(display)}
+            <p class="mb-3 text-xs text-amber-300" data-testid="frontmatter-banner">
+              One or more items had malformed YAML frontmatter and were
+              blocked at the item level. The rest of the batch was processed
+              normally.
+            </p>
+          {/if}
           <ul class="space-y-2">
             {#each activeItems(display) as item, idx}
               <li class="border border-zinc-800 rounded-md bg-zinc-950">
@@ -607,9 +666,13 @@
                     {#if item.errors.length > 0}
                       <div>
                         <div class="text-rose-300 font-medium">Errors</div>
-                        <ul class="list-disc pl-5 text-zinc-300">
+                        <ul class="list-disc pl-5 text-zinc-300" data-testid="item-errors">
                           {#each item.errors as e}
-                            <li class="break-words"><code class="text-rose-200">{e.code}</code> — {e.message}</li>
+                            <li class="break-words">
+                              <code class="text-rose-200">{e.code}</code>
+                              <span class="text-rose-200"> — {itemErrorLabel(e.code)}</span>
+                              <span class="text-zinc-400"> ({e.message})</span>
+                            </li>
                           {/each}
                         </ul>
                       </div>

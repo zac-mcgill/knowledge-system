@@ -6,7 +6,7 @@ Use this checklist before tagging a release. All steps are local and determinist
 
 ## Pre-release Verification
 
-- [ ] `python mcp/test_verify.py` passes, all 625 tests green (no skips, no failures)
+- [ ] `python mcp/test_verify.py` passes, all 650 tests green (no skips, no failures)
 - [ ] `python run.py validate` passes, all notes valid
 - [ ] `python run.py security` passes, status is `pass` or `warning` only (no `fail`)
 - [ ] `python run.py feedback` passes, exits 0, valid JSON
@@ -18,7 +18,7 @@ Use this checklist before tagging a release. All steps are local and determinist
 - [ ] API.md documents every route registered in `mcp/server/mcp_server.py`
 - [ ] TESTING.md current test count and phase sections up to date
 - [ ] ROADMAP.md active phase, status table, and Phase 25 entry correct
-- [ ] ROADMAP.md Phase 26 entry reflects Phase 26A, Phase 26B, and Phase 26C as complete, with other import sources still deferred
+- [ ] ROADMAP.md Phase 26 entry reflects Phase 26A, Phase 26B, Phase 26C, and Phase 26D as complete, with other import sources still deferred
 
 ---
 

@@ -1,13 +1,13 @@
 # Context Vault Engine - Testing
 
-All tests live in `mcp/test_verify.py`. The suite currently has 625 test functions (609 phase tests plus 16 documentation drift guardrails), all of which are executed by the manual runner in `main()` at the bottom of that file. A passing run prints `ALL VERIFICATION TESTS PASSED`. Historical test counts from earlier phases (272, 382, 429, 467, 507, 548, 553, 564, 587, 607) appear later in this document as part of the phase changelog and are not the current total.
+All tests live in `mcp/test_verify.py`. The suite currently has 650 test functions (634 phase tests plus 16 documentation drift guardrails), all of which are executed by the manual runner in `main()` at the bottom of that file. A passing run prints `ALL VERIFICATION TESTS PASSED`. Historical test counts from earlier phases (272, 382, 429, 467, 507, 548, 553, 564, 587, 607, 625) appear later in this document as part of the phase changelog and are not the current total.
 
 ## Current Verification Summary
 
 A full local verification consists of:
 
 ```bash
-py mcp/test_verify.py           # 625 tests, all must pass
+py mcp/test_verify.py           # 650 tests, all must pass
 py run.py validate              # vault schema-compliance
 py run.py security              # status: pass (or warning, never fail)
 py run.py feedback              # exits 0, valid JSON
@@ -1791,7 +1791,7 @@ cd ui; npm run build       # zero errors
 **Verification steps:**
 
 ```bash
-py mcp/test_verify.py      # 625 tests, all must pass
+py mcp/test_verify.py      # 650 tests, all must pass
 py run.py validate         # vault still valid
 py run.py security         # status: pass
 py run.py import-markdown <source_dir>            # dry-run by default
@@ -1868,7 +1868,45 @@ Phase 26C extends the Phase 26B Import Review UI with a post-import review path 
 **Verification steps:**
 
 ```bash
-py mcp/test_verify.py            # 625 tests, all must pass
+py mcp/test_verify.py            # 650 tests, all must pass
+py run.py validate               # vault still valid
+py run.py security               # status: pass
+py run.py feedback               # exits 0, valid JSON
+py run.py export --overwrite     # status: ok
+cd ui; npm run build             # builds the /notes and /import page artefacts
+```
+
+---
+
+## Phase 26D - Import Workflow Hardening and Edge-Case QA
+
+25 new tests (`test_p26d_1` through `test_p26d_25`), bringing the phase-test total to 634. Combined with the 16 documentation drift guardrails, the overall test count is now 650.
+
+Phase 26D does not add any new import sources. It hardens the existing Markdown folder import lifecycle against ugly, malformed, duplicated, large, oddly named, or structurally inconsistent input, and makes failure modes clearer, safer, and more deterministic. PDF, browser article, GitHub repo, Obsidian-specific, chat transcript, semantic mapping, and LLM extraction imports remain deferred. Imported content still requires human review and there is no automatic trust promotion or LLM rewriting.
+
+**Highlights:**
+
+- `test_p26d_1`: dry-run is deterministic across repeated calls with identical inputs (item destinations, statuses, and summary counts all match).
+- `test_p26d_2`: nested source folders preserve their safe relative structure under the destination.
+- `test_p26d_3`: duplicate source filenames in different folders produce distinct destinations.
+- `test_p26d_4`: filename punctuation (commas, underscores, parentheses, non-ASCII) is slugged deterministically.
+- `test_p26d_5`: filenames whose stem collapses to nothing after sanitisation fall back to `untitled`.
+- `test_p26d_6`: destinations containing Windows backslashes are normalised into forward slashes.
+- `test_p26d_7`: one blocked file does not crash the rest of the batch.
+- `test_p26d_8`: summary counts (`discovered`, `planned`, `skipped`, `errors`, `warnings`) equal the per-item status counts exactly.
+- `test_p26d_9`/`test_p26d_10`/`test_p26d_11`/`test_p26d_12`: malformed YAML, non-mapping YAML, orphan opening markers, and duplicate YAML keys are reported at item level as `INVALID_FRONTMATTER`, `FRONTMATTER_NOT_OBJECT`, `INVALID_FRONTMATTER`, and `DUPLICATE_YAML_KEY` respectively, without crashing the batch.
+- `test_p26d_13`/`test_p26d_14`: source files containing a null byte are blocked with `NULL_BYTE`; source files exceeding the 5 MB cap are blocked with `SOURCE_TOO_LARGE`.
+- `test_p26d_15`: invalid source enum values (such as a `status` field with an unknown value) are replaced with a schema-safe value rather than being written through.
+- `test_p26d_16`/`test_p26d_17`: imported notes appear in `/query` results and `/validation` reflects them correctly.
+- `test_p26d_18`: repeated writes with `overwrite=false` skip existing destinations deterministically with `DESTINATION_EXISTS`.
+- `test_p26d_19`/`test_p26d_20`/`test_p26d_21`/`test_p26d_22`: the Import Review UI has a clear empty-items message, a dedicated `DESTINATION_EXISTS` collision banner, a dedicated malformed-frontmatter banner, and per-item plain-language labels for all Phase 26D error codes.
+- `test_p26d_23`/`test_p26d_24`: README, QUICKSTART, TESTING, ROADMAP, and RELEASE_CHECKLIST mention Phase 26D; README, QUICKSTART, and ROADMAP state that Phase 26D adds no new import sources; deferred sources remain reaffirmed; no em dash regresses into project-authored docs.
+- `test_p26d_25`: a smoke test drives the pipeline through every new edge case and confirms that `NULL_BYTE`, `INVALID_FRONTMATTER`, `FRONTMATTER_NOT_OBJECT`, `DUPLICATE_YAML_KEY`, and `SOURCE_TOO_LARGE` are actually surfaced.
+
+**Verification steps:**
+
+```bash
+py mcp/test_verify.py            # 650 tests, all must pass
 py run.py validate               # vault still valid
 py run.py security               # status: pass
 py run.py feedback               # exits 0, valid JSON

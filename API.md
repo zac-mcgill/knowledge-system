@@ -443,15 +443,21 @@ Safely import a folder of Markdown files into a vault (Phase 26A). The pipeline 
 - `INVALID_SOURCE` - `source_dir` missing, not a directory, or contains null bytes (HTTP 400).
 - `UNSAFE_SOURCE` - source folder rejected by safety checks (HTTP 400).
 - `UNSAFE_DESTINATION` - destination traverses the vault, is absolute, or lands in `Vault Files/` (HTTP 400).
-- `READ_FAILED` - source file unreadable or exceeds the 5 MB size cap (per-item; surfaced in item `errors`).
+- `READ_FAILED` - source file unreadable for an unexpected reason (per-item; surfaced in item `errors`).
+- `SOURCE_TOO_LARGE` - source file exceeds the 5 MB size cap (per-item; Phase 26D).
+- `NULL_BYTE` - source file contains a NUL byte (per-item; Phase 26D).
 - `SECURITY_FAIL` - blocking security finding (high or critical severity) in a source body (per-item).
-- `INVALID_FRONTMATTER` - malformed YAML in source frontmatter (per-item).
+- `INVALID_FRONTMATTER` - malformed YAML in source frontmatter, including an orphan opening `---` marker with no closing marker (per-item).
+- `FRONTMATTER_NOT_OBJECT` - YAML frontmatter parsed to a non-mapping value (list, scalar, null) (per-item; Phase 26D).
+- `DUPLICATE_YAML_KEY` - YAML frontmatter contains a duplicated mapping key (per-item; Phase 26D).
 - `SERIALISE_FAILED` - candidate note could not be serialised (per-item).
 - `VALIDATION_FAILED` - candidate failed schema validation (per-item; `validation.errors` populated).
 - `DESTINATION_EXISTS` - destination already exists and `overwrite=false` (per-item).
 - `WRITE_FAILED` - atomic write failed (per-item; HTTP 200 returned with item-level error).
 - `READ_ONLY` - remote read-only mode forbids writes (HTTP 403).
 - `IMPORT_FAILED` - unexpected pipeline error (HTTP 500).
+
+Phase 26D guarantees: dry-run is deterministic for repeated identical inputs, one bad file does not crash the batch (other items still get planned), summary counts (`discovered`, `planned`, `written`, `skipped`, `errors`, `warnings`) match per-item statuses exactly, and repeated writes with `overwrite=false` skip existing destinations deterministically with `DESTINATION_EXISTS`. Phase 26D does not add any new import sources; PDF, browser article, GitHub repo, Obsidian-specific, chat transcript, semantic mapping, and LLM extraction imports remain deferred.
 
 ---
 
