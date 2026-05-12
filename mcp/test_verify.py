@@ -11349,6 +11349,7 @@ def main():
     test_p26a_21()
     test_p26a_22()
     test_p26a_23()
+    test_p26a_24()
 
     # Phase 26B — Import Review UI
     test_p26b_1()
@@ -13025,6 +13026,68 @@ def test_p26a_23():
             assert key in data["items"][0], f"missing item key {key}"
         print("  response shape matches spec ✓")
     finally:
+        _p26a_cleanup(src)
+
+
+def test_p26a_24():
+    """P26A-24: destination folder casing is preserved (Linux regression).
+
+    Regression for the Phase 26 release-checkpoint failure: lowercasing
+    the user-supplied destination on Linux broke schema-derived domains,
+    because "fundamentals" is not the same folder as "Fundamentals" on a
+    case-sensitive filesystem. The destination root must be preserved
+    verbatim while only the filename stem is slugged.
+    """
+    print("\n=== Test P26A-24: destination casing preserved ===")
+    from core.shared.import_pipeline import import_markdown_folder
+    from mcp.core.vault_registry import get_vault_path
+    src = _p26a_make_source_dir({"P26A Casing.md": _VALID_NOTE_BODY})
+    written_rel: list[str] = []
+    try:
+        # Single-segment canonical destination.
+        result = import_markdown_folder(
+            vault_name=_p26a_vault_name(),
+            source_dir=str(src),
+            destination="Fundamentals",
+            dry_run=False,
+        )
+        assert result["status"] == "ok", f"import failed: {result}"
+        data = result["data"]
+        assert data["summary"]["written"] == 1, f"expected 1 written: {data}"
+        rel = data["items"][0]["destination_path"]
+        written_rel.append(rel)
+        assert rel.startswith("Fundamentals/"), (
+            f"destination root casing not preserved: {rel!r}"
+        )
+        assert rel.split("/", 1)[0] == "Fundamentals", (
+            f"top-level destination segment must be exact 'Fundamentals': {rel!r}"
+        )
+        # Filename stem is still lowercase-slugged deterministically.
+        filename = rel.rsplit("/", 1)[-1]
+        assert filename == "p26a-casing.md", (
+            f"filename slug should be 'p26a-casing.md': {filename!r}"
+        )
+        # The written file must exist on disk under the canonical folder.
+        vault_path = get_vault_path(_p26a_vault_name())
+        assert (vault_path / rel).is_file(), (
+            f"file not written at canonical path: {vault_path / rel}"
+        )
+
+        # Multi-segment destination casing is also preserved end to end.
+        result2 = import_markdown_folder(
+            vault_name=_p26a_vault_name(),
+            source_dir=str(src),
+            destination="Imported/Obsidian",
+            dry_run=True,
+        )
+        assert result2["status"] == "ok"
+        rel2 = result2["data"]["items"][0]["destination_path"]
+        assert rel2.startswith("Imported/Obsidian/"), (
+            f"multi-segment destination casing not preserved: {rel2!r}"
+        )
+        print("  destination casing preserved; filename stem still slugged ✓")
+    finally:
+        _p26a_remove_written(written_rel)
         _p26a_cleanup(src)
 
 

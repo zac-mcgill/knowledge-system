@@ -177,9 +177,17 @@ def _safe_destination_path(
     Returns ``(rel_posix_path, error_message)``.  If ``error_message`` is
     not None, the caller MUST treat the item as an error.
     """
-    # Sanitise each segment of the destination folder.
-    dest_segments_raw = destination.replace("\\", "/").strip("/").split("/")
-    dest_segments = [normalise_import_slug(seg) for seg in dest_segments_raw]
+    # Preserve the case of the user-supplied destination folder.  The
+    # destination has already passed _is_safe_relative_destination (no null
+    # bytes, no '.'/'..' segments, not absolute, not inside Vault Files),
+    # so we only need to normalise separators and drop empties here.
+    # Lowercasing breaks case-sensitive filesystems (Linux CI): the demo
+    # schema derives the domain from the top-level folder name and
+    # expects canonical casing like "Fundamentals", not "fundamentals".
+    dest_segments = [
+        seg for seg in destination.replace("\\", "/").strip("/").split("/")
+        if seg not in ("", ".", "..")
+    ]
 
     # Sanitise relative source sub-folders (excluding the filename itself).
     rel_parts = list(relative_source.parts[:-1])
