@@ -203,6 +203,7 @@ The index rebuilds lazily on the next API call after a 2-second cooldown (to avo
 - **Deterministic lexical search in query layer.** `POST /query` supports an optional `q` parameter for free-text lexical search over note body, path, or frontmatter values. Scoring is deterministic and pure-Python: for each unique query term, TF = occurrences / corpus length; score = mean TF across unique terms. Results are ranked by score descending then path ascending. No embeddings, no persistent index, no new dependencies.
 - **No semantic retrieval.** The current implementation does not use embeddings or vector search. All structured queries are filter-based (equality, substring, list membership). The lexical `q` parameter is deterministic keyword scoring only. Semantic retrieval (embeddings, vector search) remains a future phase and is not implemented.
 - **No registry.** Context packages are written to `dist/` but there is no registry, versioning, or deduplication layer. This is a future phase.
+- **Trust metadata layer (Phase 25).** Optional `trust_level`, `source_type`, `last_reviewed`, `review_after` frontmatter fields per note. `mcp/core/trust_metadata.py` provides extraction, confidence scoring, staleness detection, and the evidence builder. Confidence reflects user/system-provided maintenance metadata, not factual correctness. Trust annotations are injected into context bundles and query results automatically. The `/trust`, `/stale`, and `/evidence` endpoints expose this layer to API consumers.
 
 ---
 

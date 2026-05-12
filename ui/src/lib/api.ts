@@ -1211,3 +1211,99 @@ export function rejectPendingChange(
     body,
   );
 }
+
+// ---------------------------------------------------------------------------
+// Phase 25 — Trust, Staleness, and Evidence
+// ---------------------------------------------------------------------------
+
+export type TrustLevel = 'verified' | 'working' | 'draft' | 'external' | 'deprecated';
+export type SourceType = 'authored' | 'imported' | 'generated' | 'agent_suggested';
+export type ConfidenceLevel = 'high' | 'medium' | 'low' | 'deprecated' | 'unknown';
+
+export interface TrustNoteSummary {
+  path: string;
+  trust_level: TrustLevel | null;
+  source_type: SourceType | null;
+  last_reviewed: string | null;
+  review_after: string | null;
+  confidence: ConfidenceLevel;
+  trust_score: number;
+  stale: boolean;
+}
+
+export interface TrustSummaryData {
+  vault: string;
+  total_notes: number;
+  by_trust_level: Record<string, number>;
+  by_source_type: Record<string, number>;
+  by_confidence: Record<string, number>;
+  missing_trust_metadata: number;
+  deprecated_count: number;
+  stale_count: number;
+  notes: TrustNoteSummary[];
+}
+
+export interface StaleSummaryData {
+  vault: string;
+  total_notes: number;
+  stale: TrustNoteSummary[];
+  freshness_unknown: TrustNoteSummary[];
+  review_unknown: TrustNoteSummary[];
+  deprecated: TrustNoteSummary[];
+}
+
+export interface EvidenceNote {
+  evidence_id: string;
+  path: string;
+  title: string | null;
+  trust_level: TrustLevel | null;
+  source_type: SourceType | null;
+  last_reviewed: string | null;
+  review_after: string | null;
+  confidence: ConfidenceLevel;
+  trust_score: number;
+  stale: boolean;
+  sections: Record<string, string>;
+  body_excerpt: string | null;
+}
+
+export interface EvidenceSummary {
+  total_notes: number;
+  by_confidence: Record<string, number>;
+  deprecated_excluded: number;
+  stale_excluded: number;
+}
+
+export interface EvidenceData {
+  vault: string;
+  query: string | null;
+  evidence: EvidenceNote[];
+  summary: EvidenceSummary;
+  confidence_disclaimer: string;
+}
+
+export interface EvidenceRequest {
+  vault: string;
+  filters?: Record<string, string | string[]>;
+  q?: string;
+  include_sections?: string[];
+  max_notes?: number;
+  prefer_verified?: boolean;
+  include_deprecated?: boolean;
+  include_stale?: boolean;
+}
+
+/** GET /trust?vault=<vault> — vault-level trust and confidence summary. */
+export function fetchTrustSummary(vault: string): Promise<ApiResult<TrustSummaryData>> {
+  return get<TrustSummaryData>(`/trust?vault=${encodeURIComponent(vault)}`);
+}
+
+/** GET /stale?vault=<vault> — staleness summary for all notes in vault. */
+export function fetchStaleSummary(vault: string): Promise<ApiResult<StaleSummaryData>> {
+  return get<StaleSummaryData>(`/stale?vault=${encodeURIComponent(vault)}`);
+}
+
+/** POST /evidence — build a trust-ranked evidence response with source refs. */
+export function buildEvidence(request: EvidenceRequest): Promise<ApiResult<EvidenceData>> {
+  return post<EvidenceData>('/evidence', request);
+}

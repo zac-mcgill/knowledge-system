@@ -105,6 +105,17 @@ PATTERN_TECHNIQUE_FIELDS: tuple[str, ...] = (
 ALL_KNOWN_FIELDS: frozenset[str] = frozenset({
     "type", "domain", "subdomain", "topic", "status",
     "has_key_principles", "has_how_it_works", "has_tradeoffs", "difficulty",
+    # Phase 25 — optional trust/staleness/evidence metadata fields
+    "trust_level", "source_type", "last_reviewed", "review_after",
+})
+
+# Phase 25 — optional trust metadata enum values (for validation when present)
+VALID_TRUST_LEVELS: frozenset[str] = frozenset({
+    "verified", "working", "draft", "external", "deprecated",
+})
+
+VALID_SOURCE_TYPES: frozenset[str] = frozenset({
+    "authored", "imported", "generated", "agent_suggested",
 })
 
 INDICATOR_HEADINGS: tuple[str, ...] = (

@@ -1316,6 +1316,92 @@ The Bundle Builder at `/app/bundles` now shows a **Context Profile / Mode** pane
 
 ---
 
+## 6r. Trust, Staleness, and Evidence Metadata (Phase 25)
+
+Notes can carry optional trust and freshness metadata as frontmatter fields.
+
+### Optional frontmatter fields
+
+```yaml
+trust_level: verified        # verified | working | draft | external | deprecated
+source_type: authored        # authored | imported | generated | agent_suggested
+last_reviewed: "2025-06-01"  # ISO date YYYY-MM-DD
+review_after: "2026-06-01"   # ISO date YYYY-MM-DD
+```
+
+All fields are optional and backward-compatible. Existing notes without them continue to validate and export normally.
+
+**Allowed values:**
+- `trust_level`: `verified`, `working`, `draft`, `external`, `deprecated`
+- `source_type`: `authored`, `imported`, `generated`, `agent_suggested`
+- `last_reviewed` / `review_after`: ISO date format `YYYY-MM-DD`
+
+### Confidence scoring
+
+Confidence is computed from `trust_level` and `source_type`. It indicates how thoroughly a note has been reviewed and maintained — **not factual correctness**.
+
+| trust_level | source_type | confidence |
+|---|---|---|
+| verified | authored | high |
+| working | authored | medium |
+| draft / external / generated | — | low |
+| deprecated | — | deprecated |
+| (none) | — | unknown |
+
+### CLI commands
+
+```bash
+# Trust summary for the default vault
+py run.py trust
+
+# Staleness summary for the default vault
+py run.py stale
+```
+
+### API endpoints
+
+```
+GET /trust?vault=<vault>            # trust/confidence summary
+GET /stale?vault=<vault>            # staleness breakdown
+POST /evidence                      # build trust-ranked evidence response
+```
+
+Evidence request body:
+```json
+{
+  "vault": "demo-vault",
+  "q": "sorting algorithms",
+  "prefer_verified": true,
+  "include_deprecated": false,
+  "include_stale": true,
+  "max_notes": 20
+}
+```
+
+### Trust & Evidence UI
+
+Visit `/app/trust` in the browser UI to:
+- View trust/confidence summary cards
+- Browse stale and deprecated notes
+- Build evidence responses with the interactive form
+
+### MCP tools
+
+- `cve.get_trust_summary` — vault-level trust/confidence summary
+- `cve.get_stale_notes` — stale and freshness-unknown notes
+- `cve.build_evidence` — trust-ranked evidence with source paths and section excerpts
+
+### MCP resources
+
+- `cve://vault/{vault}/trust` — trust summary as a resource
+- `cve://vault/{vault}/stale` — staleness summary as a resource
+
+### MCP prompt
+
+- `cve.evidence_review` — guides an agent to cite source paths, state confidence levels, include a factual accuracy disclaimer, and not auto-edit notes
+
+---
+
 ## 8. Run Verification Tests (Optional)
 
 Core tests (requires only `requirements.txt`):

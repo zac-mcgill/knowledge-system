@@ -45,6 +45,34 @@ PROMPTS = [
             },
         ],
     },
+    # Phase 25 — evidence review prompt (alphabetical: evidence_review after context_handoff)
+    {
+        "name": "cve.evidence_review",
+        "description": (
+            "Guide an agent through building an evidence response from vault notes. "
+            "Instructs the agent to cite source paths and sections, prefer verified notes, "
+            "and communicate confidence metadata correctly. "
+            "IMPORTANT: confidence metadata is based on user/system-provided trust fields "
+            "only — it does NOT verify factual correctness."
+        ),
+        "arguments": [
+            {
+                "name": "vault",
+                "description": "The vault name to use.",
+                "required": True,
+            },
+            {
+                "name": "q",
+                "description": "Optional query string to filter relevant notes.",
+                "required": False,
+            },
+            {
+                "name": "prefer_verified",
+                "description": "Whether to prefer verified notes (default: true).",
+                "required": False,
+            },
+        ],
+    },
     {
         "name": "cve.quality_plan",
         "description": (
@@ -157,6 +185,10 @@ def get_prompt(name: str, arguments: dict | None = None) -> dict | None:
     if name == "cve.context_handoff":
         intent = arguments.get("intent", "agent-context")
         return _prompt_context_handoff(vault, intent)
+    if name == "cve.evidence_review":
+        q = arguments.get("q")
+        prefer_verified = arguments.get("prefer_verified", True)
+        return _prompt_evidence_review(vault, q, prefer_verified)
     if name == "cve.quality_plan":
         return _prompt_quality_plan(vault)
     if name == "cve.resume_work":
@@ -375,6 +407,53 @@ def _prompt_review_pending_change(vault: str, change_id: str) -> dict:
     )
     return {
         "description": "Review a pending change proposal (diff, validation, accept/reject)",
+        "messages": [
+            {"role": "user", "content": {"type": "text", "text": text}},
+        ],
+    }
+
+
+# Phase 25 — evidence review prompt implementation
+
+def _prompt_evidence_review(vault: str, q: str | None, prefer_verified: bool) -> dict:
+    q_clause = f" filtered by query {q!r}" if q else ""
+    prefer_clause = "true" if prefer_verified else "false"
+    text = (
+        f"You are building an evidence response for vault: {vault!r}{q_clause}\n\n"
+        "Follow these steps:\n\n"
+        f"1. Call `cve.build_evidence` with `vault={vault!r}`"
+        + (f", `q={q!r}`" if q else "")
+        + f" and `prefer_verified={prefer_clause}` "
+        "to retrieve trust-ranked source notes.\n\n"
+        "2. For each note in the evidence result:\n"
+        "   - `path`: the vault-relative path to the source note\n"
+        "   - `trust_level`: verified | working | draft | external | deprecated\n"
+        "   - `source_type`: authored | imported | generated | agent_suggested\n"
+        "   - `confidence`: high | medium | low | deprecated | unknown\n"
+        "   - `stale`: whether the note is past its review_after date\n"
+        "   - `sections`: the requested sections included from that note\n\n"
+        "3. When presenting findings, you MUST:\n"
+        "   a. Cite the exact note path for every claim or statement.\n"
+        "      Example: 'According to [Fundamentals/Algorithms.md] ...'\n"
+        "   b. Note the confidence level of each cited source.\n"
+        "      Example: '(confidence: high, verified)'\n"
+        "   c. If a note is stale, flag it: '(stale — may be outdated)'\n"
+        "   d. If a note is draft or external, warn the user:\n"
+        "      '(draft — not yet reviewed)' or '(external — treat as reference only)'\n\n"
+        "4. IMPORTANT — Confidence Disclaimer:\n"
+        "   Confidence levels are based on user-provided metadata (trust_level, "
+        "source_type, last_reviewed). They indicate how thoroughly a note has been "
+        "reviewed and maintained — they do NOT verify factual correctness.\n"
+        "   Always tell the user: 'These confidence indicators reflect note "
+        "maintenance status, not factual accuracy. Verify critical claims "
+        "with primary sources.'\n\n"
+        "5. Do NOT suggest editing notes or updating metadata automatically. "
+        "If stale or unreviewed notes are found, recommend that the user review "
+        "and update them using the vault's normal editing workflow.\n"
+        f"{_SAFETY_FOOTER}"
+    )
+    return {
+        "description": "Evidence review: cite sources, show trust metadata, include confidence disclaimer",
         "messages": [
             {"role": "user", "content": {"type": "text", "text": text}},
         ],

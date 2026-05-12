@@ -97,7 +97,16 @@ Each entry in the `notes` array:
     "Trade-offs": "..."
   },
   "body": "...",
-  "related": []
+  "related": [],
+  "trust_metadata": {
+    "trust_level": "verified",
+    "source_type": "authored",
+    "last_reviewed": "2025-06-01",
+    "review_after": "2026-06-01",
+    "confidence": "high",
+    "trust_score": 90,
+    "stale": false
+  }
 }
 ```
 
@@ -108,6 +117,19 @@ Each entry in the `notes` array:
 | `sections` | object | Extracted section content, keyed by section name. Empty string if section not found. Only sections listed in `include_sections` are present. |
 | `body` | string \| null | Full note body text (everything after frontmatter). Present when `include_body=true`; absent (key not present) when `include_body=false`. |
 | `related` | array | Graph relationship IDs for this note. Empty when `include_related=false`. |
+| `trust_metadata` | object | Trust/confidence metadata computed from frontmatter trust fields. Always present (Phase 25+). Confidence reflects note maintenance status, **not factual correctness**. |
+
+**`trust_metadata` fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `trust_level` | string \| null | User-set trust level: `verified`, `working`, `draft`, `external`, `deprecated`. |
+| `source_type` | string \| null | User-set source type: `authored`, `imported`, `generated`, `agent_suggested`. |
+| `last_reviewed` | string \| null | ISO date of last review. |
+| `review_after` | string \| null | ISO date after which the note is considered stale. |
+| `confidence` | string | Computed confidence: `high`, `medium`, `low`, `deprecated`, `unknown`. |
+| `trust_score` | integer | Numeric trust score (higher is better). Deprecated notes score negative. |
+| `stale` | boolean | `true` if `review_after` is before today's UTC date. |
 
 ---
 

@@ -96,6 +96,9 @@ See `DEPLOYMENT.md` for full deployment and VPS setup guidance.
 | `POST` | `/context/security` | Scan a context bundle for security issues |
 | `GET` | `/context/profiles` | List all built-in context profiles and modes |
 | `GET` | `/context/profiles/{profile_name}` | Get a single profile or mode definition |
+| `GET` | `/trust` | Vault-level trust/confidence/staleness summary (Phase 25) |
+| `GET` | `/stale` | Vault staleness breakdown — stale, freshness_unknown, deprecated notes (Phase 25) |
+| `POST` | `/evidence` | Build trust-ranked evidence with source paths and section excerpts (Phase 25) |
 | `GET` | `/app` | Serve compiled local web UI (index.html) |
 | `GET` | `/app/{ui_path:path}` | Serve compiled local web UI static assets |
 | `POST` | `/vault/bootstrap` | Create a new vault (Phase 11A) |
@@ -963,6 +966,96 @@ When a profile or mode is used, the response includes a `profile_metadata` objec
 ```
 
 For `/context/export`: if the resolved profile has `require_security_scan: true`, the export enforces `require_security_pass: true` (the export is aborted if the security scan fails). For `/context/bundle`: a warning is added to the response instead.
+
+---
+
+## Phase 25: Trust, Staleness, and Evidence Endpoints
+
+### GET /trust
+
+Return a vault-level trust/confidence/staleness summary. All fields reflect user-provided frontmatter metadata — they do **not** verify factual correctness.
+
+**Query parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `vault` | string | Yes | Registered vault name |
+
+**Response fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `vault` | string | Vault name |
+| `total_notes` | integer | Total note count |
+| `by_trust_level` | object | Count by trust_level value |
+| `by_source_type` | object | Count by source_type value |
+| `by_confidence` | object | Count by computed confidence level |
+| `missing_trust_metadata` | integer | Notes with no trust_level set |
+| `deprecated_count` | integer | Notes with trust_level=deprecated |
+| `stale_count` | integer | Notes past their review_after date |
+| `notes` | array | Per-note trust summary objects |
+
+**Error codes:** `INVALID_VAULT` (404), `TRUST_ERROR` (500)
+
+---
+
+### GET /stale
+
+Return a staleness breakdown for all notes in a vault.
+
+**Query parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `vault` | string | Yes | Registered vault name |
+
+**Response fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `vault` | string | Vault name |
+| `total_notes` | integer | Total note count |
+| `stale` | array | Notes where review_after < today |
+| `freshness_unknown` | array | Notes with no review_after set |
+| `review_unknown` | array | Notes with no last_reviewed set |
+| `deprecated` | array | Notes with trust_level=deprecated |
+
+**Error codes:** `INVALID_VAULT` (404), `STALE_ERROR` (500)
+
+---
+
+### POST /evidence
+
+Build a trust-ranked evidence response with source note paths, section excerpts, and confidence metadata. Use this to generate cite-able responses from vault notes.
+
+**Request body:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `vault` | string | Yes | Registered vault name |
+| `filters` | object | No | Frontmatter filter key/value map |
+| `q` | string | No | Lexical query string |
+| `include_sections` | array | No | Section names to include in excerpts |
+| `max_notes` | integer | No | Max notes to return (1–100, default 20) |
+| `prefer_verified` | boolean | No | Sort verified notes first (default true) |
+| `include_deprecated` | boolean | No | Include deprecated notes (default false) |
+| `include_stale` | boolean | No | Include stale notes (default true) |
+
+**Response fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `vault` | string | Vault name |
+| `query` | string\|null | Echo of `q` if provided |
+| `evidence` | array | Trust-ranked evidence note objects |
+| `summary` | object | Counts by confidence, excluded counts |
+| `confidence_disclaimer` | string | Standard disclaimer text |
+
+Each evidence note includes: `evidence_id`, `path`, `title`, `trust_level`, `source_type`, `last_reviewed`, `review_after`, `confidence`, `trust_score`, `stale`, `sections`, `body_excerpt`.
+
+**Confidence disclaimer:** Confidence levels reflect note maintenance status based on user-provided metadata. They do **not** indicate factual correctness.
+
+**Error codes:** `INVALID_VAULT` (404), `EVIDENCE_ERROR` (500)
 
 ---
 

@@ -81,6 +81,7 @@ from mcp.core.private_cloud import (
 from mcp.core import session_state as _session_state
 from mcp.core import pending_changes as _pending_changes
 from mcp.core import context_profiles as _context_profiles
+from mcp.core import trust_metadata as _trust_metadata
 
 
 # ---------- Structured Logging (Phase 7) ----------
@@ -838,6 +839,9 @@ def endpoint_query(req: QueryRequest):
         # Forward engine-level error responses
         if result["status"] == "error":
             return JSONResponse(status_code=400, content=result)
+        # Phase 25: annotate query results with trust metadata (non-breaking)
+        if "results" in result and isinstance(result["results"], list):
+            result["results"] = _trust_metadata.annotate_notes_with_trust(result["results"])
         return {"status": "ok", "data": result}
     except Exception as exc:
         return _error("QUERY_FAILED", f"Query failed: {exc}", 500)
@@ -1785,6 +1789,10 @@ def endpoint_context_bundle(req: BundleRequest):
         if "manifest" in result and isinstance(result["manifest"], dict):
             result["manifest"]["profile_metadata"] = profile_meta
 
+        # Phase 25: annotate bundle notes with trust metadata
+        if "notes" in result and isinstance(result["notes"], list):
+            result["notes"] = _trust_metadata.annotate_notes_with_trust(result["notes"])
+
         return result
     except Exception as exc:
         return _error("BUNDLE_FAILED", f"Bundle generation failed: {exc}", 500)
@@ -1842,6 +1850,204 @@ def endpoint_context_profile_by_name(profile_name: str):
         return {"status": "ok", "data": {"profile": result["profile"], "source": result["source"]}}
     except Exception as exc:
         return _error("PROFILES_FAILED", f"Failed to get profile: {exc}", 500)
+
+
+# ---------- Phase 25: Trust, Staleness, and Evidence Metadata ----------
+
+
+@app.get("/trust")
+def endpoint_trust(
+    vault: str = Query(..., description="Vault name"),
+):
+    """Return vault-level trust/source/staleness summary.
+
+    Query parameters:
+        vault (str, required): Vault name.
+
+    Response data:
+        status (str): 'ok' or 'error'.
+        vault (str): Vault name.
+        counts_by_trust_level (dict): Counts per trust_level value (including 'missing').
+        counts_by_source_type (dict): Counts per source_type value (including 'missing').
+        confidence_distribution (dict): Counts per confidence level.
+        missing_metadata_count (int): Notes with no trust_level or source_type.
+        deprecated_count (int): Notes with trust_level=deprecated.
+        stale_count (int): Notes where review_after is before today.
+        freshness_unknown_count (int): Notes missing review_after.
+        review_unknown_count (int): Notes missing last_reviewed.
+        notes (list): All notes with their trust_metadata, sorted by path.
+
+    Error codes:
+        INVALID_VAULT: Vault not registered (HTTP 404).
+
+    Private-cloud: allowed in read-only mode with valid auth.
+    """
+    err = _validate_vault(vault)
+    if err:
+        return err
+    try:
+        result = _trust_metadata.list_trust_summary(vault)
+        if result.get("status") == "error":
+            code = result["error"]["code"]
+            msg = result["error"]["message"]
+            return _error(code, msg, 404 if code == "INVALID_VAULT" else 500)
+        return result
+    except Exception as exc:
+        return _error("TRUST_SUMMARY_FAILED", f"Trust summary failed: {exc}", 500)
+
+
+@app.get("/stale")
+def endpoint_stale(
+    vault: str = Query(..., description="Vault name"),
+):
+    """Return stale/review information for a vault.
+
+    Query parameters:
+        vault (str, required): Vault name.
+
+    Response data:
+        status (str): 'ok' or 'error'.
+        vault (str): Vault name.
+        today (str): ISO date used for staleness calculation (UTC).
+        stale_notes (list): Notes where review_after is before today.
+        freshness_unknown (list): Notes with no review_after set.
+        review_unknown (list): Notes with no last_reviewed set.
+        deprecated_notes (list): Notes with trust_level=deprecated.
+
+    Error codes:
+        INVALID_VAULT: Vault not registered (HTTP 404).
+
+    Private-cloud: allowed in read-only mode with valid auth.
+    """
+    err = _validate_vault(vault)
+    if err:
+        return err
+    try:
+        result = _trust_metadata.list_stale_notes(vault)
+        if result.get("status") == "error":
+            code = result["error"]["code"]
+            msg = result["error"]["message"]
+            return _error(code, msg, 404 if code == "INVALID_VAULT" else 500)
+        return result
+    except Exception as exc:
+        return _error("STALE_NOTES_FAILED", f"Stale notes failed: {exc}", 500)
+
+
+class EvidenceRequest(BaseModel):
+    """Request body for POST /evidence."""
+
+    vault: str = Field(..., description="Vault name")
+    filters: dict = Field(
+        default_factory=dict,
+        description="Equality filters on frontmatter fields",
+    )
+    q: str | None = Field(
+        default=None,
+        description="Free-text lexical search string (max 1000 chars)",
+    )
+    profile: str | None = Field(
+        default=None,
+        description="Named context profile (informational; used in evidence_id)",
+    )
+    mode: str | None = Field(
+        default=None,
+        description="Named bundle mode (informational; used in evidence_id)",
+    )
+    include_sections: list[str] | None = Field(
+        default=None,
+        description="Section names to include as evidence extracts",
+    )
+    max_notes: int = Field(
+        default=20,
+        ge=1,
+        le=100,
+        description="Maximum notes to include (1–100)",
+    )
+    prefer_verified: bool = Field(
+        default=True,
+        description="Sort by trust score (verified notes first) when True",
+    )
+    include_deprecated: bool = Field(
+        default=False,
+        description="Include deprecated notes in results (excluded by default)",
+    )
+    include_stale: bool = Field(
+        default=True,
+        description="Include stale notes in results",
+    )
+
+
+@app.post("/evidence")
+def endpoint_evidence(req: EvidenceRequest):
+    """Build a structured evidence response with trust metadata and source refs.
+
+    Evidence mode returns source note paths, sections, confidence metadata,
+    and trust/staleness status so that local LLMs can cite sources and
+    prefer higher-trust notes.
+
+    IMPORTANT: trust metadata is user/system-provided metadata.
+    It does NOT indicate factual correctness.
+
+    Request body:
+        vault (str): Vault name.
+        filters (dict): Equality filters on frontmatter fields.
+        q (str|None): Free-text lexical search.
+        profile (str|None): Profile name (informational).
+        mode (str|None): Bundle mode (informational).
+        include_sections (list|None): Section names to extract.
+        max_notes (int): Max notes to return (1-100, default 20).
+        prefer_verified (bool): Sort by trust score (default True).
+        include_deprecated (bool): Include deprecated notes (default False).
+        include_stale (bool): Include stale notes (default True).
+
+    Response data:
+        evidence_id (str): Deterministic 16-char hex ID.
+        vault (str): Vault name.
+        query_params (dict): Echoed effective request parameters.
+        notes (list): Evidence notes sorted by trust score then path.
+        warnings (list): Non-fatal notices.
+        summary (dict): Counts by confidence level.
+
+    Each note includes:
+        path, fields, trust_metadata, confidence, stale, sections, evidence_refs
+
+    error_refs contain path + section for each extracted section.
+
+    Error codes:
+        INVALID_VAULT: Vault not registered (HTTP 404).
+        INVALID_FILTER: Unknown filter field (HTTP 400).
+        INVALID_QUERY: q is too long (HTTP 400).
+        INVALID_EVIDENCE_REQUEST: Invalid request parameter (HTTP 400).
+
+    Private-cloud: allowed in read-only mode with valid auth.
+    """
+    err = _validate_vault(req.vault)
+    if err:
+        return err
+    try:
+        result = _trust_metadata.build_evidence(
+            vault_name=req.vault,
+            filters=req.filters,
+            q=req.q,
+            profile=req.profile,
+            mode=req.mode,
+            include_sections=req.include_sections,
+            max_notes=req.max_notes,
+            prefer_verified=req.prefer_verified,
+            include_deprecated=req.include_deprecated,
+            include_stale=req.include_stale,
+        )
+        if result.get("status") == "error":
+            code = result["error"]["code"]
+            msg = result["error"]["message"]
+            if code == "INVALID_VAULT":
+                return _error(code, msg, 404)
+            if code in ("INVALID_FILTER", "INVALID_QUERY", "INVALID_EVIDENCE_REQUEST"):
+                return _error(code, msg, 400)
+            return _error(code, msg, 500)
+        return result
+    except Exception as exc:
+        return _error("EVIDENCE_BUILD_FAILED", f"Evidence build failed: {exc}", 500)
 
 
 # ---------- Phase 3: Feedback ----------
@@ -2251,6 +2457,21 @@ def endpoint_context_export(req: ExportRequest):
         result["profile_metadata"] = profile_meta_exp
         result.setdefault("warnings", [])
         result["warnings"] = profile_result_exp["warnings"] + result["warnings"]
+
+        # Phase 25: inject trust/staleness summary into export manifest
+        try:
+            trust_summary = _trust_metadata.evidence_status_summary(req.vault)
+            if trust_summary.get("status") == "ok":
+                result["trust_summary"] = trust_summary
+                if "manifest" in result and isinstance(result["manifest"], dict):
+                    result["manifest"]["trust_summary"] = {
+                        "deprecated_count": trust_summary.get("deprecated_count", 0),
+                        "stale_count": trust_summary.get("stale_count", 0),
+                        "missing_metadata_count": trust_summary.get("missing_metadata_count", 0),
+                        "confidence_distribution": trust_summary.get("confidence_distribution", {}),
+                    }
+        except Exception:
+            pass  # Non-blocking: trust summary failure should not block export
 
         return result
 

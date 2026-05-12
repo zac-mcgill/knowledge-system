@@ -1045,6 +1045,75 @@ cd ui && npm run build     # must complete with 0 errors
 - `mcp/test_verify.py` — 40 new Phase 24 tests.
 
 
+## Phase 25 — Trust, Staleness, and Evidence Metadata
+
+41 new tests (`test_p25_1` through `test_p25_41`).
+
+**Key tests:**
+- `test_p25_1` — `trust_metadata` module imports without error.
+- `test_p25_2` — `extract_trust_metadata` returns all four trust fields from frontmatter.
+- `test_p25_3` — `extract_trust_metadata` returns None for missing fields (backward compat).
+- `test_p25_4` — `compute_staleness` returns True when review_after < today.
+- `test_p25_5` — `compute_staleness` returns False when review_after >= today.
+- `test_p25_6` — `compute_staleness` returns False when review_after is absent.
+- `test_p25_7` — `compute_confidence` returns "high" for verified+authored.
+- `test_p25_8` — `compute_confidence` returns "medium" for working level.
+- `test_p25_9` — `compute_confidence` returns "low" for draft level.
+- `test_p25_10` — `compute_confidence` returns "deprecated" for deprecated level.
+- `test_p25_11` — `compute_confidence` returns "unknown" when trust_level is None.
+- `test_p25_12` — `score_note_trust` returns higher score for verified+authored vs draft.
+- `test_p25_13` — `score_note_trust` applies stale penalty when stale=True.
+- `test_p25_14` — `annotate_notes_with_trust` attaches trust_metadata to each note dict.
+- `test_p25_15` — `list_trust_summary` returns correct counts for demo vault.
+- `test_p25_16` — `list_trust_summary` returns INVALID_VAULT for unknown vault.
+- `test_p25_17` — `list_stale_notes` returns stale list for demo vault.
+- `test_p25_18` — `list_stale_notes` returns INVALID_VAULT for unknown vault.
+- `test_p25_19` — `build_evidence` returns notes sorted by trust score when prefer_verified=True.
+- `test_p25_20` — `build_evidence` excludes deprecated notes when include_deprecated=False.
+- `test_p25_21` — `build_evidence` includes deprecated notes when include_deprecated=True.
+- `test_p25_22` — `build_evidence` result includes confidence_disclaimer.
+- `test_p25_23` — `GET /trust` returns 200 with trust summary for demo vault.
+- `test_p25_24` — `GET /trust` returns 404 for unknown vault.
+- `test_p25_25` — `GET /stale` returns 200 with stale summary for demo vault.
+- `test_p25_26` — `GET /stale` returns 404 for unknown vault.
+- `test_p25_27` — `POST /evidence` returns 200 with evidence list.
+- `test_p25_28` — `POST /evidence` with prefer_verified=True returns verified notes first.
+- `test_p25_29` — `POST /evidence` with q filters notes by query string.
+- `test_p25_30` — trust field validation in validate_vault accepts valid trust_level.
+- `test_p25_31` — trust field validation rejects invalid trust_level.
+- `test_p25_32` — trust field validation rejects invalid source_type.
+- `test_p25_33` — trust field validation rejects malformed ISO date in last_reviewed.
+- `test_p25_34` — trust field validation rejects malformed ISO date in review_after.
+- `test_p25_35` — vault_schema.py has VALID_TRUST_LEVELS and VALID_SOURCE_TYPES.
+- `test_p25_36` — MCP tool `cve.get_trust_summary` returns trust summary.
+- `test_p25_37` — MCP tool `cve.get_stale_notes` returns stale data.
+- `test_p25_38` — MCP tool `cve.build_evidence` returns evidence list.
+- `test_p25_39` — MCP resource `cve://vault/{vault}/trust` readable.
+- `test_p25_40` — MCP prompt `cve.evidence_review` includes cite-source instruction.
+- `test_p25_41` — `ROADMAP.md` marks Phase 25 complete.
+
+**Files modified:**
+- `mcp/core/trust_metadata.py` — new service module: extract, score, annotate, summarise, stale, evidence.
+- `demo-vault/Vault Files/Scripts/vault_schema.py` — VALID_TRUST_LEVELS, VALID_SOURCE_TYPES, trust fields in ALL_KNOWN_FIELDS.
+- `core/shared/validate_vault.py` — _validate_trust_fields() called in validate_file().
+- `mcp/server/mcp_server.py` — trust import; annotate on bundle/query; /trust /stale /evidence endpoints.
+- `mcp/core/mcp_tools.py` — cve.get_trust_summary, cve.get_stale_notes, cve.build_evidence tools.
+- `mcp/core/mcp_resources.py` — cve://vault/{vault}/trust and cve://vault/{vault}/stale resources.
+- `mcp/core/mcp_prompts.py` — cve.evidence_review prompt with cite-source and disclaimer.
+- `ui/src/lib/api.ts` — Trust/Stale/Evidence types and API functions.
+- `ui/src/components/TrustEvidence.svelte` — new Trust & Evidence page component.
+- `ui/src/pages/trust.astro` — new /app/trust page.
+- `ui/src/layouts/AppLayout.astro` — Trust nav item added.
+- `run.py` — trust and stale CLI commands.
+- `README.md` — trust/evidence capability bullet; test count updated to 548.
+- `QUICKSTART.md` — Phase 25 section added.
+- `API.md` — /trust /stale /evidence endpoints documented.
+- `TESTING.md` — added Phase 25 section (this entry); updated test count to 548.
+- `ROADMAP.md` — Phase 25 marked Complete; Phase 26 set as next.
+- `mcp/test_verify.py` — 41 new Phase 25 tests.
+
+---
+
 Safe vault deletion through API and UI. Users can permanently delete non-demo vaults via `DELETE /vault/{vault_name}` with explicit typed confirmation. A Danger Zone section was added to the Vault Setup page. 18 backend tests added.
 
 **Verification steps:**

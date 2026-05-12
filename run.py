@@ -49,6 +49,8 @@ Commands:
   project-state  Print project state as JSON
   pending        Print pending change proposals as JSON
   profiles       Print all available context profiles and modes as JSON
+  trust          Print vault trust/confidence summary as JSON
+  stale          Print vault staleness summary as JSON
   templates      Generate canonical templates from vault schema
                  Use --dry-run to preview without writing
   app            Start local server and open browser UI
@@ -422,6 +424,48 @@ def main():
                 "error": {"code": "PROFILES_FAILED", "message": str(exc)},
             }
             print(json.dumps(error_output, indent=2, ensure_ascii=False))
+            raise SystemExit(1)
+
+    if command == "trust":
+        import json
+        sys.path.insert(0, str(repo_root))
+        try:
+            from mcp.core.vault_registry import list_vaults
+            from mcp.core import trust_metadata as _trust_metadata
+
+            vault_name = list_vaults()[0]
+            result = _trust_metadata.list_trust_summary(vault_name)
+            print(json.dumps(result, indent=2, ensure_ascii=True))
+            raise SystemExit(0)
+        except SystemExit:
+            raise
+        except Exception as exc:
+            error_output = {
+                "status": "error",
+                "error": {"code": "TRUST_FAILED", "message": str(exc)},
+            }
+            print(json.dumps(error_output, indent=2, ensure_ascii=True))
+            raise SystemExit(1)
+
+    if command == "stale":
+        import json
+        sys.path.insert(0, str(repo_root))
+        try:
+            from mcp.core.vault_registry import list_vaults
+            from mcp.core import trust_metadata as _trust_metadata
+
+            vault_name = list_vaults()[0]
+            result = _trust_metadata.list_stale_notes(vault_name)
+            print(json.dumps(result, indent=2, ensure_ascii=True))
+            raise SystemExit(0)
+        except SystemExit:
+            raise
+        except Exception as exc:
+            error_output = {
+                "status": "error",
+                "error": {"code": "STALE_FAILED", "message": str(exc)},
+            }
+            print(json.dumps(error_output, indent=2, ensure_ascii=True))
             raise SystemExit(1)
 
     if command not in COMMANDS:

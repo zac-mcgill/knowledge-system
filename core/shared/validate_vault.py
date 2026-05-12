@@ -23,6 +23,76 @@ from core.shared import _resolve_vault_path
 
 _NUMBERED_STEP = re.compile(r"^\d+\.\s+")
 
+# ISO date pattern for Phase 25 trust metadata validation
+_ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def _validate_trust_fields(fields: dict, errors: list, schema) -> None:
+    """Validate optional Phase 25 trust/staleness metadata fields.
+
+    These fields are optional; validation only runs if a field is present
+    and non-empty. Missing fields are always accepted (backwards-compatible).
+    """
+    # trust_level — if present, must be a valid value
+    trust_level = fields.get("trust_level")
+    if trust_level is not None and str(trust_level).strip():
+        valid_levels = getattr(schema, "VALID_TRUST_LEVELS", None) or frozenset({
+            "verified", "working", "draft", "external", "deprecated",
+        })
+        if str(trust_level).strip().lower() not in valid_levels:
+            errors.append(
+                f"Invalid trust_level: {trust_level!r}. "
+                f"Allowed: {sorted(valid_levels)}"
+            )
+
+    # source_type — if present, must be a valid value
+    source_type = fields.get("source_type")
+    if source_type is not None and str(source_type).strip():
+        valid_types = getattr(schema, "VALID_SOURCE_TYPES", None) or frozenset({
+            "authored", "imported", "generated", "agent_suggested",
+        })
+        if str(source_type).strip().lower() not in valid_types:
+            errors.append(
+                f"Invalid source_type: {source_type!r}. "
+                f"Allowed: {sorted(valid_types)}"
+            )
+
+    # last_reviewed — if present, must be ISO YYYY-MM-DD
+    last_reviewed = fields.get("last_reviewed")
+    if last_reviewed is not None and str(last_reviewed).strip():
+        s = str(last_reviewed).strip()
+        if not _ISO_DATE_RE.match(s):
+            errors.append(
+                f"Invalid last_reviewed date: {last_reviewed!r}. "
+                "Expected format: YYYY-MM-DD"
+            )
+        else:
+            try:
+                from datetime import date
+                date.fromisoformat(s)
+            except ValueError:
+                errors.append(
+                    f"Invalid last_reviewed date value: {last_reviewed!r}"
+                )
+
+    # review_after — if present, must be ISO YYYY-MM-DD
+    review_after = fields.get("review_after")
+    if review_after is not None and str(review_after).strip():
+        s = str(review_after).strip()
+        if not _ISO_DATE_RE.match(s):
+            errors.append(
+                f"Invalid review_after date: {review_after!r}. "
+                "Expected format: YYYY-MM-DD"
+            )
+        else:
+            try:
+                from datetime import date
+                date.fromisoformat(s)
+            except ValueError:
+                errors.append(
+                    f"Invalid review_after date value: {review_after!r}"
+                )
+
 
 def validate_how_it_works(body: str, schema) -> str | None:
     """Return an error string if ## How It Works fails strict validation."""
@@ -146,6 +216,10 @@ def validate_file(filepath: Path, root: Path, schema) -> list[str]:
     difficulty = fields.get("difficulty")
     if difficulty is not None and difficulty not in schema.VALID_DIFFICULTIES:
         errors.append(f"Invalid difficulty: '{difficulty}'")
+
+    # ── Phase 25: optional trust metadata field validation ──
+    # These fields are optional; if present they must have valid values.
+    _validate_trust_fields(fields, errors, schema)
 
     # ── Derivation consistency ──
 

@@ -92,7 +92,7 @@ The backend is strong. The local UI has reached a usable application baseline. T
 
 ## Current Active Phase
 
-**Phase 25 - Trust, Staleness, and Evidence Metadata**
+**Phase 26 - Import Pipelines**
 
 ## Phase Status Overview
 
@@ -124,8 +124,8 @@ The backend is strong. The local UI has reached a usable application baseline. T
 | 22    | Session and Project State Layer         | Complete |
 | 23    | Safe Memory Write Queue                 | Complete |
 | 24    | Device Profiles and Context Budgets     | Complete |
-| 25    | Trust, Staleness, and Evidence Metadata | Active   |
-| 26    | Import Pipelines                        | Planned  |
+| 25    | Trust, Staleness, and Evidence Metadata | Complete |
+| 26    | Import Pipelines                        | Active   |
 | 27    | Registry and Reuse Layer                | Deferred |
 | 28    | Optional Semantic Retrieval             | Deferred |
 
@@ -696,41 +696,9 @@ feat(context): add device profiles and context budgets
 
 ### Phase 25 - Trust, Staleness, and Evidence Metadata
 
-#### Purpose
+**Status: Complete**
 
-Help local LLMs prefer better sources and avoid stale/generated/low-confidence notes.
-
-#### Deliver
-
-Optional frontmatter fields:
-
-```yaml
-trust_level: verified | working | draft | external | deprecated
-source_type: authored | imported | generated | agent_suggested
-last_reviewed: 2026-05-07
-review_after: 2026-08-01
-```
-
-Endpoints/UI:
-
-- `/stale`
-- `/trust`
-- `/evidence`
-
-Evidence mode should return source paths, sections, and confidence metadata.
-
-#### Acceptance Criteria
-
-- Retrieval can prefer verified notes.
-- Stale notes are visible.
-- Deprecated notes are deprioritised.
-- Answers can cite source note paths.
-
-#### Suggested Commit
-
-```
-feat(metadata): add trust and staleness controls
-```
+Optional `trust_level`, `source_type`, `last_reviewed`, `review_after` frontmatter fields. Trust metadata service (`trust_metadata.py`) with confidence scoring, staleness detection, and evidence builder. `/trust`, `/stale`, and `/evidence` REST endpoints. MCP tools (`cve.get_trust_summary`, `cve.get_stale_notes`, `cve.build_evidence`), resources (`cve://vault/{vault}/trust`, `cve://vault/{vault}/stale`), and prompt (`cve.evidence_review`). Trust & Evidence UI page at `/app/trust`. CLI `trust` and `stale` commands. Validation extended to check trust field values. 41 new tests (548 total).
 
 ---
 

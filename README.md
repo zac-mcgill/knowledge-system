@@ -4,7 +4,7 @@
 
 Context Vault Engine is a local-first Python pipeline for validating, scanning, and securely packaging structured Markdown content. It enforces a schema contract on every note, scans content for credential leaks, prompt-injection patterns, and suspicious executable/script blocks, then exports integrity-verified packages with SHA-256 manifests. All security rules are deterministic and regex-based, so every finding is explainable, reproducible, and auditable without an LLM or cloud dependency.
 
-**Local-first Python pipeline: credential leak scanning, prompt-injection detection, schema enforcement, rate-limited API, path-traversal blocking, SHA-256 artefact integrity, MCP stdio compatibility layer, private cloud mode, session and project state, safe memory write queue. 467 tests.**
+**Local-first Python pipeline: credential leak scanning, prompt-injection detection, schema enforcement, rate-limited API, path-traversal blocking, SHA-256 artefact integrity, MCP stdio compatibility layer, private cloud mode, session and project state, safe memory write queue, trust/staleness/evidence metadata. 548 tests.**
 
 ---
 
@@ -23,7 +23,8 @@ Context Vault Engine is a local-first Python pipeline for validating, scanning, 
 - Private Cloud Mode: token-authenticated, read-only remote API access — self-hosted, no cloud accounts required
 - Session and Project State: file-backed session tracking and project state so local LLMs can answer "where was I?" — local-first, no DB, no cloud sync
 - Safe Memory Write Queue: LLM-proposed note changes are stored as pending proposals for human review — nothing is written to vault notes without explicit accept
-- 467 deterministic tests
+- Trust, Staleness, and Evidence Metadata: optional `trust_level`, `source_type`, `last_reviewed`, `review_after` frontmatter fields; `/trust`, `/stale`, `/evidence` endpoints; confidence scoring (verified/working/draft/external/deprecated); stale detection; evidence builder returns trust-ranked source notes with cite-able paths
+- 548 deterministic tests
 
 ---
 
@@ -84,6 +85,7 @@ Each command exits `0` on success, `1` on failure, and writes structured JSON ou
 | **API** | Serves all of the above through a rate-limited FastAPI HTTP interface for programmatic use. |
 | **MCP** | Exposes vault capabilities as JSON-RPC tools, resources, and prompts over stdio for use with MCP-compatible local clients. Read-only, deterministic. |
 | **Private Cloud** | Optional token-authenticated read-only remote access mode. Self-hosted, no cloud dependencies. Mutating routes blocked by default in remote mode. See `DEPLOYMENT.md`. |
+| **Trust/Evidence** | Optional trust metadata fields (`trust_level`, `source_type`, `last_reviewed`, `review_after`) per note. `/trust`, `/stale`, and `/evidence` API endpoints. Evidence builder returns trust-ranked source notes with confidence scores and section excerpts for cite-able responses. |
 
 ---
 

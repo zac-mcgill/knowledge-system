@@ -115,6 +115,37 @@ TOOLS = [
             "additionalProperties": False,
         },
     },
+    # Phase 25 — Evidence tool (alphabetical: build_evidence after build_context_bundle)
+    {
+        "name": "cve.build_evidence",
+        "description": (
+            "Build a structured evidence response with trust metadata and source refs. "
+            "Returns source note paths, sections, confidence metadata, and trust/staleness "
+            "status so that local LLMs can cite sources and prefer higher-trust notes. "
+            "Notes are sorted by trust score (verified first) when prefer_verified=True. "
+            "Deprecated notes are excluded by default. "
+            "IMPORTANT: confidence is based on user/system-provided metadata only. "
+            "It does NOT indicate factual correctness."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "vault": {"type": "string"},
+                "filters": {"type": "object"},
+                "q": {"type": "string"},
+                "include_sections": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                },
+                "max_notes": {"type": "integer", "minimum": 1, "maximum": 100},
+                "prefer_verified": {"type": "boolean"},
+                "include_deprecated": {"type": "boolean"},
+                "include_stale": {"type": "boolean"},
+            },
+            "required": ["vault"],
+            "additionalProperties": False,
+        },
+    },
     {
         "name": "cve.close_session",
         "description": (
@@ -228,6 +259,27 @@ TOOLS = [
             "additionalProperties": False,
         },
     },
+    # Phase 25 — Stale notes tool (alphabetical: get_stale_notes after get_project_state)
+    {
+        "name": "cve.get_stale_notes",
+        "description": (
+            "Return stale/review information for a vault. "
+            "Lists notes where review_after is before today (stale), "
+            "notes with no review_after (freshness_unknown), "
+            "notes with no last_reviewed (review_unknown), "
+            "and deprecated notes. "
+            "Staleness is computed deterministically from note frontmatter "
+            "using today's UTC date."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "vault": {"type": "string"},
+            },
+            "required": ["vault"],
+            "additionalProperties": False,
+        },
+    },
     {
         "name": "cve.get_tasks",
         "description": "Get deterministic improvement tasks.",
@@ -236,6 +288,25 @@ TOOLS = [
             "properties": {
                 "vault": {"type": "string"},
                 "min_priority": {"type": "number"},
+            },
+            "required": ["vault"],
+            "additionalProperties": False,
+        },
+    },
+    # Phase 25 — Trust summary tool (alphabetical: get_trust_summary after get_tasks)
+    {
+        "name": "cve.get_trust_summary",
+        "description": (
+            "Return vault-level trust/source/staleness summary. "
+            "Counts notes by trust_level, source_type, and confidence level. "
+            "Reports missing metadata count, deprecated count, stale count. "
+            "Trust metadata is user/system-provided: it signals confidence but "
+            "does NOT verify factual correctness."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "vault": {"type": "string"},
             },
             "required": ["vault"],
             "additionalProperties": False,
@@ -593,6 +664,7 @@ def _execute_tool(tool_name: str, args: dict) -> dict:
         "cve.accept_pending_change": _tool_accept_pending_change,
         "cve.attach_note_to_session": _tool_attach_note_to_session,
         "cve.build_context_bundle": _tool_build_context_bundle,
+        "cve.build_evidence": _tool_build_evidence,
         "cve.close_session": _tool_close_session,
         "cve.create_note_draft": _tool_create_note_draft,
         "cve.get_context_plan": _tool_get_context_plan,
@@ -600,7 +672,9 @@ def _execute_tool(tool_name: str, args: dict) -> dict:
         "cve.get_missing_concepts": _tool_get_missing_concepts,
         "cve.get_note": _tool_get_note,
         "cve.get_project_state": _tool_get_project_state,
+        "cve.get_stale_notes": _tool_get_stale_notes,
         "cve.get_tasks": _tool_get_tasks,
+        "cve.get_trust_summary": _tool_get_trust_summary,
         "cve.list_context_profiles": _tool_list_context_profiles,
         "cve.list_pending_changes": _tool_list_pending_changes,
         "cve.list_vaults": _tool_list_vaults,
@@ -1088,3 +1162,55 @@ def _tool_reject_pending_change(args: dict) -> dict:
         err = result["error"]
         return _tool_error(f"{err['code']}: {err['message']}")
     return _tool_ok(result, f"Change rejected and archived: {change_id}")
+
+
+# ---------------------------------------------------------------------------
+# Phase 25: Trust, Staleness, and Evidence tool implementations
+# ---------------------------------------------------------------------------
+
+def _tool_get_trust_summary(args: dict) -> dict:
+    from mcp.core import trust_metadata as _tm  # noqa: PLC0415
+    vault = args["vault"]
+    result = _tm.list_trust_summary(vault)
+    if result.get("status") == "error":
+        err = result["error"]
+        return _tool_error(f"{err['code']}: {err['message']}")
+    return _tool_ok(result)
+
+
+def _tool_get_stale_notes(args: dict) -> dict:
+    from mcp.core import trust_metadata as _tm  # noqa: PLC0415
+    vault = args["vault"]
+    result = _tm.list_stale_notes(vault)
+    if result.get("status") == "error":
+        err = result["error"]
+        return _tool_error(f"{err['code']}: {err['message']}")
+    return _tool_ok(result)
+
+
+def _tool_build_evidence(args: dict) -> dict:
+    from mcp.core import trust_metadata as _tm  # noqa: PLC0415
+    vault = args["vault"]
+    filters = args.get("filters") or {}
+    q = args.get("q")
+    include_sections = args.get("include_sections")
+    max_notes = args.get("max_notes", 20)
+    prefer_verified = args.get("prefer_verified", True)
+    include_deprecated = args.get("include_deprecated", False)
+    include_stale = args.get("include_stale", True)
+    result = _tm.build_evidence(
+        vault_name=vault,
+        filters=filters,
+        q=q,
+        include_sections=include_sections,
+        max_notes=max_notes,
+        prefer_verified=prefer_verified,
+        include_deprecated=include_deprecated,
+        include_stale=include_stale,
+    )
+    if result.get("status") == "error":
+        err = result["error"]
+        return _tool_error(f"{err['code']}: {err['message']}")
+    summary = result.get("summary", {})
+    total = summary.get("total_notes", 0)
+    return _tool_ok(result, f"Evidence built: {total} note(s) from {vault!r}")

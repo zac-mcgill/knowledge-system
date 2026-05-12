@@ -14,6 +14,8 @@ Supported URIs:
   cve://vault/{vault}/missing
   cve://vault/{vault}/security
   cve://vault/{vault}/graph
+  cve://vault/{vault}/trust
+  cve://vault/{vault}/stale
 
 Path safety: vault names are validated against the registered vault list.
 No raw filesystem paths are accepted from callers.
@@ -63,6 +65,9 @@ _VAULT_RESOURCE_TEMPLATES = [
     ("cve://vault/{vault}/session/current", "Current Session", "Latest active session summary."),
     ("cve://vault/{vault}/project-state", "Project State", "Project phase, tasks, blockers, and decisions."),
     ("cve://vault/{vault}/pending-changes", "Pending Changes", "Pending change proposals awaiting review."),
+    # Phase 25 — trust/staleness resources
+    ("cve://vault/{vault}/trust", "Trust Summary", "Trust/staleness/evidence metadata summary."),
+    ("cve://vault/{vault}/stale", "Stale Notes", "Notes with staleness information."),
 ]
 
 # Static profile resource templates (not per-vault)
@@ -266,6 +271,11 @@ def _read_vault_resource(uri: str, vault_name: str, resource_path: str) -> dict:
         return _read_project_state(uri, vault_name)
     if resource_path == "pending-changes":
         return _read_pending_changes(uri, vault_name)
+    # Phase 25 — trust/staleness
+    if resource_path == "trust":
+        return _read_trust(uri, vault_name)
+    if resource_path == "stale":
+        return _read_stale(uri, vault_name)
 
     return _resource_error(uri, f"Unknown vault resource path: {resource_path!r}")
 
@@ -375,6 +385,28 @@ def _read_pending_changes(uri: str, vault_name: str) -> dict:
     """Read the pending change queue (status=pending) for a vault."""
     from mcp.core import pending_changes as _pc  # noqa: PLC0415
     result = _pc.list_pending_changes(vault_name, status="pending", limit=100)
+    if result.get("status") == "error":
+        err = result["error"]
+        return _resource_error(uri, f"{err['code']}: {err['message']}")
+    return _resource_ok(uri, result)
+
+
+# Phase 25 — trust/staleness resource readers
+
+def _read_trust(uri: str, vault_name: str) -> dict:
+    """Read vault-level trust/source/confidence summary."""
+    from mcp.core import trust_metadata as _tm  # noqa: PLC0415
+    result = _tm.list_trust_summary(vault_name)
+    if result.get("status") == "error":
+        err = result["error"]
+        return _resource_error(uri, f"{err['code']}: {err['message']}")
+    return _resource_ok(uri, result)
+
+
+def _read_stale(uri: str, vault_name: str) -> dict:
+    """Read stale/review metadata for all notes in a vault."""
+    from mcp.core import trust_metadata as _tm  # noqa: PLC0415
+    result = _tm.list_stale_notes(vault_name)
     if result.get("status") == "error":
         err = result["error"]
         return _resource_error(uri, f"{err['code']}: {err['message']}")
