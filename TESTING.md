@@ -1,13 +1,13 @@
 # Context Vault Engine - Testing
 
-All tests live in `mcp/test_verify.py`. The suite currently has 695 test functions (679 phase tests plus 16 documentation drift guardrails), all of which are executed by the manual runner in `main()` at the bottom of that file. A passing run prints `ALL VERIFICATION TESTS PASSED`. Historical test counts from earlier phases (272, 382, 429, 467, 507, 548, 553, 564, 587, 607, 625, 650, 675) appear later in this document as part of the phase changelog and are not the current total.
+All tests live in `mcp/test_verify.py`. The suite currently has 706 test functions (690 phase tests plus 16 documentation drift guardrails), all of which are executed by the manual runner in `main()` at the bottom of that file. A passing run prints `ALL VERIFICATION TESTS PASSED`. Historical test counts from earlier phases (272, 382, 429, 467, 507, 548, 553, 564, 587, 607, 625, 650, 675, 695) appear later in this document as part of the phase changelog and are not the current total.
 
 ## Current Verification Summary
 
 A full local verification consists of:
 
 ```bash
-py mcp/test_verify.py           # 695 tests, all must pass
+py mcp/test_verify.py           # 706 tests, all must pass
 py run.py validate              # vault schema-compliance
 py run.py security              # status: pass (or warning, never fail)
 py run.py feedback              # exits 0, valid JSON
@@ -1997,6 +1997,41 @@ A small set of deterministic tests guards against the most common documentation 
 - `test_p22_testing_md_updated_count`, `test_p23_testing_md_updated_count`, `test_p24_36` (historical) confirm prior test-count entries remain present in TESTING.md.
 - `test_p18bu_ui_no_stale_limitation_text` (Phase 18BU) confirms VaultSetup.svelte no longer claims expected concepts are not written to schema.
 - `test_doc_drift_*` (current pass) confirms README, TESTING, and RELEASE_CHECKLIST agree on the current test count and that QUICKSTART no longer carries the stale "Expected Concepts not yet written to schema" sentence.
+
+---
+
+## Phase 29A - UI/UX Quality Roadmap Formalisation and Audit
+
+11 new tests (`test_p29a_1` through `test_p29a_11`), bringing the phase-test total to 690. Combined with the 16 documentation drift guardrails, the overall test count is now 706.
+
+Phase 29A is documentation and audit only. No UI code, no CSS, no components, and no backend behaviour are changed in this phase. The new tests guard against drift between ROADMAP.md, UI_UX_AUDIT.md, TESTING.md, README.md, and the deferral status of Phase 27 (Registry and Reuse Layer) and Phase 28 (Optional Semantic Retrieval).
+
+**Tests added:**
+
+- `test_p29a_1_roadmap_contains_phase29` - ROADMAP.md contains a Phase 29 section header.
+- `test_p29a_2_roadmap_contains_all_subphases` - ROADMAP.md mentions Phase 29A, 29B, 29C, 29D, and 29E.
+- `test_p29a_3_roadmap_phase27_still_deferred` - ROADMAP.md status table row for Phase 27 still reads Deferred.
+- `test_p29a_4_roadmap_phase28_still_deferred` - ROADMAP.md status table row for Phase 28 still reads Deferred.
+- `test_p29a_5_roadmap_current_active_phase` - ROADMAP.md Current Active Phase references Phase 29A.
+- `test_p29a_6_ui_ux_audit_exists` - UI_UX_AUDIT.md exists in the repository root.
+- `test_p29a_7_ui_ux_audit_required_sections` - UI_UX_AUDIT.md includes screenshot findings, route inventory, component inventory, information architecture, design system, React decision, and non-goals.
+- `test_p29a_8_no_em_dashes_in_p29_docs` - ROADMAP.md and UI_UX_AUDIT.md do not contain em dashes.
+- `test_p29a_9_testing_documents_phase29a` - TESTING.md documents Phase 29A.
+- `test_p29a_10_readme_no_phase29_implementation_claim` - README.md does not claim Phase 29 UI implementation is complete.
+- `test_p29a_11_verification_commands_intact` - The standard verification command list (test_verify.py, validate, security, feedback, export, npm run build) is still documented.
+
+**Verification steps:**
+
+```bash
+py mcp/test_verify.py            # 706 tests, all must pass
+py run.py validate               # vault still valid
+py run.py security               # status: pass
+py run.py feedback               # exits 0, valid JSON
+py run.py export --overwrite     # status: ok
+cd ui; npm run build             # builds without errors
+```
+
+Phase 29A does not implement any UI change. Phase 29B (Navigation and information architecture redesign) is the first sub-phase that touches UI code, and it is not part of Phase 29A.
 
 ---
 

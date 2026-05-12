@@ -11537,6 +11537,19 @@ def main():
     test_doc_drift_testing_no_current_six_files()
     test_doc_drift_release_checklist_no_phase17_example()
 
+    # Phase 29A - UI/UX Quality and Design System (roadmap formalisation and audit)
+    test_p29a_1_roadmap_contains_phase29()
+    test_p29a_2_roadmap_contains_all_subphases()
+    test_p29a_3_roadmap_phase27_still_deferred()
+    test_p29a_4_roadmap_phase28_still_deferred()
+    test_p29a_5_roadmap_current_active_phase()
+    test_p29a_6_ui_ux_audit_exists()
+    test_p29a_7_ui_ux_audit_required_sections()
+    test_p29a_8_no_em_dashes_in_p29_docs()
+    test_p29a_9_testing_documents_phase29a()
+    test_p29a_10_readme_no_phase29_implementation_claim()
+    test_p29a_11_verification_commands_intact()
+
     print()
     print("=" * 60)
     print("ALL VERIFICATION TESTS PASSED")
@@ -19151,9 +19164,9 @@ def _repo_root():
 
 
 def test_doc_drift_readme_test_count():
-    """DOC-DRIFT-1: README quotes the current 695-test total, no stale counts."""
+    """DOC-DRIFT-1: README quotes the current 706-test total, no stale counts."""
     readme = (_repo_root() / "README.md").read_text(encoding="utf-8")
-    assert "695" in readme, "README.md must mention the current test count 695"
+    assert "706" in readme, "README.md must mention the current test count 706"
     stale_phrases = [
         "553 deterministic tests",
         "548 deterministic tests",
@@ -19165,29 +19178,30 @@ def test_doc_drift_readme_test_count():
         "625 deterministic tests",
         "650 deterministic tests",
         "675 deterministic tests",
+        "695 deterministic tests",
     ]
     for phrase in stale_phrases:
         assert phrase not in readme, f"README.md still mentions stale phrase {phrase!r}"
-    print(f"  README mentions 695 tests, no stale counts present ✓")
+    print(f"  README mentions 706 tests, no stale counts present ✓")
 
 
 def test_doc_drift_testing_test_count():
-    """DOC-DRIFT-2: TESTING.md current total is 695 and historical markers retained."""
+    """DOC-DRIFT-2: TESTING.md current total is 706 and historical markers retained."""
     text = (_repo_root() / "TESTING.md").read_text(encoding="utf-8")
-    assert "695 test functions" in text, "TESTING.md must state 695 test functions"
-    for marker in ("429", "467", "507", "548", "564", "587", "607", "625", "650", "675"):
+    assert "706 test functions" in text, "TESTING.md must state 706 test functions"
+    for marker in ("429", "467", "507", "548", "564", "587", "607", "625", "650", "675", "695"):
         assert marker in text, f"TESTING.md must retain historical test-count marker {marker}"
-    print(f"  TESTING.md states 695 functions and keeps historical markers ✓")
+    print(f"  TESTING.md states 706 functions and keeps historical markers ✓")
 
 
 def test_doc_drift_release_checklist_test_count():
-    """DOC-DRIFT-3: RELEASE_CHECKLIST references 695 tests and required commands."""
+    """DOC-DRIFT-3: RELEASE_CHECKLIST references 706 tests and required commands."""
     text = (_repo_root() / "RELEASE_CHECKLIST.md").read_text(encoding="utf-8")
-    assert "695" in text, "RELEASE_CHECKLIST.md must reference the 695-test target"
+    assert "706" in text, "RELEASE_CHECKLIST.md must reference the 706-test target"
     for req in ("test_verify.py", "run.py validate", "run.py security",
                 "run.py export", "GitHub Release"):
         assert req in text, f"RELEASE_CHECKLIST.md must contain {req!r}"
-    print(f"  RELEASE_CHECKLIST mentions 695 tests and required commands ✓")
+    print(f"  RELEASE_CHECKLIST mentions 706 tests and required commands ✓")
 
 
 def test_doc_drift_roadmap_active_phase():
@@ -19341,6 +19355,195 @@ def test_doc_drift_release_checklist_no_phase17_example():
     assert not offenders, \
         f"Project-authored docs must not contain em dashes; offenders: {offenders}"
     print(f"  RELEASE_CHECKLIST clean; no em dashes in project docs ✓")
+
+
+# ============================================================
+# Phase 29A - UI/UX Quality Roadmap Formalisation and Audit
+# ============================================================
+#
+# Phase 29A is documentation and audit only. These tests guard against
+# drift between ROADMAP.md, UI_UX_AUDIT.md, TESTING.md, README.md, and
+# the deferral status of Phase 27 (Registry and Reuse Layer) and
+# Phase 28 (Optional Semantic Retrieval). No UI implementation,
+# no CSS redesign, no component rewrites, and no backend behaviour
+# changes ship in Phase 29A.
+
+
+def test_p29a_1_roadmap_contains_phase29():
+    """P29A-1: ROADMAP.md contains a Phase 29 section header."""
+    print("\n=== Test P29A-1: ROADMAP.md contains Phase 29 ===")
+    text = (_repo_root() / "ROADMAP.md").read_text(encoding="utf-8")
+    assert "Phase 29 - UI/UX Quality and Design System" in text, \
+        "ROADMAP.md must contain a Phase 29 section header"
+    assert "| 29    | UI/UX Quality and Design System         | Active   |" in text, \
+        "ROADMAP.md status table must mark Phase 29 Active"
+    print("  ROADMAP.md contains Phase 29 ✓")
+
+
+def test_p29a_2_roadmap_contains_all_subphases():
+    """P29A-2: ROADMAP.md mentions Phase 29A, 29B, 29C, 29D, 29E."""
+    print("\n=== Test P29A-2: ROADMAP.md contains Phase 29A to 29E ===")
+    text = (_repo_root() / "ROADMAP.md").read_text(encoding="utf-8")
+    for sub in ("Phase 29A", "Phase 29B", "Phase 29C", "Phase 29D", "Phase 29E"):
+        assert sub in text, f"ROADMAP.md must mention {sub}"
+    # Each sub-phase header should appear in the Phase 29 section.
+    for header in (
+        "Phase 29A - Roadmap formalisation and UI/UX audit",
+        "Phase 29B - Navigation and information architecture redesign",
+        "Phase 29C - Global design system and shared UI primitives",
+        "Phase 29D - Page-level UX consistency pass",
+        "Phase 29E - Final polish, docs, and release readiness",
+    ):
+        assert header in text, f"ROADMAP.md must contain section header: {header}"
+    print("  All five Phase 29 sub-phases present ✓")
+
+
+def test_p29a_3_roadmap_phase27_still_deferred():
+    """P29A-3: ROADMAP.md status table row for Phase 27 still reads Deferred."""
+    print("\n=== Test P29A-3: Phase 27 still deferred ===")
+    text = (_repo_root() / "ROADMAP.md").read_text(encoding="utf-8")
+    assert "| 27    | Registry and Reuse Layer                | Deferred |" in text, \
+        "ROADMAP.md status table must keep Phase 27 Deferred"
+    assert "Phase 29 does not supersede or start Phase 27" in text, \
+        "ROADMAP.md must explicitly state Phase 29 does not start Phase 27"
+    print("  Phase 27 still deferred ✓")
+
+
+def test_p29a_4_roadmap_phase28_still_deferred():
+    """P29A-4: ROADMAP.md status table row for Phase 28 still reads Deferred."""
+    print("\n=== Test P29A-4: Phase 28 still deferred ===")
+    text = (_repo_root() / "ROADMAP.md").read_text(encoding="utf-8")
+    assert "| 28    | Optional Semantic Retrieval             | Deferred |" in text, \
+        "ROADMAP.md status table must keep Phase 28 Deferred"
+    assert "Phase 28" in text, "ROADMAP.md must still discuss Phase 28"
+    print("  Phase 28 still deferred ✓")
+
+
+def test_p29a_5_roadmap_current_active_phase():
+    """P29A-5: ROADMAP.md Current Active Phase references Phase 29A."""
+    print("\n=== Test P29A-5: Current Active Phase ===")
+    text = (_repo_root() / "ROADMAP.md").read_text(encoding="utf-8")
+    assert "## Current Active Phase" in text, \
+        "ROADMAP.md must have a Current Active Phase section"
+    # Locate the section and confirm it names Phase 29A.
+    marker = "## Current Active Phase"
+    idx = text.find(marker)
+    assert idx >= 0
+    section = text[idx:idx + 800]
+    assert "Phase 29A" in section, \
+        "ROADMAP.md Current Active Phase must reference Phase 29A"
+    assert "None." not in section.split("\n\n", 2)[1], \
+        "ROADMAP.md Current Active Phase must not still read 'None'"
+    print("  Current Active Phase references Phase 29A ✓")
+
+
+def test_p29a_6_ui_ux_audit_exists():
+    """P29A-6: UI_UX_AUDIT.md exists in the repository root."""
+    print("\n=== Test P29A-6: UI_UX_AUDIT.md exists ===")
+    audit_path = _repo_root() / "UI_UX_AUDIT.md"
+    assert audit_path.is_file(), "UI_UX_AUDIT.md must exist in the repo root"
+    text = audit_path.read_text(encoding="utf-8")
+    assert len(text) > 2000, "UI_UX_AUDIT.md must contain meaningful audit content"
+    print("  UI_UX_AUDIT.md exists ✓")
+
+
+def test_p29a_7_ui_ux_audit_required_sections():
+    """P29A-7: UI_UX_AUDIT.md contains screenshot findings, route inventory,
+    component inventory, IA, design system, React decision, non-goals."""
+    print("\n=== Test P29A-7: UI_UX_AUDIT.md required sections ===")
+    text = (_repo_root() / "UI_UX_AUDIT.md").read_text(encoding="utf-8")
+    required_markers = [
+        "Executive Verdict",
+        "Screenshot Findings",
+        "Route Inventory",
+        "Component Inventory",
+        "Information Architecture Recommendation",
+        "Proposed Sidebar Grouping",
+        "Page Consolidation Recommendations",
+        "Design System Proposal",
+        "React Decision",
+        "No React needed",
+        "Recommended Implementation Sequence",
+        "Risks and Non-Goals",
+    ]
+    for marker in required_markers:
+        assert marker in text, f"UI_UX_AUDIT.md must contain section: {marker!r}"
+    # The audit must explicitly keep Phase 27 and Phase 28 deferred.
+    assert "Phase 27 stays deferred" in text or "Phase 27 (Registry and Reuse Layer) is deferred" in text or \
+        "Phase 27" in text, "UI_UX_AUDIT.md must reference Phase 27"
+    assert "Phase 28" in text, "UI_UX_AUDIT.md must reference Phase 28"
+    print("  All required audit sections present ✓")
+
+
+def test_p29a_8_no_em_dashes_in_p29_docs():
+    """P29A-8: ROADMAP.md and UI_UX_AUDIT.md contain no em dashes."""
+    print("\n=== Test P29A-8: no em dashes in Phase 29 docs ===")
+    em_dash = "\u2014"
+    for fname in ("ROADMAP.md", "UI_UX_AUDIT.md", "TESTING.md",
+                  "README.md", "RELEASE_CHECKLIST.md"):
+        text = (_repo_root() / fname).read_text(encoding="utf-8")
+        assert em_dash not in text, f"{fname} must not contain em dashes"
+    print("  No em dashes in Phase 29 docs ✓")
+
+
+def test_p29a_9_testing_documents_phase29a():
+    """P29A-9: TESTING.md documents Phase 29A."""
+    print("\n=== Test P29A-9: TESTING.md documents Phase 29A ===")
+    text = (_repo_root() / "TESTING.md").read_text(encoding="utf-8")
+    assert "Phase 29A" in text, "TESTING.md must document Phase 29A"
+    assert "706 test functions" in text, \
+        "TESTING.md must reflect the new test count after Phase 29A"
+    assert "documentation and audit only" in text or \
+        "documentation/audit only" in text, \
+        "TESTING.md must state Phase 29A is documentation/audit only"
+    print("  TESTING.md documents Phase 29A ✓")
+
+
+def test_p29a_10_readme_no_phase29_implementation_claim():
+    """P29A-10: README.md does not claim Phase 29 UI implementation is complete."""
+    print("\n=== Test P29A-10: README does not over-claim Phase 29 ===")
+    text = (_repo_root() / "README.md").read_text(encoding="utf-8")
+    forbidden = [
+        "Phase 29 is complete",
+        "Phase 29 (UI/UX Quality and Design System) is complete",
+        "Phase 29B is complete",
+        "Phase 29C is complete",
+        "Phase 29D is complete",
+        "Phase 29E is complete",
+        "UI/UX redesign is complete",
+        "design system is complete",
+    ]
+    for phrase in forbidden:
+        assert phrase not in text, \
+            f"README.md must not claim {phrase!r}; Phase 29A is documentation only"
+    # README must keep Phase 27 and Phase 28 deferred.
+    assert "Phase 27 (Registry and Reuse Layer) is deferred" in text, \
+        "README.md must keep Phase 27 deferred"
+    assert "Phase 28 (Optional Semantic Retrieval) is deferred" in text, \
+        "README.md must keep Phase 28 deferred"
+    print("  README does not over-claim Phase 29 ✓")
+
+
+def test_p29a_11_verification_commands_intact():
+    """P29A-11: Existing verification command references remain intact."""
+    print("\n=== Test P29A-11: verification commands intact ===")
+    testing = (_repo_root() / "TESTING.md").read_text(encoding="utf-8")
+    checklist = (_repo_root() / "RELEASE_CHECKLIST.md").read_text(encoding="utf-8")
+    required_cmds = [
+        "py mcp/test_verify.py",
+        "py run.py validate",
+        "py run.py security",
+        "py run.py feedback",
+        "py run.py export --overwrite",
+        "npm run build",
+    ]
+    for cmd in required_cmds:
+        assert cmd in testing, f"TESTING.md must keep verification command {cmd!r}"
+    for cmd in ("python mcp/test_verify.py", "python run.py validate",
+                "python run.py security", "python run.py feedback",
+                "python run.py export --overwrite", "npm run build"):
+        assert cmd in checklist, f"RELEASE_CHECKLIST.md must keep {cmd!r}"
+    print("  Verification commands intact ✓")
 
 
 if __name__ == "__main__":

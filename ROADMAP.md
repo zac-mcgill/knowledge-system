@@ -92,7 +92,7 @@ The backend is strong. The local UI has reached a usable application baseline. T
 
 ## Current Active Phase
 
-None. Phase 26 (Import Pipelines) is complete. Phases 27 and 28 remain deferred.
+Phase 29A (Roadmap formalisation and UI/UX audit). Phases 0 to 26 are complete. Phase 29 (UI/UX Quality and Design System) is now active. Phase 27 (Registry and Reuse Layer) and Phase 28 (Optional Semantic Retrieval) remain deferred and are not started by Phase 29.
 
 ## Phase Status Overview
 
@@ -126,6 +126,7 @@ None. Phase 26 (Import Pipelines) is complete. Phases 27 and 28 remain deferred.
 | 24    | Device Profiles and Context Budgets     | Complete |
 | 25    | Trust, Staleness, and Evidence Metadata | Complete |
 | 26    | Import Pipelines                        | Complete |
+| 29    | UI/UX Quality and Design System         | Active   |
 | 27    | Registry and Reuse Layer                | Deferred |
 | 28    | Optional Semantic Retrieval             | Deferred |
 
@@ -711,6 +712,217 @@ docs(import): finalise Phase 26 import lifecycle
 
 ---
 
+### Phase 29 - UI/UX Quality and Design System
+
+**Status: Active (Phase 29A in progress).**
+
+#### Purpose
+
+Phases 0 to 26 delivered the backend, the API surface, the MCP layer, and a functional but unpolished local web UI. Phase 29 turns that functional UI into a coherent, navigable, and visually consistent application without changing backend behaviour, route contracts, or the local-first deterministic model.
+
+Phase 29 is a UI/UX quality phase only. It does not introduce semantic retrieval, a registry, SaaS features, cloud dependencies, or LLM-driven UI behaviour. It does not start Phase 27 or Phase 28, and it does not change any backend API contract.
+
+#### Scope
+
+- Information architecture and sidebar grouping.
+- Shared design system tokens (colour, spacing, typography, radius, focus).
+- Reusable UI primitives (card, button, badge, table, empty state, raw JSON panel, dangerous action confirm, trust warning, page header).
+- Page-level consistency across existing routes.
+- Final polish, accessibility minimums, and docs.
+
+#### Non-Goals
+
+- No new backend routes.
+- No removal of existing backend routes.
+- No semantic retrieval.
+- No registry.
+- No cloud features.
+- No LLM-driven UI behaviour.
+- No React introduction unless a future sub-phase demonstrates a concrete reason and Svelte is materially worse for that specific use case.
+- No removal of existing pages unless a sub-phase is explicitly documentation-only and only recommends consolidation.
+- No changes to runtime CLI, API, or MCP behaviour.
+
+#### Sub-Phases
+
+##### Phase 29A - Roadmap formalisation and UI/UX audit
+
+**Purpose**
+
+Make the UI/UX direction official in the project roadmap, document the existing UI and routes, identify the design and information architecture problems, and propose the sequence for sub-phases 29B to 29E. Documentation and tests only.
+
+**Scope**
+
+- Add this Phase 29 section to ROADMAP.md.
+- Produce `UI_UX_AUDIT.md` with executive verdict, screenshot findings, route inventory, component inventory, information architecture recommendation, proposed sidebar grouping, page consolidation recommendations, design system proposal, React decision, recommended sequence for 29B to 29E, and risks/non-goals.
+- Update TESTING.md, README.md, and RELEASE_CHECKLIST.md to reflect that Phase 29A is active and is documentation/audit only.
+- Add deterministic guardrail tests that prevent docs from drifting on Phase 29 status, Phase 27 deferral, and Phase 28 deferral.
+
+**Non-Goals**
+
+- No UI implementation.
+- No CSS redesign.
+- No component rewrites.
+- No page consolidation.
+- No backend changes.
+- No dependency changes.
+
+**Acceptance Criteria**
+
+- ROADMAP.md lists Phase 29 in the status table and includes a full Phase 29 section with all five sub-phases (29A to 29E).
+- ROADMAP.md still marks Phase 27 and Phase 28 as Deferred.
+- ROADMAP.md Current Active Phase references Phase 29A.
+- `UI_UX_AUDIT.md` exists and contains the required sections.
+- TESTING.md documents Phase 29A and the new tests are wired into the manual runner.
+- README.md does not claim any Phase 29 UI implementation is complete.
+- All previous verification commands still pass.
+
+**Suggested Commit**
+
+```
+docs(phase29a): formalise UI/UX quality phase and produce audit plan
+```
+
+##### Phase 29B - Navigation and information architecture redesign
+
+**Purpose**
+
+Reorganise the sidebar and top-level navigation around user intent groups (for example: Overview, Vault, Review/Governance, Context, Imports, Developer) rather than a flat list, and surface the active vault clearly in the chrome. Implements the information architecture recommendation from `UI_UX_AUDIT.md`.
+
+**Scope**
+
+- Sidebar grouping with section headers.
+- Active state, hover state, focus-visible state.
+- Persistent vault selector in the layout chrome rather than per page.
+- Mobile navigation pattern that matches the new groups.
+- No backend changes. No route removals.
+
+**Non-Goals**
+
+- No new pages.
+- No design tokens beyond what is strictly required for the new nav.
+- No React.
+
+**Acceptance Criteria**
+
+- All current routes remain reachable.
+- Sidebar groups match `UI_UX_AUDIT.md` proposed grouping.
+- Keyboard navigation reaches every nav item and visibly focuses it.
+- Mobile shell still works.
+- `cd ui; npm run build` succeeds with zero errors.
+- Backend tests are unchanged.
+
+**Suggested Commit**
+
+```
+feat(ui): grouped sidebar and information architecture (Phase 29B)
+```
+
+##### Phase 29C - Global design system and shared UI primitives
+
+**Purpose**
+
+Introduce a shared design system that every page consumes. Define tokens for colour (background, surface, border, text, muted text, accent, danger, warning, success, info), typography, spacing, radius, and focus, expressed either as CSS custom properties or Tailwind theme extensions. Extract reusable Svelte primitives for the patterns used across multiple existing components.
+
+**Scope**
+
+- Design tokens.
+- Shared primitives: page header, card, button (primary/secondary/ghost/danger), badge (status/trust/severity), status indicator, raw JSON expander, empty state, loading state, error state, success state, table, dangerous action confirm, trust/security warning.
+- Migration of one or two existing pages to the new primitives as a worked example. Other pages are migrated in Phase 29D.
+- No backend changes.
+
+**Non-Goals**
+
+- No new business behaviour.
+- No new dependencies.
+- No React.
+
+**Acceptance Criteria**
+
+- Tokens exist and are documented in the audit or in a new `ui/src/styles/` doc.
+- Primitives compile and are used in at least one page.
+- Keyboard focus is visible on every interactive primitive.
+- `cd ui; npm run build` succeeds.
+- Backend tests are unchanged.
+
+**Suggested Commit**
+
+```
+feat(ui): introduce design tokens and shared primitives (Phase 29C)
+```
+
+##### Phase 29D - Page-level UX consistency pass
+
+**Purpose**
+
+Migrate every existing page to the Phase 29C primitives, tighten copy, standardise empty/loading/error/success states, standardise raw JSON expanders, and apply consistent dangerous action and trust/security warning patterns. No new pages, no new backend.
+
+**Scope**
+
+- Apply primitives to every page under `ui/src/pages/`.
+- Standardise headings, descriptions, and helper text.
+- Standardise the dangerous action pattern (typed confirmation, danger button variant, audit-friendly copy).
+- Standardise the trust/security warning pattern.
+- Standardise the raw JSON / details pattern.
+
+**Non-Goals**
+
+- No backend route changes.
+- No removal of existing pages. Consolidation is only allowed if it is purely cosmetic and the underlying routes remain.
+- No React.
+
+**Acceptance Criteria**
+
+- Every page renders the new page header pattern.
+- Every page handles loading, empty, and error states consistently.
+- Every dangerous action uses the standardised pattern.
+- Every raw JSON panel is collapsed by default and uses the standardised expander.
+- `cd ui; npm run build` succeeds.
+- Backend tests are unchanged.
+
+**Suggested Commit**
+
+```
+feat(ui): page-level UX consistency pass (Phase 29D)
+```
+
+##### Phase 29E - Final polish, docs, and release readiness
+
+**Purpose**
+
+Final pass before any UI release tag. Tighten visual rhythm, accessibility (keyboard focus, colour contrast, screen-reader labels for icon-only controls), responsive behaviour, and update the documentation to reflect the new UI shape without claiming behaviour that the backend does not implement.
+
+**Scope**
+
+- Accessibility minimums: visible focus, contrast on text and badges, labels on icon-only controls, semantic landmarks (`header`, `nav`, `main`, `aside`).
+- Responsive review at common breakpoints.
+- Documentation updates (README current status, QUICKSTART screenshots if any, ROADMAP marks 29 complete only when truly complete).
+- Verification: `py mcp/test_verify.py`, `py run.py validate`, `py run.py security`, `py run.py feedback`, `py run.py export --overwrite`, `cd ui; npm run build`.
+
+**Non-Goals**
+
+- No backend changes.
+- No semantic retrieval, no registry.
+- No React.
+
+**Acceptance Criteria**
+
+- All Phase 29 acceptance criteria from 29A to 29D remain satisfied.
+- Accessibility minimums pass manual inspection on every page.
+- Docs reflect the implemented UI only.
+- ROADMAP marks Phase 29 complete and notes Phase 27 and Phase 28 are still deferred.
+
+**Suggested Commit**
+
+```
+feat(ui): final UI/UX polish, accessibility, and docs (Phase 29E)
+```
+
+#### Phase 29 Strategic Note
+
+Phase 29 does not supersede or start Phase 27 (Registry and Reuse Layer) or Phase 28 (Optional Semantic Retrieval). Both remain explicitly deferred. Phase 29 only addresses the UI/UX quality gap in the already-shipped local web application.
+
+---
+
 ### Phase 27 - Registry and Reuse Layer
 
 **Status: Deferred.**
@@ -793,6 +1005,7 @@ Recommended sequence:
 24. Device Profiles and Context Budgets
 25. Trust, Staleness, and Evidence Metadata
 26. Import Pipelines
+29. UI/UX Quality and Design System (active, does not start Phase 27 or Phase 28)
 27. Registry and Reuse Layer
 28. Optional Semantic Retrieval
 
