@@ -1,13 +1,13 @@
 # Context Vault Engine - Testing
 
-All tests live in `mcp/test_verify.py`. The suite currently has 721 test functions (705 phase tests plus 16 documentation drift guardrails), all of which are executed by the manual runner in `main()` at the bottom of that file. A passing run prints `ALL VERIFICATION TESTS PASSED`. Historical test counts from earlier phases (272, 382, 429, 467, 507, 548, 553, 564, 587, 607, 625, 650, 675, 695, 706) appear later in this document as part of the phase changelog and are not the current total.
+All tests live in `mcp/test_verify.py`. The suite currently has 740 test functions (724 phase tests plus 16 documentation drift guardrails), all of which are executed by the manual runner in `main()` at the bottom of that file. A passing run prints `ALL VERIFICATION TESTS PASSED`. Historical test counts from earlier phases (272, 382, 429, 467, 507, 548, 553, 564, 587, 607, 625, 650, 675, 695, 706, 721) appear later in this document as part of the phase changelog and are not the current total.
 
 ## Current Verification Summary
 
 A full local verification consists of:
 
 ```bash
-py mcp/test_verify.py           # 721 tests, all must pass
+py mcp/test_verify.py           # 740 tests, all must pass
 py run.py validate              # vault schema-compliance
 py run.py security              # status: pass (or warning, never fail)
 py run.py feedback              # exits 0, valid JSON
@@ -2071,6 +2071,49 @@ cd ui; npm run build             # builds without errors
 ```
 
 Phase 29B does not implement the full design system. Phase 29C (Global design system and shared UI primitives) is the next sub-phase and is not part of Phase 29B.
+
+---
+
+## Phase 29C - Global Design System and Shared UI Primitives
+
+19 new tests (`test_p29c_1` through `test_p29c_19`), bringing the phase-test total to 724. Combined with the 16 documentation drift guardrails, the overall test count is now 740 test functions.
+
+Phase 29C introduces the design system foundation: CSS custom property tokens and reusable `cve-*` primitive classes defined in `ui/src/styles/global.css`. Tokens cover app background, elevated and muted surfaces, borders, strong/normal/muted/faint text, accent and accent-soft, success, warning, danger, info, and focus ring. Primitives cover typography, page shell, page header, content stack, card grid, card, button (primary/secondary/ghost/danger), badge (neutral/success/warning/danger/info/draft/deprecated), alert (info/success/warning/danger), form field/label/helper/input/select/textarea, table and list, empty/loading/error/success states, raw JSON and collapsible details, and dangerous action, warning, and trust-warning blocks. A single `:focus-visible` rule is applied to all interactive primitives. No backend behaviour, no API contracts, no route paths, and no dependencies are changed. Page-level migration is deferred to Phase 29D.
+
+**Tests added:**
+
+- `test_p29c_1_tokens_defined` - global.css defines design tokens for background, surface, border, text, muted text, accent, accent-soft, success, warning, danger, info, and focus.
+- `test_p29c_2_card_primitive` - global.css defines reusable `.cve-card` styling that references the surface and border tokens.
+- `test_p29c_3_button_variants` - global.css defines `.cve-btn`, `.cve-btn-primary`, `.cve-btn-secondary`, `.cve-btn-ghost`, and `.cve-btn-danger`.
+- `test_p29c_4_badge_variants` - global.css defines `.cve-badge` plus neutral, success, warning, danger, info, draft, and deprecated variants.
+- `test_p29c_5_alert_variants` - global.css defines `.cve-alert` plus info, success, warning, and danger variants.
+- `test_p29c_6_form_primitives` - global.css defines `.cve-field`, `.cve-label`, `.cve-helper`, `.cve-input`, `.cve-select`, and `.cve-textarea`.
+- `test_p29c_7_table_primitive` - global.css defines `.cve-table-wrap`, `.cve-table`, and `.cve-list`.
+- `test_p29c_8_raw_json_details` - global.css defines `.cve-raw` and `.cve-details`.
+- `test_p29c_9_dangerous_action_pattern` - global.css defines `.cve-danger-zone`, `.cve-warning-block`, and `.cve-trust-warning` and uses the `--cve-danger` token.
+- `test_p29c_10_focus_visible_styling` - global.css includes a `:focus-visible` rule that references the `--cve-focus` token.
+- `test_p29c_11_applayout_groups_preserved` - AppLayout.astro still contains the Phase 29B group labels Overview, Vault, Context, Review and Governance, and Developer.
+- `test_p29c_12_applayout_api_raw_under_developer` - AppLayout.astro still links to `/app/raw` labelled API / Raw under Developer.
+- `test_p29c_13_roadmap_phase27_still_deferred` - ROADMAP.md status table still marks Phase 27 Deferred.
+- `test_p29c_14_roadmap_phase28_still_deferred` - ROADMAP.md status table still marks Phase 28 Deferred.
+- `test_p29c_15_roadmap_marks_phase29c_complete` - ROADMAP.md records Phase 29C as Complete.
+- `test_p29c_16_testing_documents_phase29c` - TESTING.md documents Phase 29C and states the new total of 740 test functions.
+- `test_p29c_17_readme_no_phase29_complete_claim` - README.md does not claim Phase 29 is fully complete.
+- `test_p29c_18_no_em_dashes_in_p29c_docs` - ROADMAP.md, TESTING.md, README.md, RELEASE_CHECKLIST.md, and UI_UX_AUDIT.md contain no em dashes.
+- `test_p29c_19_verification_commands_intact` - The six standard verification commands remain documented in TESTING.md and RELEASE_CHECKLIST.md.
+
+**Verification steps:**
+
+```bash
+py mcp/test_verify.py            # 740 tests, all must pass
+py run.py validate               # vault still valid
+py run.py security               # status: pass
+py run.py feedback               # exits 0, valid JSON
+py run.py export --overwrite     # status: ok
+cd ui; npm run build             # builds without errors
+```
+
+Phase 29C is the design system foundation only. Page-level UX consistency, page consolidation, and migration of every existing page to the new primitives are deferred to Phase 29D.
 
 ---
 

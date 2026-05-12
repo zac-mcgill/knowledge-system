@@ -92,7 +92,7 @@ The backend is strong. The local UI has reached a usable application baseline. T
 
 ## Current Active Phase
 
-Phase 29C (Global design system and shared UI primitives). Phases 0 to 26 are complete. Phase 29A (Roadmap formalisation and UI/UX audit) and Phase 29B (Navigation and information architecture redesign) are complete. Phase 29 (UI/UX Quality and Design System) remains active overall; 29C is the next sub-phase to ship. Phase 27 (Registry and Reuse Layer) and Phase 28 (Optional Semantic Retrieval) remain deferred and are not started by Phase 29.
+Phase 29D (Page-level UX consistency pass). Phases 0 to 26 are complete. Phase 29A (Roadmap formalisation and UI/UX audit), Phase 29B (Navigation and information architecture redesign), and Phase 29C (Global design system and shared UI primitives) are complete. Phase 29 (UI/UX Quality and Design System) remains active overall; 29D is the next sub-phase to ship. Phase 27 (Registry and Reuse Layer) and Phase 28 (Optional Semantic Retrieval) remain deferred and are not started by Phase 29.
 
 ## Phase Status Overview
 
@@ -714,7 +714,7 @@ docs(import): finalise Phase 26 import lifecycle
 
 ### Phase 29 - UI/UX Quality and Design System
 
-**Status: Active (Phase 29B complete, Phase 29C in progress).**
+**Status: Active (Phase 29C complete, Phase 29D in progress).**
 
 #### Purpose
 
@@ -831,6 +831,8 @@ feat(ui): grouped sidebar and information architecture (Phase 29B)
 
 ##### Phase 29C - Global design system and shared UI primitives
 
+**Status: Complete.**
+
 **Purpose**
 
 Introduce a shared design system that every page consumes. Define tokens for colour (background, surface, border, text, muted text, accent, danger, warning, success, info), typography, spacing, radius, and focus, expressed either as CSS custom properties or Tailwind theme extensions. Extract reusable Svelte primitives for the patterns used across multiple existing components.
@@ -856,10 +858,19 @@ Introduce a shared design system that every page consumes. Define tokens for col
 - `cd ui; npm run build` succeeds.
 - Backend tests are unchanged.
 
+**Delivered**
+
+- `ui/src/styles/global.css` now formalises a token layer using CSS custom properties for app background, elevated and muted surfaces, hairline and soft borders, strong/normal/muted/faint text, accent and accent-soft, success, warning, danger, info, and focus ring, alongside a documented radius and spacing scale.
+- A `cve-*` class layer adds shared primitives for typography (`cve-app-title`, `cve-page-title`, `cve-section-title`, `cve-card-title`, `cve-body`, `cve-meta`, `cve-mono`), layout (`cve-shell`, `cve-page`, `cve-page-header`, `cve-stack`, `cve-section`, `cve-card-grid`, `cve-meta-row`), cards (`cve-card` with `--muted` and `__header` modifiers), buttons (`cve-btn` plus primary/secondary/ghost/danger variants), badges (neutral/success/warning/danger/info/draft/deprecated), alerts (info/success/warning/danger), forms (`cve-field`, `cve-label`, `cve-helper`, `cve-input`, `cve-select`, `cve-textarea`), tables and lists (`cve-table-wrap`, `cve-table`, `cve-list`), state patterns (`cve-empty`, `cve-loading`, `cve-error`, `cve-success`), raw JSON and details blocks (`cve-raw`, `cve-details`), and dangerous-action, warning, and trust-warning blocks (`cve-danger-zone`, `cve-warning-block`, `cve-trust-warning`).
+- A single `:focus-visible` rule targets every interactive primitive and references the `--cve-focus` token, ensuring keyboard focus remains visible without removing native focus rings.
+- A `prefers-reduced-motion` guard is documented even though Phase 29C introduces no animations, so any future motion is opt-out by default.
+- `ui/src/layouts/AppLayout.astro` is unchanged and still ships the Phase 29B grouped sidebar (Overview, Vault, Context, Review and Governance, Developer) with `/app/raw` surfaced as API / Raw under Developer. All 15 existing `/app/*` routes are preserved; no page is consolidated.
+- 19 new tests (`test_p29c_1` through `test_p29c_19`) verify tokens, every shared primitive class, the focus-visible rule, the AppLayout navigation, and the deferral status of Phases 27 and 28. Documentation drift guardrails are updated to the new total of 740 test functions.
+
 **Suggested Commit**
 
 ```
-feat(ui): introduce design tokens and shared primitives (Phase 29C)
+feat(ui): design system tokens and shared primitives (Phase 29C)
 ```
 
 ##### Phase 29D - Page-level UX consistency pass

@@ -1,8 +1,62 @@
 /* Tailwind CSS 4 — single import activates all utilities */
 @import "tailwindcss";
 
-/* Base typographic defaults for the dark dashboard shell */
+/* ------------------------------------------------------------------
+   Phase 29C - Design System Foundation
+   ------------------------------------------------------------------
+   This stylesheet now formalises the design system tokens and shared
+   UI primitives used across the local web UI. Tokens are expressed as
+   CSS custom properties so both Astro pages and Svelte components can
+   consume them without adding dependencies or coupling to a component
+   library. The Phase 29B grouped navigation continues to compose the
+   existing Tailwind utility classes; Phase 29C adds tokens and reusable
+   class primitives that Phase 29D pages will adopt incrementally.
+
+   Naming convention: every Phase 29C addition is prefixed `cve-` (or
+   `--cve-` for tokens) to avoid collision with Tailwind utilities.
+   ------------------------------------------------------------------ */
+
 @layer base {
+  :root {
+    /* Surfaces and structure */
+    --cve-bg: #09090b;             /* app background, zinc-950 */
+    --cve-surface: #18181b;        /* elevated surface, zinc-900 */
+    --cve-surface-muted: #27272a;  /* muted/sunken surface, zinc-800 */
+    --cve-border: #3f3f46;         /* hairline border, zinc-700 */
+    --cve-border-soft: #27272a;    /* soft divider, zinc-800 */
+
+    /* Text */
+    --cve-text-strong: #fafafa;    /* zinc-50 */
+    --cve-text: #f4f4f5;           /* normal text, zinc-100 */
+    --cve-text-muted: #a1a1aa;     /* secondary text, zinc-400 */
+    --cve-text-faint: #71717a;     /* tertiary metadata, zinc-500 */
+
+    /* Accent and status */
+    --cve-accent: #38bdf8;         /* primary accent, sky-400 */
+    --cve-accent-soft: #075985;    /* accent fill, sky-800 */
+    --cve-success: #4ade80;        /* green-400 */
+    --cve-warning: #facc15;        /* amber-400 */
+    --cve-danger: #f87171;         /* red-400 */
+    --cve-info: #60a5fa;           /* blue-400 */
+
+    /* Focus ring */
+    --cve-focus: #38bdf8;          /* focus outline colour */
+    --cve-focus-ring: 0 0 0 2px var(--cve-focus);
+
+    /* Radii */
+    --cve-radius-sm: 4px;
+    --cve-radius: 6px;
+    --cve-radius-lg: 8px;
+
+    /* Spacing scale (rem) */
+    --cve-space-1: 0.25rem;
+    --cve-space-2: 0.5rem;
+    --cve-space-3: 0.75rem;
+    --cve-space-4: 1rem;
+    --cve-space-5: 1.5rem;
+    --cve-space-6: 2rem;
+  }
+
   html {
     font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
       "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -13,8 +67,8 @@
   }
 
   body {
-    background-color: #09090b; /* zinc-950 */
-    color: #f4f4f5;            /* zinc-100 */
+    background-color: var(--cve-bg);
+    color: var(--cve-text);
   }
 
   code, pre, kbd {
@@ -29,10 +83,472 @@
     height: 6px;
   }
   ::-webkit-scrollbar-track {
-    background: #18181b; /* zinc-900 */
+    background: var(--cve-surface);
   }
   ::-webkit-scrollbar-thumb {
-    background: #3f3f46; /* zinc-700 */
+    background: var(--cve-border);
     border-radius: 3px;
+  }
+
+  /* Respect reduced-motion. Phase 29C adds no animations, but if any
+     transitions are introduced by future phases they must be opt-out
+     for users with prefers-reduced-motion. */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      transition-duration: 0.001ms !important;
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+    }
+  }
+}
+
+/* ------------------------------------------------------------------
+   Phase 29C - Shared UI primitives
+   These primitive classes can be applied directly in Astro markup or
+   Svelte templates. They are intentionally low-noise so they can be
+   composed with Tailwind utility classes when local adjustments are
+   required.
+   ------------------------------------------------------------------ */
+
+@layer components {
+
+  /* Typography helpers */
+  .cve-app-title {
+    font-size: 1rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: var(--cve-text-strong);
+  }
+  .cve-page-title {
+    font-size: 1.5rem;
+    font-weight: 600;
+    letter-spacing: -0.015em;
+    color: var(--cve-text-strong);
+  }
+  .cve-section-title {
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: var(--cve-text-strong);
+  }
+  .cve-card-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--cve-text);
+  }
+  .cve-body {
+    font-size: 0.9375rem;
+    color: var(--cve-text);
+  }
+  .cve-meta {
+    font-size: 0.75rem;
+    color: var(--cve-text-faint);
+    letter-spacing: 0.01em;
+  }
+  .cve-mono {
+    font-family: ui-monospace, "Cascadia Code", "Fira Code", Consolas,
+      "Liberation Mono", Menlo, monospace;
+    font-size: 0.8125rem;
+  }
+
+  /* Page shell and layout */
+  .cve-shell {
+    background-color: var(--cve-bg);
+    color: var(--cve-text);
+    min-height: 100vh;
+  }
+  .cve-page {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cve-space-5);
+    max-width: 96rem;
+  }
+  .cve-page-header {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cve-space-2);
+    padding-bottom: var(--cve-space-4);
+    border-bottom: 1px solid var(--cve-border-soft);
+  }
+  .cve-page-header__description {
+    font-size: 0.875rem;
+    color: var(--cve-text-muted);
+    max-width: 60ch;
+  }
+  .cve-stack {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cve-space-4);
+  }
+  .cve-stack-tight {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cve-space-2);
+  }
+  .cve-section {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cve-space-3);
+    margin-top: var(--cve-space-5);
+  }
+  .cve-card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+    gap: var(--cve-space-4);
+  }
+  .cve-meta-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--cve-space-3);
+    font-size: 0.75rem;
+    color: var(--cve-text-faint);
+  }
+
+  /* Card */
+  .cve-card {
+    background-color: var(--cve-surface);
+    border: 1px solid var(--cve-border-soft);
+    border-radius: var(--cve-radius-lg);
+    padding: var(--cve-space-4);
+    color: var(--cve-text);
+  }
+  .cve-card--muted {
+    background-color: var(--cve-surface-muted);
+  }
+  .cve-card__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--cve-space-3);
+    margin-bottom: var(--cve-space-3);
+  }
+
+  /* Button baseline plus variants */
+  .cve-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--cve-space-2);
+    padding: 0.45rem 0.9rem;
+    border-radius: var(--cve-radius);
+    border: 1px solid transparent;
+    font-size: 0.875rem;
+    font-weight: 500;
+    line-height: 1.2;
+    cursor: pointer;
+    background-color: transparent;
+    color: var(--cve-text);
+    user-select: none;
+  }
+  .cve-btn:disabled,
+  .cve-btn[aria-disabled="true"] {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+  .cve-btn-primary {
+    background-color: var(--cve-accent-soft);
+    border-color: var(--cve-accent);
+    color: var(--cve-text-strong);
+  }
+  .cve-btn-secondary {
+    background-color: var(--cve-surface);
+    border-color: var(--cve-border);
+    color: var(--cve-text);
+  }
+  .cve-btn-ghost {
+    background-color: transparent;
+    border-color: transparent;
+    color: var(--cve-text-muted);
+  }
+  .cve-btn-ghost:hover {
+    color: var(--cve-text);
+    background-color: var(--cve-surface);
+  }
+  .cve-btn-danger {
+    background-color: rgba(220, 38, 38, 0.15);
+    border-color: var(--cve-danger);
+    color: var(--cve-text-strong);
+  }
+
+  /* Badges */
+  .cve-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.1rem 0.5rem;
+    border-radius: 999px;
+    border: 1px solid var(--cve-border);
+    background-color: var(--cve-surface-muted);
+    color: var(--cve-text);
+    font-size: 0.6875rem;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    line-height: 1.4;
+  }
+  .cve-badge-neutral {
+    border-color: var(--cve-border);
+    background-color: var(--cve-surface-muted);
+    color: var(--cve-text-muted);
+  }
+  .cve-badge-success {
+    border-color: rgba(74, 222, 128, 0.4);
+    background-color: rgba(74, 222, 128, 0.1);
+    color: var(--cve-success);
+  }
+  .cve-badge-warning {
+    border-color: rgba(250, 204, 21, 0.4);
+    background-color: rgba(250, 204, 21, 0.1);
+    color: var(--cve-warning);
+  }
+  .cve-badge-danger {
+    border-color: rgba(248, 113, 113, 0.4);
+    background-color: rgba(248, 113, 113, 0.1);
+    color: var(--cve-danger);
+  }
+  .cve-badge-info {
+    border-color: rgba(96, 165, 250, 0.4);
+    background-color: rgba(96, 165, 250, 0.1);
+    color: var(--cve-info);
+  }
+  .cve-badge-draft {
+    border-color: rgba(161, 161, 170, 0.4);
+    background-color: rgba(161, 161, 170, 0.1);
+    color: var(--cve-text-muted);
+  }
+  .cve-badge-deprecated {
+    border-color: rgba(248, 113, 113, 0.4);
+    background-color: rgba(248, 113, 113, 0.05);
+    color: var(--cve-danger);
+    text-decoration: line-through;
+  }
+
+  /* Alerts and status blocks */
+  .cve-alert {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cve-space-1);
+    padding: var(--cve-space-3) var(--cve-space-4);
+    border: 1px solid var(--cve-border);
+    border-left-width: 3px;
+    border-radius: var(--cve-radius);
+    background-color: var(--cve-surface);
+    color: var(--cve-text);
+    font-size: 0.875rem;
+  }
+  .cve-alert__title {
+    font-weight: 600;
+    color: var(--cve-text-strong);
+  }
+  .cve-alert-info {
+    border-left-color: var(--cve-info);
+  }
+  .cve-alert-success {
+    border-left-color: var(--cve-success);
+  }
+  .cve-alert-warning {
+    border-left-color: var(--cve-warning);
+  }
+  .cve-alert-danger {
+    border-left-color: var(--cve-danger);
+  }
+
+  /* Form primitives */
+  .cve-field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cve-space-1);
+    margin-bottom: var(--cve-space-3);
+  }
+  .cve-label {
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--cve-text);
+  }
+  .cve-helper {
+    font-size: 0.75rem;
+    color: var(--cve-text-muted);
+  }
+  .cve-input,
+  .cve-select,
+  .cve-textarea {
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    background-color: var(--cve-surface);
+    border: 1px solid var(--cve-border);
+    border-radius: var(--cve-radius);
+    color: var(--cve-text);
+    font-size: 0.875rem;
+    line-height: 1.4;
+  }
+  .cve-input::placeholder,
+  .cve-textarea::placeholder {
+    color: var(--cve-text-faint);
+  }
+  .cve-textarea {
+    min-height: 6rem;
+    resize: vertical;
+  }
+
+  /* Table and list container */
+  .cve-table-wrap {
+    border: 1px solid var(--cve-border-soft);
+    border-radius: var(--cve-radius);
+    overflow: auto;
+    background-color: var(--cve-surface);
+  }
+  .cve-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+    color: var(--cve-text);
+  }
+  .cve-table th,
+  .cve-table td {
+    padding: 0.55rem 0.85rem;
+    text-align: left;
+    border-bottom: 1px solid var(--cve-border-soft);
+    vertical-align: top;
+  }
+  .cve-table th {
+    font-weight: 600;
+    color: var(--cve-text-muted);
+    background-color: var(--cve-surface-muted);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .cve-table tr:last-child td {
+    border-bottom: none;
+  }
+  .cve-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--cve-space-2);
+  }
+
+  /* State patterns: empty, loading, error, success */
+  .cve-empty,
+  .cve-loading,
+  .cve-error,
+  .cve-success {
+    padding: var(--cve-space-5);
+    border: 1px dashed var(--cve-border);
+    border-radius: var(--cve-radius);
+    background-color: var(--cve-surface);
+    color: var(--cve-text-muted);
+    font-size: 0.875rem;
+    text-align: center;
+  }
+  .cve-loading {
+    color: var(--cve-text-muted);
+  }
+  .cve-error {
+    border-style: solid;
+    border-color: var(--cve-danger);
+    color: var(--cve-text);
+    background-color: rgba(248, 113, 113, 0.05);
+  }
+  .cve-success {
+    border-style: solid;
+    border-color: var(--cve-success);
+    color: var(--cve-text);
+    background-color: rgba(74, 222, 128, 0.05);
+  }
+
+  /* Raw JSON / details block. Reused for the Developer raw view and
+     any inline JSON or evidence inspector. */
+  .cve-raw {
+    background-color: #0b0b0d;
+    border: 1px solid var(--cve-border-soft);
+    border-radius: var(--cve-radius);
+    padding: var(--cve-space-3);
+    color: var(--cve-text);
+    font-family: ui-monospace, "Cascadia Code", "Fira Code", Consolas,
+      "Liberation Mono", Menlo, monospace;
+    font-size: 0.8125rem;
+    line-height: 1.5;
+    overflow-x: auto;
+    white-space: pre;
+  }
+  .cve-details {
+    border: 1px solid var(--cve-border-soft);
+    border-radius: var(--cve-radius);
+    background-color: var(--cve-surface);
+    padding: 0;
+  }
+  .cve-details > summary {
+    list-style: none;
+    cursor: pointer;
+    padding: var(--cve-space-2) var(--cve-space-3);
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--cve-text-muted);
+  }
+  .cve-details[open] > summary {
+    border-bottom: 1px solid var(--cve-border-soft);
+    color: var(--cve-text);
+  }
+  .cve-details__body {
+    padding: var(--cve-space-3);
+  }
+
+  /* Dangerous action confirmation block and trust/security warning.
+     The local UI uses these for destructive actions such as deleting a
+     pending change or rejecting an import batch. The visual treatment
+     is intentionally heavier so the action cannot be mistaken for a
+     routine button. Safety wording (typed confirmation, audit trail,
+     pending review) is enforced by the page that consumes the block,
+     not by these primitives. */
+  .cve-danger-zone {
+    border: 1px solid var(--cve-danger);
+    border-radius: var(--cve-radius);
+    background-color: rgba(248, 113, 113, 0.06);
+    padding: var(--cve-space-4);
+    color: var(--cve-text);
+    display: flex;
+    flex-direction: column;
+    gap: var(--cve-space-3);
+  }
+  .cve-danger-zone__title {
+    color: var(--cve-danger);
+    font-weight: 600;
+    font-size: 0.875rem;
+    letter-spacing: 0.01em;
+    text-transform: uppercase;
+  }
+  .cve-warning-block {
+    border: 1px solid var(--cve-warning);
+    border-radius: var(--cve-radius);
+    background-color: rgba(250, 204, 21, 0.06);
+    padding: var(--cve-space-4);
+    color: var(--cve-text);
+    display: flex;
+    flex-direction: column;
+    gap: var(--cve-space-2);
+  }
+  .cve-trust-warning {
+    border: 1px solid var(--cve-info);
+    border-radius: var(--cve-radius);
+    background-color: rgba(96, 165, 250, 0.06);
+    padding: var(--cve-space-3) var(--cve-space-4);
+    color: var(--cve-text);
+    font-size: 0.875rem;
+  }
+
+  /* Focus-visible: a single global rule for every interactive primitive.
+     Native focus rings on inputs and buttons must remain reachable;
+     this rule strengthens them without removing the default. */
+  .cve-btn:focus-visible,
+  .cve-input:focus-visible,
+  .cve-select:focus-visible,
+  .cve-textarea:focus-visible,
+  .cve-details > summary:focus-visible,
+  a.cve-link:focus-visible {
+    outline: 2px solid var(--cve-focus);
+    outline-offset: 2px;
+    border-radius: var(--cve-radius);
   }
 }

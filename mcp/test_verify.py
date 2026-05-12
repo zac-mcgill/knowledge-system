@@ -11567,6 +11567,27 @@ def main():
     test_p29b_14_no_em_dashes_in_p29b_docs()
     test_p29b_15_verification_commands_intact()
 
+    # Phase 29C - Global design system and shared UI primitives
+    test_p29c_1_tokens_defined()
+    test_p29c_2_card_primitive()
+    test_p29c_3_button_variants()
+    test_p29c_4_badge_variants()
+    test_p29c_5_alert_variants()
+    test_p29c_6_form_primitives()
+    test_p29c_7_table_primitive()
+    test_p29c_8_raw_json_details()
+    test_p29c_9_dangerous_action_pattern()
+    test_p29c_10_focus_visible_styling()
+    test_p29c_11_applayout_groups_preserved()
+    test_p29c_12_applayout_api_raw_under_developer()
+    test_p29c_13_roadmap_phase27_still_deferred()
+    test_p29c_14_roadmap_phase28_still_deferred()
+    test_p29c_15_roadmap_marks_phase29c_complete()
+    test_p29c_16_testing_documents_phase29c()
+    test_p29c_17_readme_no_phase29_complete_claim()
+    test_p29c_18_no_em_dashes_in_p29c_docs()
+    test_p29c_19_verification_commands_intact()
+
     print()
     print("=" * 60)
     print("ALL VERIFICATION TESTS PASSED")
@@ -19181,9 +19202,9 @@ def _repo_root():
 
 
 def test_doc_drift_readme_test_count():
-    """DOC-DRIFT-1: README quotes the current 721-test total, no stale counts."""
+    """DOC-DRIFT-1: README quotes the current 740-test total, no stale counts."""
     readme = (_repo_root() / "README.md").read_text(encoding="utf-8")
-    assert "721" in readme, "README.md must mention the current test count 721"
+    assert "740" in readme, "README.md must mention the current test count 740"
     stale_phrases = [
         "553 deterministic tests",
         "548 deterministic tests",
@@ -19198,29 +19219,31 @@ def test_doc_drift_readme_test_count():
         "695 deterministic tests",
         "706 deterministic tests",
         "706 tests.",
+        "721 deterministic tests",
+        "721 tests.",
     ]
     for phrase in stale_phrases:
         assert phrase not in readme, f"README.md still mentions stale phrase {phrase!r}"
-    print(f"  README mentions 721 tests, no stale counts present ✓")
+    print(f"  README mentions 740 tests, no stale counts present ✓")
 
 
 def test_doc_drift_testing_test_count():
-    """DOC-DRIFT-2: TESTING.md current total is 721 and historical markers retained."""
+    """DOC-DRIFT-2: TESTING.md current total is 740 and historical markers retained."""
     text = (_repo_root() / "TESTING.md").read_text(encoding="utf-8")
-    assert "721 test functions" in text, "TESTING.md must state 721 test functions"
-    for marker in ("429", "467", "507", "548", "564", "587", "607", "625", "650", "675", "695", "706"):
+    assert "740 test functions" in text, "TESTING.md must state 740 test functions"
+    for marker in ("429", "467", "507", "548", "564", "587", "607", "625", "650", "675", "695", "706", "721"):
         assert marker in text, f"TESTING.md must retain historical test-count marker {marker}"
-    print(f"  TESTING.md states 721 functions and keeps historical markers ✓")
+    print(f"  TESTING.md states 740 functions and keeps historical markers ✓")
 
 
 def test_doc_drift_release_checklist_test_count():
-    """DOC-DRIFT-3: RELEASE_CHECKLIST references 721 tests and required commands."""
+    """DOC-DRIFT-3: RELEASE_CHECKLIST references 740 tests and required commands."""
     text = (_repo_root() / "RELEASE_CHECKLIST.md").read_text(encoding="utf-8")
-    assert "721" in text, "RELEASE_CHECKLIST.md must reference the 721-test target"
+    assert "740" in text, "RELEASE_CHECKLIST.md must reference the 740-test target"
     for req in ("test_verify.py", "run.py validate", "run.py security",
                 "run.py export", "GitHub Release"):
         assert req in text, f"RELEASE_CHECKLIST.md must contain {req!r}"
-    print(f"  RELEASE_CHECKLIST mentions 721 tests and required commands ✓")
+    print(f"  RELEASE_CHECKLIST mentions 740 tests and required commands ✓")
 
 
 def test_doc_drift_roadmap_active_phase():
@@ -19790,6 +19813,254 @@ def test_p29b_14_no_em_dashes_in_p29b_docs():
 def test_p29b_15_verification_commands_intact():
     """P29B-15: All six standard verification commands remain documented."""
     print("\n=== Test P29B-15: verification commands intact ===")
+    testing = (_repo_root() / "TESTING.md").read_text(encoding="utf-8")
+    checklist = (_repo_root() / "RELEASE_CHECKLIST.md").read_text(encoding="utf-8")
+    for cmd in ("py mcp/test_verify.py", "py run.py validate",
+                "py run.py security", "py run.py feedback",
+                "py run.py export --overwrite", "npm run build"):
+        assert cmd in testing, f"TESTING.md must keep verification command {cmd!r}"
+    for cmd in ("python mcp/test_verify.py", "python run.py validate",
+                "python run.py security", "python run.py feedback",
+                "python run.py export --overwrite", "npm run build"):
+        assert cmd in checklist, f"RELEASE_CHECKLIST.md must keep {cmd!r}"
+    print("  Verification commands intact ✓")
+
+
+# ============================================================
+# Phase 29C - Global design system and shared UI primitives
+# ============================================================
+#
+# Phase 29C introduces the design system foundation: CSS custom property
+# tokens and reusable primitive classes consumed by Astro pages and
+# Svelte components. These tests verify that the foundation is present
+# in ui/src/styles/global.css and that AppLayout.astro remains
+# compatible with the Phase 29B grouped navigation. Phase 29C does not
+# migrate every page; that work is deferred to Phase 29D.
+
+
+def _global_css() -> str:
+    return (_repo_root() / "ui" / "src" / "styles" / "global.css").read_text(encoding="utf-8")
+
+
+def _applayout() -> str:
+    return (_repo_root() / "ui" / "src" / "layouts" / "AppLayout.astro").read_text(encoding="utf-8")
+
+
+def test_p29c_1_tokens_defined():
+    """P29C-1: global.css defines design tokens for every required role."""
+    print("\n=== Test P29C-1: design tokens defined ===")
+    css = _global_css()
+    required_tokens = [
+        "--cve-bg",
+        "--cve-surface",
+        "--cve-surface-muted",
+        "--cve-border",
+        "--cve-text",
+        "--cve-text-strong",
+        "--cve-text-muted",
+        "--cve-accent",
+        "--cve-accent-soft",
+        "--cve-success",
+        "--cve-warning",
+        "--cve-danger",
+        "--cve-info",
+        "--cve-focus",
+    ]
+    for token in required_tokens:
+        assert token in css, f"global.css must define design token {token}"
+    print("  All required design tokens present ✓")
+
+
+def test_p29c_2_card_primitive():
+    """P29C-2: global.css defines reusable card styling."""
+    print("\n=== Test P29C-2: card primitive ===")
+    css = _global_css()
+    assert ".cve-card" in css, "global.css must define a .cve-card class"
+    # Card should reference surface and border tokens.
+    assert "var(--cve-surface)" in css, "card must reference --cve-surface"
+    assert "var(--cve-border" in css, "card must reference a --cve-border token"
+    print("  Card primitive defined ✓")
+
+
+def test_p29c_3_button_variants():
+    """P29C-3: global.css defines reusable button styling with all four variants."""
+    print("\n=== Test P29C-3: button variants ===")
+    css = _global_css()
+    for klass in (".cve-btn", ".cve-btn-primary", ".cve-btn-secondary",
+                  ".cve-btn-ghost", ".cve-btn-danger"):
+        assert klass in css, f"global.css must define {klass}"
+    print("  Button primitive plus four variants defined ✓")
+
+
+def test_p29c_4_badge_variants():
+    """P29C-4: global.css defines reusable badge styling with required variants."""
+    print("\n=== Test P29C-4: badge variants ===")
+    css = _global_css()
+    for klass in (".cve-badge", ".cve-badge-neutral", ".cve-badge-success",
+                  ".cve-badge-warning", ".cve-badge-danger", ".cve-badge-info",
+                  ".cve-badge-draft", ".cve-badge-deprecated"):
+        assert klass in css, f"global.css must define {klass}"
+    print("  Badge primitive plus required variants defined ✓")
+
+
+def test_p29c_5_alert_variants():
+    """P29C-5: global.css defines reusable alert/status styling."""
+    print("\n=== Test P29C-5: alert variants ===")
+    css = _global_css()
+    for klass in (".cve-alert", ".cve-alert-info", ".cve-alert-success",
+                  ".cve-alert-warning", ".cve-alert-danger"):
+        assert klass in css, f"global.css must define {klass}"
+    print("  Alert primitive plus four variants defined ✓")
+
+
+def test_p29c_6_form_primitives():
+    """P29C-6: global.css defines form field, label, helper, and input baseline."""
+    print("\n=== Test P29C-6: form primitives ===")
+    css = _global_css()
+    for klass in (".cve-field", ".cve-label", ".cve-helper",
+                  ".cve-input", ".cve-select", ".cve-textarea"):
+        assert klass in css, f"global.css must define {klass}"
+    print("  Form primitives defined ✓")
+
+
+def test_p29c_7_table_primitive():
+    """P29C-7: global.css defines table/list container baseline."""
+    print("\n=== Test P29C-7: table and list ===")
+    css = _global_css()
+    for klass in (".cve-table-wrap", ".cve-table", ".cve-list"):
+        assert klass in css, f"global.css must define {klass}"
+    print("  Table and list primitives defined ✓")
+
+
+def test_p29c_8_raw_json_details():
+    """P29C-8: global.css defines raw JSON and collapsible details styling."""
+    print("\n=== Test P29C-8: raw JSON and details ===")
+    css = _global_css()
+    for klass in (".cve-raw", ".cve-details"):
+        assert klass in css, f"global.css must define {klass}"
+    print("  Raw JSON and details primitives defined ✓")
+
+
+def test_p29c_9_dangerous_action_pattern():
+    """P29C-9: global.css defines dangerous action and trust/security warning patterns."""
+    print("\n=== Test P29C-9: dangerous action and warning patterns ===")
+    css = _global_css()
+    for klass in (".cve-danger-zone", ".cve-warning-block", ".cve-trust-warning"):
+        assert klass in css, f"global.css must define {klass}"
+    # Dangerous action surface must reference the danger token so the
+    # visual treatment is anchored to the documented colour role.
+    assert "var(--cve-danger)" in css, \
+        "global.css must use the --cve-danger token for dangerous patterns"
+    print("  Dangerous action, warning, and trust-warning primitives defined ✓")
+
+
+def test_p29c_10_focus_visible_styling():
+    """P29C-10: global.css includes a :focus-visible rule for primitive controls."""
+    print("\n=== Test P29C-10: focus-visible styling ===")
+    css = _global_css()
+    assert ":focus-visible" in css, "global.css must include a :focus-visible rule"
+    assert "var(--cve-focus)" in css, \
+        "global.css must reference the --cve-focus token for outlines"
+    print("  Focus-visible rule present and uses the --cve-focus token ✓")
+
+
+def test_p29c_11_applayout_groups_preserved():
+    """P29C-11: AppLayout still contains the Phase 29B grouped navigation labels."""
+    print("\n=== Test P29C-11: AppLayout grouped nav labels ===")
+    text = _applayout()
+    for label in ("Overview", "Vault", "Context",
+                  "Review and Governance", "Developer"):
+        assert label in text, f"AppLayout.astro must still contain group label {label!r}"
+    print("  Phase 29B group labels preserved ✓")
+
+
+def test_p29c_12_applayout_api_raw_under_developer():
+    """P29C-12: AppLayout still surfaces /app/raw as API / Raw under Developer."""
+    print("\n=== Test P29C-12: API / Raw under Developer ===")
+    text = _applayout()
+    assert "'/app/raw'" in text or '"/app/raw"' in text, \
+        "AppLayout.astro must keep the /app/raw route"
+    assert "API / Raw" in text, "AppLayout.astro must keep the API / Raw label"
+    dev_idx = text.find("Developer")
+    raw_idx = text.find("/app/raw")
+    assert dev_idx >= 0 and raw_idx > dev_idx, \
+        "API / Raw must appear after the Developer group label in source order"
+    print("  /app/raw remains under Developer as API / Raw ✓")
+
+
+def test_p29c_13_roadmap_phase27_still_deferred():
+    """P29C-13: ROADMAP.md status table still marks Phase 27 Deferred."""
+    print("\n=== Test P29C-13: Phase 27 deferred ===")
+    text = (_repo_root() / "ROADMAP.md").read_text(encoding="utf-8")
+    assert "| 27    | Registry and Reuse Layer                | Deferred |" in text, \
+        "ROADMAP.md status table must keep Phase 27 Deferred"
+    print("  Phase 27 still deferred ✓")
+
+
+def test_p29c_14_roadmap_phase28_still_deferred():
+    """P29C-14: ROADMAP.md status table still marks Phase 28 Deferred."""
+    print("\n=== Test P29C-14: Phase 28 deferred ===")
+    text = (_repo_root() / "ROADMAP.md").read_text(encoding="utf-8")
+    assert "| 28    | Optional Semantic Retrieval             | Deferred |" in text, \
+        "ROADMAP.md status table must keep Phase 28 Deferred"
+    print("  Phase 28 still deferred ✓")
+
+
+def test_p29c_15_roadmap_marks_phase29c_complete():
+    """P29C-15: ROADMAP.md records Phase 29C as Complete."""
+    print("\n=== Test P29C-15: ROADMAP marks Phase 29C complete ===")
+    text = (_repo_root() / "ROADMAP.md").read_text(encoding="utf-8")
+    assert "Phase 29C - Global design system and shared UI primitives" in text, \
+        "ROADMAP.md must contain the Phase 29C section header"
+    # The sub-phase block should carry a Status: Complete marker.
+    marker = "##### Phase 29C - Global design system and shared UI primitives"
+    idx = text.find(marker)
+    assert idx >= 0
+    block = text[idx:idx + 2000]
+    assert "Complete" in block, "ROADMAP.md Phase 29C block must mark the sub-phase Complete"
+    print("  ROADMAP marks Phase 29C Complete ✓")
+
+
+def test_p29c_16_testing_documents_phase29c():
+    """P29C-16: TESTING.md documents Phase 29C and the new test count."""
+    print("\n=== Test P29C-16: TESTING.md documents Phase 29C ===")
+    text = (_repo_root() / "TESTING.md").read_text(encoding="utf-8")
+    assert "Phase 29C" in text, "TESTING.md must document Phase 29C"
+    assert "740 test functions" in text, \
+        "TESTING.md must state the new total of 740 test functions"
+    print("  TESTING.md documents Phase 29C and 740 total ✓")
+
+
+def test_p29c_17_readme_no_phase29_complete_claim():
+    """P29C-17: README.md does not claim Phase 29 is fully complete."""
+    print("\n=== Test P29C-17: README does not claim Phase 29 complete ===")
+    text = (_repo_root() / "README.md").read_text(encoding="utf-8")
+    forbidden = [
+        "Phase 29 is complete",
+        "Phase 29 complete",
+        "Phase 29 (UI/UX Quality and Design System) is complete",
+        "all of Phase 29 is complete",
+    ]
+    for phrase in forbidden:
+        assert phrase not in text, f"README.md must not claim {phrase!r}"
+    print("  README does not claim Phase 29 complete ✓")
+
+
+def test_p29c_18_no_em_dashes_in_p29c_docs():
+    """P29C-18: No project-authored doc modified by Phase 29C contains em dashes."""
+    print("\n=== Test P29C-18: no em dashes in modified docs ===")
+    docs = ["ROADMAP.md", "TESTING.md", "README.md",
+            "RELEASE_CHECKLIST.md", "UI_UX_AUDIT.md"]
+    offenders = [n for n in docs
+                 if "\u2014" in (_repo_root() / n).read_text(encoding="utf-8")]
+    assert not offenders, \
+        f"Project-authored docs must not contain em dashes; offenders: {offenders}"
+    print("  No em dashes in Phase 29C docs ✓")
+
+
+def test_p29c_19_verification_commands_intact():
+    """P29C-19: All six standard verification commands remain documented."""
+    print("\n=== Test P29C-19: verification commands intact ===")
     testing = (_repo_root() / "TESTING.md").read_text(encoding="utf-8")
     checklist = (_repo_root() / "RELEASE_CHECKLIST.md").read_text(encoding="utf-8")
     for cmd in ("py mcp/test_verify.py", "py run.py validate",

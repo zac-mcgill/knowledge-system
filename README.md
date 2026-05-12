@@ -4,7 +4,7 @@
 
 Context Vault Engine is a local-first Python pipeline for validating, scanning, and securely packaging structured Markdown content. It enforces a schema contract on every note, scans content for credential leaks, prompt-injection patterns, and suspicious executable/script blocks, then exports integrity-verified packages with SHA-256 manifests. All security rules are deterministic and regex-based, so every finding is explainable, reproducible, and auditable without an LLM or cloud dependency.
 
-**Local-first Python pipeline: credential leak scanning, prompt-injection detection, schema enforcement, rate-limited API, path-traversal blocking, SHA-256 artefact integrity, MCP stdio compatibility layer, private cloud mode, session and project state, safe memory write queue, trust/staleness/evidence metadata, safe Markdown folder import with browser review UI, post-import review integration, hardened import edge-case handling, Obsidian-compatible Markdown import, and end-to-end import lifecycle finalisation. 721 tests.**
+**Local-first Python pipeline: credential leak scanning, prompt-injection detection, schema enforcement, rate-limited API, path-traversal blocking, SHA-256 artefact integrity, MCP stdio compatibility layer, private cloud mode, session and project state, safe memory write queue, trust/staleness/evidence metadata, safe Markdown folder import with browser review UI, post-import review integration, hardened import edge-case handling, Obsidian-compatible Markdown import, and end-to-end import lifecycle finalisation. 740 tests.**
 
 ---
 
@@ -12,11 +12,11 @@ Context Vault Engine is a local-first Python pipeline for validating, scanning, 
 
 - Phases 0 to 25 are complete.
 - Phase 26 (Import Pipelines) is complete. The implemented import sources are Markdown folder import (Phase 26A backend, Phase 26B review UI, Phase 26C post-import review integration, Phase 26D edge-case hardening) and Obsidian-compatible Markdown import (Phase 26E). Phase 26F finalises the import lifecycle with end-to-end cross-feature tests, response-shape parity guardrails, and documentation consolidation. PDF, browser article, GitHub repo, chat transcript, semantic, and LLM-extraction imports remain deferred.
-- Phase 29A (UI/UX Quality and Design System, roadmap formalisation and UI/UX audit) is complete. Phase 29B (Navigation and information architecture redesign) is complete; the sidebar is now grouped (Overview, Vault, Context, Review and Governance, Developer), every existing `/app/*` route is preserved, the active link uses `aria-current="page"`, and a visible `:focus-visible` ring is in place. Phase 29 (UI/UX Quality and Design System) remains active overall; Phase 29C (Global design system and shared UI primitives) is the next sub-phase. See `UI_UX_AUDIT.md` and the Phase 29 section of `ROADMAP.md`.
+- Phase 29A (UI/UX Quality and Design System, roadmap formalisation and UI/UX audit) is complete. Phase 29B (Navigation and information architecture redesign) is complete; the sidebar is now grouped (Overview, Vault, Context, Review and Governance, Developer), every existing `/app/*` route is preserved, the active link uses `aria-current="page"`, and a visible `:focus-visible` ring is in place. Phase 29C (Global design system and shared UI primitives) is complete; CSS custom property tokens and reusable `cve-*` primitive classes (card, button, badge, alert, form, table, raw JSON, danger-zone, trust warning) are defined in `ui/src/styles/global.css`. Phase 29 (UI/UX Quality and Design System) remains active overall; Phase 29D (Page-level UX consistency pass) is the next sub-phase. See `UI_UX_AUDIT.md` and the Phase 29 section of `ROADMAP.md`.
 - Phase 27 (Registry and Reuse Layer) is deferred. Phase 29 does not start Phase 27.
 - Phase 28 (Optional Semantic Retrieval) is deferred. Phase 29 does not start Phase 28.
 - The local app, CLI, HTTP API, and MCP stdio surface are all production-quality for local use.
-- 721 deterministic tests cover phases 0 to 25, the Phase 26A import pipeline, Phase 26B import review UI, Phase 26C post-import review integration, Phase 26D edge-case hardening, Phase 26E Obsidian-compatible import, Phase 26F end-to-end import lifecycle finalisation, Phase 29A documentation guardrails, and Phase 29B navigation and information architecture guardrails, plus documentation drift guardrails.
+- 740 deterministic tests cover phases 0 to 25, the Phase 26A import pipeline, Phase 26B import review UI, Phase 26C post-import review integration, Phase 26D edge-case hardening, Phase 26E Obsidian-compatible import, Phase 26F end-to-end import lifecycle finalisation, Phase 29A documentation guardrails, Phase 29B navigation and information architecture guardrails, and Phase 29C design system foundation guardrails, plus documentation drift guardrails.
 
 ---
 
@@ -62,7 +62,7 @@ python run.py security
 # Export - writes integrity-verified package to dist/ with SHA-256 manifest
 python run.py export --overwrite
 
-# Full test suite (721 deterministic tests covering phases 0 to 25, Phase 26A backend, Phase 26B UI, Phase 26C post-import review integration, Phase 26D edge-case hardening, Phase 26E Obsidian-compatible import, Phase 26F import lifecycle finalisation, Phase 29A UI/UX roadmap/audit guardrails, and Phase 29B navigation guardrails)
+# Full test suite (740 deterministic tests covering phases 0 to 25, Phase 26A backend, Phase 26B UI, Phase 26C post-import review integration, Phase 26D edge-case hardening, Phase 26E Obsidian-compatible import, Phase 26F import lifecycle finalisation, Phase 29A UI/UX roadmap/audit guardrails, Phase 29B navigation guardrails, and Phase 29C design system guardrails)
 python mcp/test_verify.py
 ```
 

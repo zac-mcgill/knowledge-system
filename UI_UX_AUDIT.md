@@ -384,3 +384,13 @@ Phase 29B has now landed. `ui/src/layouts/AppLayout.astro` has been rewritten wi
 Accessibility markers added in Phase 29B: a semantic `<nav aria-label="Primary">` landmark, `aria-current="page"` on the active link with a visible left accent rail, and a plain CSS `:focus-visible` outline on every nav link for keyboard users. Brand hierarchy now shows "Context Vault" as the primary label with "Engine" as a secondary uppercase strap.
 
 The full design system (tokens, shared primitives, table/card components) and page consolidation remain out of scope for 29B. They are deferred to Phase 29C and Phase 29D respectively, exactly as recommended in section 10.
+
+## 14. Phase 29C Implementation Note
+
+Phase 29C has now landed the design system foundation. `ui/src/styles/global.css` defines a token layer using CSS custom properties for surfaces (`--cve-bg`, `--cve-surface`, `--cve-surface-muted`), borders (`--cve-border`, `--cve-border-soft`), text (`--cve-text-strong`, `--cve-text`, `--cve-text-muted`, `--cve-text-faint`), accent (`--cve-accent`, `--cve-accent-soft`), status (`--cve-success`, `--cve-warning`, `--cve-danger`, `--cve-info`), and the focus ring (`--cve-focus`). A documented radius and spacing scale rounds out the token set.
+
+A `cve-*` class layer adds shared primitives for typography, page shell and header, content stacks, card grids, cards, buttons (primary, secondary, ghost, danger), badges (neutral, success, warning, danger, info, draft, deprecated), alerts (info, success, warning, danger), form fields with label, helper, input, select, and textarea baseline styling, tables and lists, empty/loading/error/success state blocks, a raw JSON block and collapsible details, plus dangerous-action, warning, and trust/security warning blocks. A single `:focus-visible` rule targets every interactive primitive and references the `--cve-focus` token, so keyboard focus remains visible without removing native focus rings. A `prefers-reduced-motion` guard is in place even though Phase 29C introduces no animations.
+
+The audit's existing decision that no React is needed is unchanged. Astro plus Svelte plus Tailwind remains the right stack for this UI, and the new tokens and primitives are framework-agnostic CSS so both Astro pages and Svelte components can adopt them.
+
+Phase 29B's grouped navigation in `AppLayout.astro` is preserved verbatim. All 15 existing `/app/*` routes still resolve, and `/app/raw` continues to appear under Developer as `API / Raw`. Phase 29C does not migrate page content to the new primitives; that work belongs to Phase 29D, in line with the staged plan in section 10.
