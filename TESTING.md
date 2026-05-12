@@ -1,13 +1,13 @@
 # Context Vault Engine - Testing
 
-All tests live in `mcp/test_verify.py`. The suite currently has 650 test functions (634 phase tests plus 16 documentation drift guardrails), all of which are executed by the manual runner in `main()` at the bottom of that file. A passing run prints `ALL VERIFICATION TESTS PASSED`. Historical test counts from earlier phases (272, 382, 429, 467, 507, 548, 553, 564, 587, 607, 625) appear later in this document as part of the phase changelog and are not the current total.
+All tests live in `mcp/test_verify.py`. The suite currently has 675 test functions (659 phase tests plus 16 documentation drift guardrails), all of which are executed by the manual runner in `main()` at the bottom of that file. A passing run prints `ALL VERIFICATION TESTS PASSED`. Historical test counts from earlier phases (272, 382, 429, 467, 507, 548, 553, 564, 587, 607, 625, 650) appear later in this document as part of the phase changelog and are not the current total.
 
 ## Current Verification Summary
 
 A full local verification consists of:
 
 ```bash
-py mcp/test_verify.py           # 650 tests, all must pass
+py mcp/test_verify.py           # 675 tests, all must pass
 py run.py validate              # vault schema-compliance
 py run.py security              # status: pass (or warning, never fail)
 py run.py feedback              # exits 0, valid JSON
@@ -1791,7 +1791,7 @@ cd ui; npm run build       # zero errors
 **Verification steps:**
 
 ```bash
-py mcp/test_verify.py      # 650 tests, all must pass
+py mcp/test_verify.py      # 675 tests, all must pass
 py run.py validate         # vault still valid
 py run.py security         # status: pass
 py run.py import-markdown <source_dir>            # dry-run by default
@@ -1906,7 +1906,49 @@ Phase 26D does not add any new import sources. It hardens the existing Markdown 
 **Verification steps:**
 
 ```bash
-py mcp/test_verify.py            # 650 tests, all must pass
+py mcp/test_verify.py            # 675 tests, all must pass
+py run.py validate               # vault still valid
+py run.py security               # status: pass
+py run.py feedback               # exits 0, valid JSON
+py run.py export --overwrite     # status: ok
+cd ui; npm run build             # builds the /notes and /import page artefacts
+```
+
+---
+
+## Phase 26E - Obsidian-Compatible Markdown Import
+
+25 new tests (`test_p26e_1` through `test_p26e_25`), bringing the phase-test total to 659. Combined with the 16 documentation drift guardrails, the overall test count is now 675.
+
+Phase 26E adds a safe, Obsidian-compatible Markdown import on top of the hardened Phase 26A-D pipeline. It is local-only, deterministic, security-scanned, dry-run by default, and reuses every Phase 26A-D safety control. PDF, GitHub repo, browser article, chat transcript, semantic mapping, and LLM-extraction imports remain deferred. Imported content still requires human review; trust metadata is never promoted automatically and no LLM rewriting is performed.
+
+**Highlights:**
+
+- `test_p26e_1`: discovery finds `.md` files deterministically and skips `.obsidian/`, binary attachments, and `.canvas` files.
+- `test_p26e_2`: `is_obsidian_config_path` flags `.obsidian/`, `.trash/`, `.git/`, and `node_modules/` and leaves regular notes alone.
+- `test_p26e_3`: dry-run uses the `Imported/Obsidian` default destination and writes no files.
+- `test_p26e_4`: nested source folders preserve their relative structure under the destination.
+- `test_p26e_5`: the feature extractor returns deterministic, sorted, de-duplicated lists across repeated calls.
+- `test_p26e_6`: wikilink variants (`[[Note#Heading]]`, `[[Note|Alias]]`, `[[Note#^block-id]]`) are detected and block references are surfaced.
+- `test_p26e_7`: Markdown image embeds are reported as attachment references; plain `.md` links are not.
+- `test_p26e_8`: each item carries a deterministic `obsidian` metadata block (wikilinks, embeds, tags, aliases, callouts, attachment refs) plus warnings for preserved wikilinks and detected attachments.
+- `test_p26e_9`: each item's `source_path` points back to the original Obsidian file (no staging-directory leakage).
+- `test_p26e_10`: binary attachments and `.canvas` files are never imported.
+- `test_p26e_11`: write mode actually creates the destination Markdown files.
+- `test_p26e_12`/`test_p26e_13`: malformed YAML frontmatter and duplicate YAML keys are blocked exactly as in Phase 26A-D.
+- `test_p26e_14`: high-severity security findings still block the write (`SECURITY_FAIL`).
+- `test_p26e_15`: unknown Obsidian YAML fields are dropped from the written note and surfaced under the per-item `obsidian` metadata.
+- `test_p26e_16`: imported Obsidian notes still land as `source_type: imported` and `trust_level: draft` when the schema supports them; the response carries `source_type: obsidian-vault` at the data level.
+- `test_p26e_17`/`test_p26e_18`: the HTTP endpoint returns the Obsidian-shaped envelope on dry-run and rejects unsafe destinations (`Vault Files/...`) with `UNSAFE_DESTINATION`.
+- `test_p26e_19`/`test_p26e_20`: `py run.py import-obsidian` dry-run prints valid JSON and `--write` actually creates files.
+- `test_p26e_21`/`test_p26e_22`/`test_p26e_23`: the Import Review UI exposes a source-type selector, shows Phase 26E helper text (`.obsidian/` skipped, binary attachments not imported, wikilinks preserved, preview and explicit confirmation), surfaces the per-item Obsidian metadata section, and includes source-type changes in stale-preview detection.
+- `test_p26e_24`: README, QUICKSTART, API, TESTING, ROADMAP, and RELEASE_CHECKLIST mention Phase 26E; API.md documents `/import/obsidian-vault`; QUICKSTART mentions `.obsidian`.
+- `test_p26e_25`: the deferred sources (PDF, GitHub repo, browser article, chat transcript, semantic, LLM) are still explicitly called out in README, and no em dash regresses into project-authored docs.
+
+**Verification steps:**
+
+```bash
+py mcp/test_verify.py            # 675 tests, all must pass
 py run.py validate               # vault still valid
 py run.py security               # status: pass
 py run.py feedback               # exits 0, valid JSON

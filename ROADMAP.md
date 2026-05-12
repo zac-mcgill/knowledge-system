@@ -611,7 +611,7 @@ Optional `trust_level`, `source_type`, `last_reviewed`, `review_after` frontmatt
 
 ### Phase 26 - Import Pipelines
 
-**Status: Active - Phase 26A, Phase 26B, Phase 26C, and Phase 26D complete. Other import sources remain deferred.**
+**Status: Active - Phase 26A, Phase 26B, Phase 26C, Phase 26D, and Phase 26E complete. Other import sources remain deferred.**
 
 #### Purpose
 
@@ -619,7 +619,7 @@ Make it easier to ingest existing knowledge without bypassing schema controls.
 
 #### Import Sources
 
-- Markdown folder (Phase 26A backend, Phase 26B review UI, Phase 26C post-import review integration, Phase 26D edge-case hardening - implemented)
+- Markdown folder (Phase 26A backend, Phase 26B review UI, Phase 26C post-import review integration, Phase 26D edge-case hardening, Phase 26E Obsidian-compatible mode - implemented)
 - Obsidian vault (deferred)
 - GitHub repo docs (deferred)
 - Copilot/agent reports (deferred)
@@ -652,6 +652,7 @@ Make it easier to ingest existing knowledge without bypassing schema controls.
 - User can preview and confirm imports through the browser before writing. (Phase 26B - done)
 - After import, the user can review imported notes in context (filters, trust metadata, validation, tasks) without any automatic trust promotion or LLM rewriting. (Phase 26C - done)
 - The Markdown import pipeline handles real-world edge cases (malformed YAML, duplicate keys, null bytes, oversize files, nested folders, duplicate filenames, Windows backslashes, destination collisions) deterministically and with clear item-level error codes, without crashing the batch and without adding new import sources. (Phase 26D - done)
+- A safe, Obsidian-compatible Markdown import mode imports notes from an Obsidian vault folder, skipping `.obsidian/` config and binary attachments, preserving wikilinks verbatim, surfacing wikilinks, embeds, tags, aliases, callouts, and attachment references as deterministic per-item metadata, and reusing the entire Phase 26A-D safety pipeline. (Phase 26E - done)
 
 #### Phase 26A Summary
 
@@ -685,6 +686,16 @@ Phase 26D hardens the Markdown import workflow against real-world edge cases wit
 
 ```
 test(import): harden markdown import workflow edge cases
+```
+
+#### Phase 26E Summary
+
+Phase 26E adds a safe, Obsidian-compatible Markdown import on top of the hardened Phase 26A-D pipeline. The new endpoint `POST /import/obsidian-vault` and CLI `py run.py import-obsidian` accept the root of an Obsidian vault folder, skip `.obsidian/` config and binary attachments, ignore `.canvas` files, and reuse every Phase 26A-D safety control (null-byte rejection, oversize rejection, duplicate YAML key detection, malformed-frontmatter detection, security scan before write, schema validation before write, destination safety checks, atomic writes, cache and index invalidation, dry-run by default, no overwrite by default). Obsidian wikilinks (`[[Note]]`, `[[Note|Alias]]`, `[[Note#Heading]]`, `[[Note#^block-id]]`) are preserved verbatim in note bodies. Each item carries a deterministic `obsidian` metadata block with sorted, de-duplicated lists for wikilinks, embeds, tags (YAML and inline `#tag`), aliases, callouts (lowercased), block references, and attachment references, plus advisory warnings for preserved wikilinks and detected attachments. Unknown Obsidian YAML fields are dropped from the written note and surfaced under the per-item metadata. The default destination is `Imported/Obsidian`. The Import Review UI gains a source-type selector (Markdown folder / Obsidian vault), helper text describing the Obsidian rules, a per-item Obsidian metadata section, and stale-preview detection on source-type changes; explicit confirmation is still required before any write. No automatic wikilink rewriting, no automatic trust promotion, no automatic LLM rewriting, and no new import sources beyond Obsidian-compatible Markdown. PDF, GitHub repo, browser article, chat transcript, semantic mapping, and LLM-extraction imports remain deferred.
+
+#### Suggested Commit
+
+```
+feat(import): add Obsidian-compatible Markdown import
 ```
 
 ---

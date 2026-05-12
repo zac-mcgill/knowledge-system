@@ -55,6 +55,11 @@ Commands:
                  Phase 26A: Import a folder of Markdown files into a vault.
                  Defaults to dry-run (no writes) unless --write is given.
                  Options: --vault NAME --destination FOLDER --write --overwrite
+  import-obsidian <source_dir>
+                 Phase 26E: Import an Obsidian vault folder. Skips .obsidian/,
+                 ignores binary attachments, preserves wikilinks in bodies.
+                 Defaults to dry-run; default destination Imported/Obsidian.
+                 Options: --vault NAME --destination FOLDER --write --overwrite
   templates      Generate canonical templates from vault schema
                  Use --dry-run to preview without writing
   app            Start local server and open browser UI
@@ -528,6 +533,80 @@ def main():
                 vault_override = list_vaults()[0]
 
             result = import_markdown_folder(
+                vault_name=vault_override,
+                source_dir=source_dir,
+                destination=destination,
+                dry_run=(not write_flag),
+                overwrite=overwrite,
+            )
+            print(json.dumps(result, indent=2, ensure_ascii=False))
+            raise SystemExit(0 if result.get("status") == "ok" else 1)
+        except SystemExit:
+            raise
+        except Exception as exc:
+            error_output = {
+                "status": "error",
+                "error": {"code": "IMPORT_FAILED", "message": str(exc)},
+            }
+            print(json.dumps(error_output, indent=2, ensure_ascii=False))
+            raise SystemExit(1)
+
+    if command == "import-obsidian":
+        import json
+        sys.path.insert(0, str(repo_root))
+
+        # Phase 26E: Obsidian-compatible Markdown import.
+        args = sys.argv[2:]
+        if not args or args[0].startswith("--"):
+            print(
+                "Usage: import-obsidian <source_dir> "
+                "[--vault NAME] [--destination FOLDER] [--write] [--overwrite]"
+            )
+            raise SystemExit(1)
+
+        source_dir = args[0]
+        vault_override: str | None = None
+        destination = "Imported/Obsidian"
+        write_flag = False
+        overwrite = False
+
+        i = 1
+        while i < len(args):
+            tok = args[i]
+            if tok == "--vault" and i + 1 < len(args):
+                vault_override = args[i + 1]
+                i += 2
+            elif tok == "--destination" and i + 1 < len(args):
+                destination = args[i + 1]
+                i += 2
+            elif tok == "--write":
+                write_flag = True
+                i += 1
+            elif tok == "--dry-run":
+                write_flag = False
+                i += 1
+            elif tok == "--overwrite":
+                overwrite = True
+                i += 1
+            else:
+                err = {
+                    "status": "error",
+                    "error": {
+                        "code": "INVALID_INPUT",
+                        "message": f"unknown argument: {tok!r}",
+                    },
+                }
+                print(json.dumps(err, indent=2, ensure_ascii=False))
+                raise SystemExit(1)
+
+        try:
+            from mcp.core.vault_registry import list_vaults
+            from core.shared.obsidian_import import import_obsidian_vault
+
+            if vault_override is None:
+                vault_override = list_vaults()[0]
+
+            result = import_obsidian_vault(
                 vault_name=vault_override,
                 source_dir=source_dir,
                 destination=destination,

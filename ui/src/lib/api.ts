@@ -1407,6 +1407,71 @@ export function importMarkdownFolder(
   return post<ImportMarkdownFolderResponse>('/import/markdown-folder', request);
 }
 
+// ---------------------------------------------------------------------------
+// Phase 26E - Obsidian-compatible Markdown import (POST /import/obsidian-vault)
+// ---------------------------------------------------------------------------
+
+/**
+ * Request body for POST /import/obsidian-vault.
+ *
+ * `source_dir` is resolved on the backend host (server-local path) and
+ * is expected to be the root of an Obsidian vault. `.obsidian/` config
+ * and binary attachments are skipped automatically.
+ */
+export interface ImportObsidianVaultRequest {
+  vault: string;
+  source_dir: string;
+  destination: string;
+  dry_run: boolean;
+  overwrite: boolean;
+}
+
+export interface ObsidianFeatureBlock {
+  wikilinks: string[];
+  embeds: string[];
+  tags: string[];
+  aliases: string[];
+  callouts: string[];
+  block_refs?: string[];
+  attachment_refs: string[];
+  warnings: string[];
+}
+
+export interface ImportObsidianItem extends ImportMarkdownItem {
+  obsidian?: ObsidianFeatureBlock;
+}
+
+export interface ImportObsidianSummary extends ImportMarkdownSummary {
+  wikilinks?: number;
+  embeds?: number;
+  attachment_refs?: number;
+}
+
+export interface ImportObsidianVaultResponse {
+  vault: string;
+  source_type?: string;
+  source_dir: string;
+  destination: string;
+  dry_run: boolean;
+  overwrite: boolean;
+  summary: ImportObsidianSummary;
+  items: ImportObsidianItem[];
+}
+
+/**
+ * POST /import/obsidian-vault - plan or execute an Obsidian vault import.
+ *
+ * Same envelope as importMarkdownFolder; adds per-item `obsidian`
+ * metadata and Obsidian-specific summary counts. Pass `dry_run: true`
+ * for the preview call and `dry_run: false` only after explicit
+ * confirmation.
+ */
+export function importObsidianVault(
+  request: ImportObsidianVaultRequest,
+): Promise<ApiResult<ImportObsidianVaultResponse>> {
+  return post<ImportObsidianVaultResponse>('/import/obsidian-vault', request);
+}
+
 
 // ---------------------------------------------------------------------------
 // Phase 26C — Import Post-Processing and Review Integration

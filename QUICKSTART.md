@@ -1515,6 +1515,52 @@ The Phase 26D hardening covers:
 - **Item-level error codes.** The pipeline returns one of the following codes per item where applicable: `READ_FAILED`, `SOURCE_TOO_LARGE`, `NULL_BYTE`, `INVALID_FRONTMATTER`, `FRONTMATTER_NOT_OBJECT`, `DUPLICATE_YAML_KEY`, `DESTINATION_EXISTS`, `UNSAFE_DESTINATION`, `SECURITY_FAIL`, `VALIDATION_FAILED`, `SERIALISE_FAILED`, `WRITE_FAILED`.
 - **UI guards.** The Import Review page now renders a dedicated banner when any item reports `DESTINATION_EXISTS`, and a separate banner when any item reports a malformed-frontmatter code. The empty-items message names the `.md` extension and the Markdown-only scope. Each per-item error code is rendered with a short, plain-language label in addition to its raw code.
 
+### Obsidian-Compatible Markdown Import (Phase 26E)
+
+Phase 26E adds a safe, Obsidian-compatible Markdown import on top of the hardened Phase 26A-D pipeline. It imports Markdown notes from an Obsidian vault folder, skips `.obsidian/` config, ignores binary attachments and `.canvas` files, preserves Obsidian wikilinks verbatim in note bodies, and reports Obsidian-specific features (wikilinks, embeds, tags, aliases, callouts, attachment references) as deterministic per-item metadata. PDF, GitHub repo, browser article, chat transcript, semantic mapping, and LLM-extraction imports remain deferred. Imported content still requires human review; trust metadata is never promoted automatically and no LLM rewriting is performed.
+
+CLI:
+
+```bash
+# Dry-run preview (default): no files are written.
+py run.py import-obsidian "C:\Users\Zach\Documents\My Obsidian Vault"
+
+# Write into the vault under Imported/Obsidian (the default destination).
+py run.py import-obsidian "C:\path\to\Obsidian Vault" --write
+
+# Custom destination, specific vault.
+py run.py import-obsidian "C:\path\to\Obsidian Vault" \
+  --vault demo-vault --destination Fundamentals --write
+```
+
+API:
+
+```
+POST /import/obsidian-vault
+{
+  "vault": "demo-vault",
+  "source_dir": "C:/Users/Zach/Documents/My Obsidian Vault",
+  "destination": "Imported/Obsidian",
+  "dry_run": true,
+  "overwrite": false
+}
+```
+
+The response envelope mirrors `/import/markdown-folder`, adds `source_type: "obsidian-vault"` at the data level, and exposes Obsidian-specific summary counters (`wikilinks`, `embeds`, `attachment_refs`). Each item carries a deterministic `obsidian` metadata block with sorted, de-duplicated lists for `wikilinks`, `embeds`, `tags`, `aliases`, `callouts`, `block_refs`, and `attachment_refs`, plus advisory `warnings`.
+
+Phase 26E rules:
+
+- Source path must be the Obsidian vault folder on the backend host.
+- Only `.md` files are imported. Binary attachments (PNG, JPG, PDF, MP3, MP4, ZIP, etc.) and `.canvas` files are never imported.
+- `.obsidian/`, `.trash/`, `.git/`, `node_modules/`, and other obvious config / hidden directories are skipped during discovery.
+- Obsidian wikilinks (`[[Note]]`, `[[Note|Alias]]`, `[[Note#Heading]]`, `[[Note#^block-id]]`) are preserved verbatim in note bodies. There is no automatic wikilink rewriting in this phase.
+- Embeds (`![[image.png]]`, `![[Note]]`) and Markdown image links (`![alt](path)`) are detected and reported as attachment references; binary attachment files are not imported.
+- Inline tags (`#tag`, `#nested/tag`), YAML tags / aliases, and Obsidian callouts (`> [!warning]` and similar) are detected and surfaced under the per-item `obsidian` block.
+- Unknown Obsidian YAML fields are dropped from the written note and surfaced as warnings; only schema-compatible fields are written through.
+- Imported notes still use `source_type: imported` and `trust_level: draft` when the target schema supports those values. Trust metadata is never promoted automatically.
+- Every safety control from Phase 26A-D applies unchanged: null-byte rejection, oversize rejection (5 MB cap), duplicate YAML key detection, malformed frontmatter detection, security scan before write, schema validation before write, destination safety checks (no `..`, no absolute paths, no writes inside `Vault Files/`), atomic writes, cache and index invalidation, and dry-run by default with no overwrite.
+- The Import Review UI exposes a source-type selector (Markdown folder / Obsidian vault). When Obsidian vault is selected, the default destination becomes `Imported/Obsidian`, the helper text shows the Obsidian rules (`.obsidian/` skipped, binary attachments not imported, wikilinks preserved), and changing the source type after a preview marks the preview stale until it is re-run. Explicit confirmation is still required before writing.
+
 ---
 
 ## 31. Run Verification Tests (Optional)

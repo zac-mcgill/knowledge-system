@@ -461,6 +461,97 @@ Phase 26D guarantees: dry-run is deterministic for repeated identical inputs, on
 
 ---
 
+### POST /import/obsidian-vault
+
+Safely import Markdown notes from an Obsidian vault folder into a Context Vault Engine vault (Phase 26E). This endpoint accepts the root of an Obsidian vault, skips Obsidian config (`.obsidian/`) and binary attachments, preserves Obsidian wikilinks verbatim in note bodies, and reports Obsidian-specific features (wikilinks, embeds, tags, aliases, callouts, attachment references) as deterministic per-item metadata. The Phase 26A-D safety pipeline applies in full: null-byte rejection, oversize rejection (5 MB cap), duplicate YAML key detection, malformed-frontmatter detection, security scan before write, schema validation before write, destination safety checks, atomic writes, and cache and index invalidation. Default destination is `Imported/Obsidian/`. Dry-run by default; no overwrite by default. Blocked in remote read-only mode.
+
+**Request body:**
+```json
+{
+  "vault": "demo-vault",
+  "source_dir": "C:/Users/Zach/Documents/My Obsidian Vault",
+  "destination": "Imported/Obsidian",
+  "dry_run": true,
+  "overwrite": false
+}
+```
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `vault` | string | yes | - | Registered vault name |
+| `source_dir` | string | yes | - | Absolute filesystem path to an Obsidian vault folder |
+| `destination` | string | no | `"Imported/Obsidian"` | Vault-relative POSIX subfolder for imports; rejected if it traverses the vault, is absolute, or lands inside `Vault Files/` |
+| `dry_run` | bool | no | `true` | When true, no files are written; the response shows the plan |
+| `overwrite` | bool | no | `false` | When true, existing destination notes are replaced atomically |
+
+**Success response (HTTP 200):**
+```json
+{
+  "status": "ok",
+  "data": {
+    "vault": "demo-vault",
+    "source_dir": "C:/Users/Zach/Documents/My Obsidian Vault",
+    "destination": "Imported/Obsidian",
+    "dry_run": true,
+    "overwrite": false,
+    "source_type": "obsidian-vault",
+    "summary": {
+      "discovered": 12,
+      "planned": 12,
+      "written": 0,
+      "skipped": 0,
+      "errors": 0,
+      "warnings": 8,
+      "wikilinks": 27,
+      "embeds": 3,
+      "attachment_refs": 5
+    },
+    "items": [
+      {
+        "source_path": "C:/Users/Zach/Documents/My Obsidian Vault/Networking.md",
+        "destination_path": "Imported/Obsidian/Networking.md",
+        "action": "create",
+        "status": "planned",
+        "fields": {"type": "core-concept", "trust_level": "draft", "source_type": "imported"},
+        "warnings": [
+          "Obsidian wikilinks were preserved verbatim and are not rewritten in this phase.",
+          "Attachment references were detected but binary attachments are not imported."
+        ],
+        "errors": [],
+        "security": {"status": "pass", "findings": []},
+        "validation": {"status": "pass", "errors": []},
+        "obsidian": {
+          "wikilinks": ["[[Algorithms|Algo]]", "[[Networking]]"],
+          "embeds": ["![[diagram.png]]"],
+          "tags": ["networking", "security/labs"],
+          "aliases": ["Net notes"],
+          "callouts": ["warning"],
+          "block_refs": [],
+          "attachment_refs": ["diagram.png"],
+          "warnings": []
+        }
+      }
+    ]
+  }
+}
+```
+
+`source_type` at the data level is always `"obsidian-vault"` for this endpoint. The `obsidian` block on each item is deterministic: every list is sorted and de-duplicated, tags have their leading `#` stripped, and callout types are lowercased.
+
+**Discovery and skip rules:**
+- Only `.md` files are imported.
+- `.obsidian/` (and other obvious config / hidden directories such as `.trash/`, `.git/`, `.hg/`, `.svn/`, `node_modules/`, `.vscode/`, `.idea/`, `__pycache__/`) are skipped during discovery.
+- Binary attachments (PNG, JPG, JPEG, GIF, WEBP, SVG, PDF, MP3, MP4, MOV, WAV, ZIP, etc.) and `.canvas` files are never imported.
+- Obsidian wikilinks (`[[Note]]`, `[[Note|Alias]]`, `[[Note#Heading]]`, `[[Note#^block-id]]`) are preserved verbatim in the body. There is no automatic wikilink rewriting.
+
+**Error codes:**
+
+Returns the same error code set as `POST /import/markdown-folder` (`INVALID_VAULT`, `INVALID_SOURCE`, `UNSAFE_SOURCE`, `UNSAFE_DESTINATION`, `READ_FAILED`, `SOURCE_TOO_LARGE`, `NULL_BYTE`, `SECURITY_FAIL`, `INVALID_FRONTMATTER`, `FRONTMATTER_NOT_OBJECT`, `DUPLICATE_YAML_KEY`, `SERIALISE_FAILED`, `VALIDATION_FAILED`, `DESTINATION_EXISTS`, `WRITE_FAILED`, `READ_ONLY`, `IMPORT_FAILED`). Phase 26E adds no new top-level error codes; Obsidian-specific advisories are surfaced as item `warnings` only.
+
+Phase 26E does not add PDF, GitHub repo, browser article, chat transcript, semantic mapping, or LLM-extraction imports; those remain deferred. There is no automatic trust promotion: imported Obsidian notes still land as `trust_level: draft` and `source_type: imported`.
+
+---
+
 ### GET /stats
 
 Aggregate distinct values for a field across a vault.

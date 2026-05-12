@@ -26,11 +26,15 @@
     fetchTasks,
     fetchTrustSummary,
     importMarkdownFolder,
+    importObsidianVault,
     isOk,
     buildNotesLink,
     type ImportMarkdownFolderRequest,
     type ImportMarkdownFolderResponse,
     type ImportMarkdownItem,
+    type ImportObsidianVaultRequest,
+    type ImportObsidianVaultResponse,
+    type ImportObsidianItem,
     type NoteListItem,
     type TasksData,
     type TrustSummaryData,
@@ -45,6 +49,12 @@
   let vaultsError = '';
 
   // ── Form state ─────────────────────────────────────────────────────────────
+  // Phase 26E: source-type selector. Markdown folder is the default;
+  // Obsidian vault hits a different endpoint and surfaces obsidian
+  // metadata. No other source types are added in this phase.
+  type SourceType = 'markdown-folder' | 'obsidian-vault';
+  let sourceType: SourceType = 'markdown-folder';
+  let destinationTouched = false;
   let selectedVault = '';
   let sourceDir = '';
   let destination = 'Imported';
@@ -53,6 +63,7 @@
   // Snapshot of the form values at the moment the preview succeeded.
   // Used to detect "stale preview" when the user edits the form afterwards.
   let previewedVault = '';
+  let previewedSourceType: SourceType = 'markdown-folder';
   let previewedSourceDir = '';
   let previewedDestination = '';
   let previewedOverwrite = false;
@@ -63,8 +74,11 @@
   let opErrorCode = '';
   let opErrorMsg = '';
 
-  let preview: ImportMarkdownFolderResponse | null = null;
-  let writeResult: ImportMarkdownFolderResponse | null = null;
+  // Preview / write results are typed loosely so a single component can
+  // render either Markdown folder responses or Obsidian vault responses
+  // (the Obsidian shape is a superset).
+  let preview: (ImportMarkdownFolderResponse & Partial<ImportObsidianVaultResponse>) | null = null;
+  let writeResult: (ImportMarkdownFolderResponse & Partial<ImportObsidianVaultResponse>) | null = null;
 
   // ── Phase 26C: post-write review data ──────────────────────────────────────
   // Populated after a successful write so the result panel can render the
@@ -85,10 +99,18 @@
   $: previewStale =
     preview !== null && (
       selectedVault !== previewedVault ||
+      sourceType !== previewedSourceType ||
       sourceDir.trim() !== previewedSourceDir ||
       destination.trim() !== previewedDestination ||
       overwrite !== previewedOverwrite
     );
+
+  // When the user switches source type, snap the default destination
+  // unless they have explicitly customised it.
+  $: if (!destinationTouched) {
+    destination =
+      sourceType === 'obsidian-vault' ? 'Imported/Obsidian' : 'Imported';
+  }
 
   $: previewHasBlockers =
     preview !== null && (
@@ -135,14 +157,27 @@
   });
 
   // ── Request builder ────────────────────────────────────────────────────────
-  function buildRequest(dryRun: boolean): ImportMarkdownFolderRequest {
+  function defaultDestinationForType(t: SourceType): string {
+    return t === 'obsidian-vault' ? 'Imported/Obsidian' : 'Imported';
+  }
+
+  function buildRequest(
+    dryRun: boolean,
+  ): ImportMarkdownFolderRequest | ImportObsidianVaultRequest {
     return {
       vault: selectedVault,
       source_dir: sourceDir.trim(),
-      destination: destination.trim() || 'Imported',
+      destination: destination.trim() || defaultDestinationForType(sourceType),
       dry_run: dryRun,
       overwrite,
     };
+  }
+
+  async function callImport(req: ImportMarkdownFolderRequest | ImportObsidianVaultRequest) {
+    if (sourceType === 'obsidian-vault') {
+      return await importObsidianVault(req as ImportObsidianVaultRequest);
+    }
+    return await importMarkdownFolder(req as ImportMarkdownFolderRequest);
   }
 
   // ── Actions ────────────────────────────────────────────────────────────────
@@ -154,10 +189,11 @@
     writeResult = null;
     confirmReviewed = false;
 
-    const result = await importMarkdownFolder(buildRequest(true));
+    const result = await callImport(buildRequest(true));
     if (isOk(result)) {
-      preview = result.data;
+      preview = result.data as ImportMarkdownFolderResponse & Partial<ImportObsidianVaultResponse>;
       previewedVault = selectedVault;
+      previewedSourceType = sourceType;
       previewedSourceDir = sourceDir.trim();
       previewedDestination = destination.trim();
       previewedOverwrite = overwrite;
@@ -176,9 +212,9 @@
     opErrorCode = '';
     opErrorMsg = '';
 
-    const result = await importMarkdownFolder(buildRequest(false));
+    const result = await callImport(buildRequest(false));
     if (isOk(result)) {
-      writeResult = result.data;
+      writeResult = result.data as ImportMarkdownFolderResponse & Partial<ImportObsidianVaultResponse>;
       opState = 'write_ok';
       await loadPostWriteData();
     } else {
@@ -229,6 +265,8 @@
     postWriteTasks = null;
     postWriteTrust = null;
     postWriteLoading = false;
+    destinationTouched = false;
+    destination = defaultDestinationForType(sourceType);
   }
 
   function errorTitle(code: string): string {
@@ -301,25 +339,25 @@
     expandedItem = expandedItem === idx ? null : idx;
   }
 
-  function activeItems(resp: ImportMarkdownFolderResponse | null): ImportMarkdownItem[] {
+  function activeItems(resp: (ImportMarkdownFolderResponse & Partial<ImportObsidianVaultResponse>) | null): (ImportMarkdownItem | ImportObsidianItem)[] {
     return resp?.items ?? [];
   }
 
-  function blockedCount(resp: ImportMarkdownFolderResponse | null): number {
+  function blockedCount(resp: (ImportMarkdownFolderResponse & Partial<ImportObsidianVaultResponse>) | null): number {
     if (!resp) return 0;
     return resp.items.filter(i => i.status === 'blocked').length;
   }
 
   // Phase 26D: per-item banner helpers so users see the specific failure
   // modes (collision, malformed frontmatter) called out near the items list.
-  function hasCollisionErrors(resp: ImportMarkdownFolderResponse | null): boolean {
+  function hasCollisionErrors(resp: (ImportMarkdownFolderResponse & Partial<ImportObsidianVaultResponse>) | null): boolean {
     if (!resp) return false;
     return resp.items.some(i =>
       (i.errors ?? []).some(e => e.code === 'DESTINATION_EXISTS')
     );
   }
 
-  function hasFrontmatterErrors(resp: ImportMarkdownFolderResponse | null): boolean {
+  function hasFrontmatterErrors(resp: (ImportMarkdownFolderResponse & Partial<ImportObsidianVaultResponse>) | null): boolean {
     if (!resp) return false;
     return resp.items.some(i =>
       (i.errors ?? []).some(
@@ -333,11 +371,13 @@
 
 <!-- ── Page header ─────────────────────────────────────────────────────────── -->
 <div class="mb-5">
-  <h1 class="text-xl font-semibold text-zinc-100">Import Markdown Folder</h1>
+  <h1 class="text-xl font-semibold text-zinc-100">Import Markdown Folder or Obsidian Vault</h1>
   <p class="text-sm text-zinc-500 mt-0.5">
-    Imports Markdown files from a server-local folder into an existing vault.
-    Preview is required before writing. Markdown folder import only. No PDF,
-    GitHub repo, browser article, semantic, or LLM import yet.
+    Imports Markdown notes from a server-local folder into an existing vault.
+    Preview is required before writing. Choose Markdown folder for a plain
+    folder of <code class="text-zinc-300">.md</code> files, or Obsidian vault
+    for an Obsidian vault folder. No PDF, GitHub repo, browser article, chat
+    transcript, semantic, or LLM-extraction imports are implemented yet.
   </p>
 </div>
 
@@ -361,6 +401,31 @@
   <div class="space-y-4">
     <div class="bg-zinc-900 border border-zinc-800 rounded-lg p-5">
       <h2 class="text-sm font-semibold text-zinc-200 mb-3">Import settings</h2>
+
+      <label class="block text-xs text-zinc-400 mb-1" for="import-source-type">Source type</label>
+      <select
+        id="import-source-type"
+        data-testid="source-type-select"
+        bind:value={sourceType}
+        disabled={opState === 'previewing' || opState === 'writing'}
+        class="w-full bg-zinc-950 border border-zinc-800 rounded-md px-2.5 py-1.5 text-sm text-zinc-100 mb-1"
+      >
+        <option value="markdown-folder">Markdown folder</option>
+        <option value="obsidian-vault">Obsidian vault</option>
+      </select>
+      <p class="text-xs text-zinc-500 mb-3" data-testid="source-type-help">
+        {#if sourceType === 'obsidian-vault'}
+          Source path must be the Obsidian vault folder on the backend host.
+          The <code class="text-zinc-300">.obsidian/</code> config folder is skipped.
+          Markdown notes are imported; binary attachments are not imported.
+          Obsidian wikilinks are preserved verbatim in note bodies and reported
+          as metadata. Import still requires preview and explicit confirmation.
+        {:else}
+          Plain Markdown folder import. Recursively discovers
+          <code class="text-zinc-300">.md</code> files; non-Markdown files are
+          ignored. Import still requires preview and explicit confirmation.
+        {/if}
+      </p>
 
       <label class="block text-xs text-zinc-400 mb-1" for="import-vault">Vault</label>
       <select
@@ -398,12 +463,13 @@
         id="import-destination"
         type="text"
         bind:value={destination}
-        placeholder="Imported"
+        on:input={() => (destinationTouched = true)}
+        placeholder={defaultDestinationForType(sourceType)}
         disabled={opState === 'previewing' || opState === 'writing'}
         class="w-full bg-zinc-950 border border-zinc-800 rounded-md px-2.5 py-1.5 text-sm text-zinc-100 font-mono mb-1"
       />
       <p class="text-xs text-zinc-500 mb-3">
-        Defaults to <code class="text-zinc-300">Imported</code>. Cannot be
+        Defaults to <code class="text-zinc-300">{defaultDestinationForType(sourceType)}</code>. Cannot be
         absolute, cannot contain <code class="text-zinc-300">..</code>, and
         cannot be inside <code class="text-zinc-300">Vault Files/</code>.
       </p>
@@ -530,6 +596,11 @@
           <dt class="text-zinc-500">Blocked</dt><dd class="text-rose-300">{blockedCount(display)}</dd>
           <dt class="text-zinc-500">Errors</dt><dd class="text-rose-300">{display?.summary.errors}</dd>
           <dt class="text-zinc-500">Warnings</dt><dd class="text-amber-300">{display?.summary.warnings}</dd>
+          {#if (display?.summary as any)?.wikilinks !== undefined}
+            <dt class="text-zinc-500">Wikilinks</dt><dd class="text-sky-300" data-testid="summary-wikilinks">{(display?.summary as any).wikilinks}</dd>
+            <dt class="text-zinc-500">Embeds</dt><dd class="text-sky-300" data-testid="summary-embeds">{(display?.summary as any).embeds ?? 0}</dd>
+            <dt class="text-zinc-500">Attachment refs</dt><dd class="text-amber-300" data-testid="summary-attachments">{(display?.summary as any).attachment_refs ?? 0}</dd>
+          {/if}
         </dl>
 
         {#if writeResult !== null}
@@ -705,6 +776,35 @@
                         <div class="text-zinc-300 font-medium">Mapped fields</div>
                         <pre class="bg-zinc-950 border border-zinc-800 rounded p-2 overflow-x-auto text-zinc-300">{JSON.stringify(item.fields, null, 2)}</pre>
                       </div>
+                    {/if}
+                    {#if (item as ImportObsidianItem).obsidian}
+                      {@const ob = (item as ImportObsidianItem).obsidian!}
+                      {#if ob.wikilinks.length || ob.embeds.length || ob.tags.length || ob.aliases.length || ob.callouts.length || ob.attachment_refs.length || ob.warnings.length}
+                        <div data-testid="obsidian-metadata">
+                          <div class="text-zinc-300 font-medium">Obsidian metadata</div>
+                          <dl class="grid grid-cols-2 gap-y-1 gap-x-3 text-xs mt-1">
+                            <dt class="text-zinc-500">Wikilinks ({ob.wikilinks.length})</dt>
+                            <dd class="text-zinc-300 break-all">{ob.wikilinks.join(', ') || '\u2014'}</dd>
+                            <dt class="text-zinc-500">Embeds ({ob.embeds.length})</dt>
+                            <dd class="text-zinc-300 break-all">{ob.embeds.join(', ') || '\u2014'}</dd>
+                            <dt class="text-zinc-500">Tags ({ob.tags.length})</dt>
+                            <dd class="text-zinc-300 break-all">{ob.tags.join(', ') || '\u2014'}</dd>
+                            <dt class="text-zinc-500">Aliases ({ob.aliases.length})</dt>
+                            <dd class="text-zinc-300 break-all">{ob.aliases.join(', ') || '\u2014'}</dd>
+                            <dt class="text-zinc-500">Callouts</dt>
+                            <dd class="text-zinc-300 break-all">{ob.callouts.join(', ') || '\u2014'}</dd>
+                            <dt class="text-zinc-500">Attachment refs</dt>
+                            <dd class="text-amber-300 break-all">{ob.attachment_refs.join(', ') || '\u2014'}</dd>
+                          </dl>
+                          {#if ob.warnings.length}
+                            <ul class="list-disc pl-5 mt-1 text-amber-300">
+                              {#each ob.warnings as ow}
+                                <li class="break-words">{ow}</li>
+                              {/each}
+                            </ul>
+                          {/if}
+                        </div>
+                      {/if}
                     {/if}
                   </div>
                 {/if}

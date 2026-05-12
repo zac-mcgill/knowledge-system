@@ -773,6 +773,16 @@ class ImportMarkdownFolderRequest(BaseModel):
     overwrite: bool = Field(False, description="When true, replace existing destination files")
 
 
+class ImportObsidianVaultRequest(BaseModel):
+    """Request body for POST /import/obsidian-vault (Phase 26E)."""
+
+    vault: str = Field(..., description="Vault name")
+    source_dir: str = Field(..., description="Absolute path to an Obsidian vault folder on the backend host")
+    destination: str = Field("Imported/Obsidian", description="Vault-relative destination folder")
+    dry_run: bool = Field(True, description="When true, plan without writing files")
+    overwrite: bool = Field(False, description="When true, replace existing destination files")
+
+
 # ---------- Error helpers ----------
 
 def _error(code: str, message: str, status_code: int = 400) -> JSONResponse:
@@ -986,6 +996,68 @@ def endpoint_import_markdown_folder(req: ImportMarkdownFolderRequest):
     except Exception as exc:
         logger.exception("import_markdown_folder failed")
         return _error("IMPORT_FAILED", f"Import failed: {exc}", 500)
+
+    if result.get("status") == "error":
+        code = result["error"].get("code", "IMPORT_FAILED")
+        if code in ("INVALID_VAULT",):
+            status_code = 404
+        else:
+            status_code = 400
+        return JSONResponse(status_code=status_code, content=result)
+
+    return result
+
+
+@app.post("/import/obsidian-vault")
+def endpoint_import_obsidian_vault(req: ImportObsidianVaultRequest):
+    """Safely import a folder of Markdown notes from an Obsidian vault.
+
+    Phase 26E: Obsidian-compatible Markdown import. ``.obsidian/`` config
+    folders are skipped, binary attachments are not imported, and
+    Obsidian wikilinks are preserved verbatim in the body. Per-item
+    Obsidian metadata (wikilinks, embeds, tags, aliases, callouts,
+    attachment refs) is surfaced alongside the existing Markdown import
+    plan. PDF, GitHub repo, browser article, chat transcript, semantic
+    mapping, and LLM extraction imports remain deferred.
+
+    Request body:
+        vault (str, required): Target vault name.
+        source_dir (str, required): Obsidian vault folder on the backend host.
+        destination (str, optional): Vault-relative destination folder.
+            Defaults to ``"Imported/Obsidian"``. Must not be inside
+            ``Vault Files/``.
+        dry_run (bool, optional): If true (default) plan without writing.
+        overwrite (bool, optional): If true, replace existing destination files.
+
+    Response data on success:
+        vault, source_type ("obsidian-vault"), source_dir, destination,
+        dry_run, summary (with extra wikilinks / embeds / attachment_refs
+        counters), items (each carrying an ``obsidian`` metadata block).
+
+    Error codes mirror /import/markdown-folder.
+    """
+    err = _validate_vault(req.vault)
+    if err:
+        return err
+
+    if is_remote_read_only():
+        return _error(
+            "READ_ONLY", "Imports are disabled in remote read-only mode.", 403
+        )
+
+    from core.shared.obsidian_import import import_obsidian_vault
+
+    try:
+        result = import_obsidian_vault(
+            vault_name=req.vault,
+            source_dir=req.source_dir,
+            destination=req.destination,
+            dry_run=req.dry_run,
+            overwrite=req.overwrite,
+        )
+    except Exception as exc:
+        logger.exception("import_obsidian_vault failed")
+        return _error("IMPORT_FAILED", f"Obsidian import failed: {exc}", 500)
 
     if result.get("status") == "error":
         code = result["error"].get("code", "IMPORT_FAILED")

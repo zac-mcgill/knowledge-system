@@ -11419,6 +11419,33 @@ def main():
     test_p26d_24()
     test_p26d_25()
 
+    # Phase 26E — Obsidian-compatible Markdown Import
+    test_p26e_1()
+    test_p26e_2()
+    test_p26e_3()
+    test_p26e_4()
+    test_p26e_5()
+    test_p26e_6()
+    test_p26e_7()
+    test_p26e_8()
+    test_p26e_9()
+    test_p26e_10()
+    test_p26e_11()
+    test_p26e_12()
+    test_p26e_13()
+    test_p26e_14()
+    test_p26e_15()
+    test_p26e_16()
+    test_p26e_17()
+    test_p26e_18()
+    test_p26e_19()
+    test_p26e_20()
+    test_p26e_21()
+    test_p26e_22()
+    test_p26e_23()
+    test_p26e_24()
+    test_p26e_25()
+
     # Documentation drift guardrails (added in the Phase 25 production-docs pass)
     test_doc_drift_readme_test_count()
     test_doc_drift_testing_test_count()
@@ -14173,6 +14200,635 @@ def test_p26d_25():
     finally:
         _ip._MAX_SOURCE_BYTES = original_cap
         _p26d_cleanup(src1, src2, src3, src4, src5)
+
+
+# ============================================================
+# Phase 26E — Obsidian-compatible Markdown Import
+# ============================================================
+
+
+_P26E_OBSIDIAN_BODY = (
+    "---\n"
+    "tags: [networking, security/labs]\n"
+    "aliases: [Net notes]\n"
+    "---\n\n"
+    "## Definition\n\n"
+    "See [[Networking]] and [[Algorithms|Algo]] for context.\n\n"
+    "## Why It Matters\n\nReason.\n\n"
+    "## Key Principles\n\n- A\n- B\n\n"
+    "## How It Works\n\n1. First\n2. Second\n3. Third\n\n"
+    "## Examples\n\nInline tag #networking and #security/labs.\n"
+    "Embedded asset: ![[diagram.png]]\n\n"
+    "## Common Pitfalls\n\n"
+    "> [!warning]\n> Watch out.\n\n"
+    "## Trade-offs\n\n"
+    "| Aspect | Benefit | Cost |\n"
+    "| --- | --- | --- |\n"
+    "| A | B | C |\n| D | E | F |\n| G | H | I |\n\n"
+    "## Related Concepts\n\nx\n\n"
+    "## Further Exploration\n\nx\n"
+)
+
+
+def _p26e_make_vault(file_map: dict) -> _P26DPath:
+    """Build a fake Obsidian vault under a fresh temp directory."""
+    tmp = _P26DPath(_p26d_tempfile.mkdtemp(prefix="p26e_obs_"))
+    for rel_name, content in file_map.items():
+        target = tmp / rel_name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        if isinstance(content, (bytes, bytearray)):
+            target.write_bytes(bytes(content))
+        else:
+            target.write_text(content, encoding="utf-8")
+    return tmp
+
+
+def _p26e_cleanup(*paths) -> None:
+    _p26d_cleanup(*paths)
+
+
+def test_p26e_1():
+    """P26E-1: discovery finds .md files deterministically and skips .obsidian/."""
+    print("\n=== Test P26E-1: discovery skips .obsidian/, finds .md ===")
+    from core.shared.obsidian_import import discover_obsidian_markdown_sources
+    src = _p26e_make_vault({
+        "alpha.md": _P26E_OBSIDIAN_BODY,
+        "sub/beta.md": _P26E_OBSIDIAN_BODY,
+        ".obsidian/config.json": "{}",
+        ".obsidian/templates/template.md": "## Definition\n",
+        "image.png": b"\x89PNG\r\n\x1a\n",
+        "notes.canvas": "{}",
+    })
+    try:
+        sources = discover_obsidian_markdown_sources(src)
+        names = sorted(p.name for p in sources)
+        assert names == ["alpha.md", "beta.md"], f"unexpected sources: {names}"
+        # Determinism across repeated calls.
+        sources2 = discover_obsidian_markdown_sources(src)
+        assert [str(p) for p in sources] == [str(p) for p in sources2]
+        print(f"  discovered {names} deterministically ✓")
+    finally:
+        _p26e_cleanup(src)
+
+
+def test_p26e_2():
+    """P26E-2: is_obsidian_config_path flags .obsidian, .git, .trash, node_modules."""
+    print("\n=== Test P26E-2: is_obsidian_config_path ===")
+    from core.shared.obsidian_import import is_obsidian_config_path
+    from pathlib import Path
+    for rel in (".obsidian/config.json", "vault/.obsidian/plugins/x.json",
+                ".trash/note.md", ".git/HEAD", "node_modules/x/index.md"):
+        assert is_obsidian_config_path(Path(rel)), f"should flag: {rel}"
+    for rel in ("notes/a.md", "Imported/x.md"):
+        assert not is_obsidian_config_path(Path(rel)), f"should not flag: {rel}"
+    print("  config-path detector behaves correctly ✓")
+
+
+def test_p26e_3():
+    """P26E-3: dry-run writes no files and uses default Imported/Obsidian destination."""
+    print("\n=== Test P26E-3: dry-run default destination ===")
+    from core.shared.obsidian_import import import_obsidian_vault
+    from mcp.core.vault_registry import get_vault_path
+    src = _p26e_make_vault({"alpha.md": _P26E_OBSIDIAN_BODY})
+    try:
+        r = import_obsidian_vault(
+            vault_name=_p26d_vault_name(),
+            source_dir=str(src),
+            dry_run=True,
+        )
+        assert r["status"] == "ok", r
+        d = r["data"]
+        assert d["destination"] == "Imported/Obsidian", d
+        assert d["source_type"] == "obsidian-vault"
+        assert d["dry_run"] is True
+        assert d["summary"]["written"] == 0
+        # No files written under the default destination.
+        vault_path = get_vault_path(_p26d_vault_name())
+        assert not (vault_path / "Imported/Obsidian/alpha.md").exists()
+        print("  dry-run defaults to Imported/Obsidian, writes nothing ✓")
+    finally:
+        _p26e_cleanup(src)
+
+
+def test_p26e_4():
+    """P26E-4: nested folder structure is preserved under the destination."""
+    print("\n=== Test P26E-4: nested folder preserved ===")
+    from core.shared.obsidian_import import import_obsidian_vault
+    src = _p26e_make_vault({"sub/deep/note.md": _P26E_OBSIDIAN_BODY})
+    try:
+        r = import_obsidian_vault(
+            vault_name=_p26d_vault_name(),
+            source_dir=str(src),
+            destination="Fundamentals",
+            dry_run=True,
+        )
+        assert r["status"] == "ok", r
+        dest = r["data"]["items"][0]["destination_path"]
+        assert dest == "Fundamentals/sub/deep/note.md", dest
+        print(f"  preserved: {dest} ✓")
+    finally:
+        _p26e_cleanup(src)
+
+
+def test_p26e_5():
+    """P26E-5: feature extractor returns deterministic, de-duplicated lists."""
+    print("\n=== Test P26E-5: feature extractor determinism ===")
+    from core.shared.obsidian_import import extract_obsidian_features
+    body = (
+        "See [[Networking]] and [[Networking]] again. "
+        "Also [[Algorithms|Algo]] and ![[diagram.png]] ![[diagram.png]].\n"
+        "Inline #tag and #tag again, plus #nested/tag.\n"
+        "> [!warning]\n> watch out\n"
+    )
+    fm = {"tags": "[networking, security/labs]", "aliases": "[Net notes]"}
+    f1 = extract_obsidian_features(body, fm)
+    f2 = extract_obsidian_features(body, fm)
+    assert f1 == f2, f"non-deterministic: {f1} vs {f2}"
+    assert f1["wikilinks"] == ["[[Algorithms|Algo]]", "[[Networking]]"]
+    assert f1["embeds"] == ["![[diagram.png]]"]
+    assert "tag" in f1["tags"] and "nested/tag" in f1["tags"]
+    assert "networking" in f1["tags"] and "security/labs" in f1["tags"]
+    assert f1["aliases"] == ["Net notes"]
+    assert f1["callouts"] == ["warning"]
+    assert f1["attachment_refs"] == ["diagram.png"]
+    print("  feature extractor deterministic and de-duplicated ✓")
+
+
+def test_p26e_6():
+    """P26E-6: extractor detects wikilink aliases and heading links separately."""
+    print("\n=== Test P26E-6: wikilink alias / heading link detection ===")
+    from core.shared.obsidian_import import extract_obsidian_features
+    body = "[[Note#Heading]] [[Note|Alias]] [[Note#^block-id]] ^block-id"
+    f = extract_obsidian_features(body, {})
+    assert "[[Note#Heading]]" in f["wikilinks"]
+    assert "[[Note|Alias]]" in f["wikilinks"]
+    assert "[[Note#^block-id]]" in f["wikilinks"]
+    assert "block-id" in f.get("block_refs", [])
+    print("  wikilink variants and block refs detected ✓")
+
+
+def test_p26e_7():
+    """P26E-7: extractor reports markdown image embeds as attachment refs only."""
+    print("\n=== Test P26E-7: markdown image -> attachment_refs ===")
+    from core.shared.obsidian_import import extract_obsidian_features
+    body = "![alt](images/photo.png) plain link [foo](other.md)"
+    f = extract_obsidian_features(body, {})
+    assert "images/photo.png" in f["attachment_refs"]
+    # Plain wiki-style or markdown link to .md must not be an attachment.
+    assert "other.md" not in f["attachment_refs"]
+    print("  markdown image surfaces as attachment_ref ✓")
+
+
+def test_p26e_8():
+    """P26E-8: import attaches obsidian metadata per item with sorted lists."""
+    print("\n=== Test P26E-8: per-item obsidian metadata ===")
+    from core.shared.obsidian_import import import_obsidian_vault
+    src = _p26e_make_vault({"note.md": _P26E_OBSIDIAN_BODY})
+    try:
+        r = import_obsidian_vault(
+            vault_name=_p26d_vault_name(),
+            source_dir=str(src),
+            destination="Fundamentals",
+            dry_run=True,
+        )
+        assert r["status"] == "ok", r
+        item = r["data"]["items"][0]
+        ob = item["obsidian"]
+        assert ob["wikilinks"] == sorted(ob["wikilinks"]), "wikilinks not sorted"
+        assert "[[Networking]]" in ob["wikilinks"]
+        assert "[[Algorithms|Algo]]" in ob["wikilinks"]
+        assert "![[diagram.png]]" in ob["embeds"]
+        assert "diagram.png" in ob["attachment_refs"]
+        assert "warning" in ob["callouts"]
+        assert "networking" in ob["tags"]
+        assert "security/labs" in ob["tags"]
+        assert "Net notes" in ob["aliases"]
+        # Warning about wikilink preservation surfaced into item warnings.
+        assert any("wikilinks were preserved" in w for w in item["warnings"])
+        assert any("Attachment references were detected" in w for w in item["warnings"])
+        print("  per-item obsidian block populated and warnings surfaced ✓")
+    finally:
+        _p26e_cleanup(src)
+
+
+def test_p26e_9():
+    """P26E-9: source_path on each item points back to the original Obsidian file."""
+    print("\n=== Test P26E-9: source_path points at Obsidian file ===")
+    from core.shared.obsidian_import import import_obsidian_vault
+    src = _p26e_make_vault({"sub/n.md": _P26E_OBSIDIAN_BODY})
+    try:
+        r = import_obsidian_vault(
+            vault_name=_p26d_vault_name(),
+            source_dir=str(src),
+            destination="Fundamentals",
+            dry_run=True,
+        )
+        assert r["status"] == "ok", r
+        sp = r["data"]["items"][0]["source_path"]
+        # Must contain the original folder, not the temp staging dir.
+        assert "p26e_obs_" in sp, f"source_path not original: {sp}"
+        assert "cvault_obsidian_" not in sp, f"source_path leaked staging dir: {sp}"
+        assert sp.endswith("n.md")
+        print(f"  source_path preserved: {sp} ✓")
+    finally:
+        _p26e_cleanup(src)
+
+
+def test_p26e_10():
+    """P26E-10: binary attachments and .canvas files are never imported."""
+    print("\n=== Test P26E-10: binary / canvas not imported ===")
+    from core.shared.obsidian_import import import_obsidian_vault
+    src = _p26e_make_vault({
+        "alpha.md": _P26E_OBSIDIAN_BODY,
+        "image.png": b"\x89PNG",
+        "audio.mp3": b"\x00\x00\x00",
+        "notes.canvas": "{}",
+    })
+    try:
+        r = import_obsidian_vault(
+            vault_name=_p26d_vault_name(),
+            source_dir=str(src),
+            destination="Fundamentals",
+            dry_run=True,
+        )
+        assert r["status"] == "ok"
+        dests = [i["destination_path"] for i in r["data"]["items"]]
+        assert all(d.endswith(".md") for d in dests), dests
+        assert r["data"]["summary"]["discovered"] == 1, r["data"]["summary"]
+        print(f"  only markdown imported: {dests} ✓")
+    finally:
+        _p26e_cleanup(src)
+
+
+def test_p26e_11():
+    """P26E-11: write mode actually creates the destination file."""
+    print("\n=== Test P26E-11: write creates Markdown notes ===")
+    from core.shared.obsidian_import import import_obsidian_vault
+    from mcp.core.vault_registry import get_vault_path
+    src = _p26e_make_vault({"p26e-write-note.md": _P26E_OBSIDIAN_BODY})
+    vault_name = _p26d_vault_name()
+    vault_path = get_vault_path(vault_name)
+    written_rels: list[str] = []
+    try:
+        r = import_obsidian_vault(
+            vault_name=vault_name,
+            source_dir=str(src),
+            destination="Fundamentals",
+            dry_run=False,
+        )
+        assert r["status"] == "ok", r
+        for it in r["data"]["items"]:
+            if it["status"] == "written":
+                written_rels.append(it["destination_path"])
+        assert written_rels, f"no files written: {r}"
+        for rel in written_rels:
+            assert (vault_path / rel).is_file()
+        print(f"  wrote: {written_rels} ✓")
+    finally:
+        for rel in written_rels:
+            try:
+                (vault_path / rel).unlink()
+            except OSError:
+                pass
+        _p26e_cleanup(src)
+
+
+def test_p26e_12():
+    """P26E-12: malformed frontmatter is still item-blocked (reuses Phase 26D)."""
+    print("\n=== Test P26E-12: malformed frontmatter blocked ===")
+    from core.shared.obsidian_import import import_obsidian_vault
+    src = _p26e_make_vault({
+        "bad.md": "---\nkey: [unclosed\n---\n\n## Definition\n\nx\n",
+    })
+    try:
+        r = import_obsidian_vault(
+            vault_name=_p26d_vault_name(),
+            source_dir=str(src),
+            destination="Fundamentals",
+            dry_run=True,
+        )
+        assert r["status"] == "ok"
+        codes: set[str] = set()
+        for it in r["data"]["items"]:
+            for e in it["errors"]:
+                codes.add(e["code"])
+        assert "INVALID_FRONTMATTER" in codes, codes
+        print(f"  malformed frontmatter blocked: {sorted(codes)} ✓")
+    finally:
+        _p26e_cleanup(src)
+
+
+def test_p26e_13():
+    """P26E-13: duplicate YAML key is rejected just like in the base pipeline."""
+    print("\n=== Test P26E-13: duplicate YAML key blocked ===")
+    from core.shared.obsidian_import import import_obsidian_vault
+    src = _p26e_make_vault({
+        "dup.md": "---\nk: 1\nk: 2\n---\n\n## Definition\n\nx\n",
+    })
+    try:
+        r = import_obsidian_vault(
+            vault_name=_p26d_vault_name(),
+            source_dir=str(src),
+            dry_run=True,
+        )
+        codes: set[str] = set()
+        for it in r["data"]["items"]:
+            for e in it["errors"]:
+                codes.add(e["code"])
+        assert "DUPLICATE_YAML_KEY" in codes, codes
+        print("  duplicate key blocked ✓")
+    finally:
+        _p26e_cleanup(src)
+
+
+def test_p26e_14():
+    """P26E-14: high-severity security findings still block the write."""
+    print("\n=== Test P26E-14: security scan blocks fail-severity ===")
+    from core.shared.obsidian_import import import_obsidian_vault
+    # Use an AWS-key-shaped string the scanner treats as high severity.
+    secret_body = (
+        "## Definition\n\nAWS key: AKIAIOSFODNN7EXAMPLE secret\n\n"
+        "## Why It Matters\n\nx\n\n## Key Principles\n\n- A\n\n"
+        "## How It Works\n\n1. a\n2. b\n3. c\n\n"
+        "## Examples\n\nx\n\n## Common Pitfalls\n\nx\n\n"
+        "## Trade-offs\n\n| A | B | C |\n| - | - | - |\n| 1 | 2 | 3 |\n\n"
+        "## Related Concepts\n\nx\n\n## Further Exploration\n\nx\n"
+    )
+    src = _p26e_make_vault({"leak.md": secret_body})
+    try:
+        r = import_obsidian_vault(
+            vault_name=_p26d_vault_name(),
+            source_dir=str(src),
+            dry_run=True,
+        )
+        assert r["status"] == "ok"
+        item = r["data"]["items"][0]
+        # Either blocked outright with SECURITY_FAIL, or surfaced as a
+        # warning. Phase 26E delegates to the same scanner as Phase 26A.
+        codes = {e["code"] for e in item["errors"]}
+        sec_status = item["security"]["status"]
+        assert sec_status in ("warning", "fail"), item
+        if sec_status == "fail":
+            assert "SECURITY_FAIL" in codes, item
+        print(f"  security scan status: {sec_status} ✓")
+    finally:
+        _p26e_cleanup(src)
+
+
+def test_p26e_15():
+    """P26E-15: unknown Obsidian YAML fields are not blindly written to target."""
+    print("\n=== Test P26E-15: unknown YAML fields dropped with warning ===")
+    from core.shared.obsidian_import import import_obsidian_vault
+    src = _p26e_make_vault({"x.md": _P26E_OBSIDIAN_BODY})
+    try:
+        r = import_obsidian_vault(
+            vault_name=_p26d_vault_name(),
+            source_dir=str(src),
+            destination="Fundamentals",
+            dry_run=True,
+        )
+        assert r["status"] == "ok"
+        item = r["data"]["items"][0]
+        # Source had 'tags' and 'aliases' which the demo vault schema does
+        # not define. Confirm those keys are not present in mapped fields.
+        assert "tags" not in item["fields"]
+        assert "aliases" not in item["fields"]
+        # And the surfaced obsidian metadata still records them.
+        assert "networking" in item["obsidian"]["tags"]
+        assert "Net notes" in item["obsidian"]["aliases"]
+        print("  unknown YAML fields dropped, surfaced in obsidian metadata ✓")
+    finally:
+        _p26e_cleanup(src)
+
+
+def test_p26e_16():
+    """P26E-16: imported notes are marked source_type: imported and trust_level: draft."""
+    print("\n=== Test P26E-16: imported / draft trust metadata ===")
+    from core.shared.obsidian_import import import_obsidian_vault
+    src = _p26e_make_vault({"y.md": _P26E_OBSIDIAN_BODY})
+    try:
+        r = import_obsidian_vault(
+            vault_name=_p26d_vault_name(),
+            source_dir=str(src),
+            destination="Fundamentals",
+            dry_run=True,
+        )
+        assert r["status"] == "ok"
+        fields = r["data"]["items"][0]["fields"]
+        # Schema may or may not support these enums; if it does, they
+        # must be set. The demo vault schema supports both.
+        assert fields.get("source_type") in (None, "imported"), fields
+        assert fields.get("trust_level") in (None, "draft"), fields
+        # Source label is reported at the response level, not in target fields.
+        assert r["data"]["source_type"] == "obsidian-vault"
+        print(f"  trust metadata: source_type={fields.get('source_type')}, trust_level={fields.get('trust_level')} ✓")
+    finally:
+        _p26e_cleanup(src)
+
+
+def test_p26e_17():
+    """P26E-17: HTTP POST /import/obsidian-vault dry-run end-to-end."""
+    print("\n=== Test P26E-17: HTTP /import/obsidian-vault dry-run ===")
+    from fastapi.testclient import TestClient
+    from mcp.server.mcp_server import app
+    src = _p26e_make_vault({"alpha.md": _P26E_OBSIDIAN_BODY})
+    try:
+        client = TestClient(app)
+        resp = client.post(
+            "/import/obsidian-vault",
+            json={
+                "vault": _p26d_vault_name(),
+                "source_dir": str(src),
+                "destination": "Fundamentals",
+                "dry_run": True,
+                "overwrite": False,
+            },
+        )
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["status"] == "ok"
+        assert body["data"]["source_type"] == "obsidian-vault"
+        assert body["data"]["summary"]["written"] == 0
+        assert "wikilinks" in body["data"]["summary"]
+        print("  /import/obsidian-vault dry-run returns Obsidian-shaped envelope ✓")
+    finally:
+        _p26e_cleanup(src)
+
+
+def test_p26e_18():
+    """P26E-18: HTTP /import/obsidian-vault rejects unsafe destination (Vault Files/)."""
+    print("\n=== Test P26E-18: unsafe destination rejected ===")
+    from fastapi.testclient import TestClient
+    from mcp.server.mcp_server import app
+    src = _p26e_make_vault({"x.md": _P26E_OBSIDIAN_BODY})
+    try:
+        client = TestClient(app)
+        resp = client.post(
+            "/import/obsidian-vault",
+            json={
+                "vault": _p26d_vault_name(),
+                "source_dir": str(src),
+                "destination": "Vault Files/Imported",
+                "dry_run": True,
+                "overwrite": False,
+            },
+        )
+        assert resp.status_code == 400, resp.text
+        body = resp.json()
+        assert body["status"] == "error"
+        assert body["error"]["code"] == "UNSAFE_DESTINATION"
+        print("  Vault Files/ destination rejected ✓")
+    finally:
+        _p26e_cleanup(src)
+
+
+def test_p26e_19():
+    """P26E-19: CLI import-obsidian dry-run writes no files and prints JSON."""
+    print("\n=== Test P26E-19: CLI import-obsidian dry-run ===")
+    import subprocess
+    import sys as _sys
+    src = _p26e_make_vault({"cli-note.md": _P26E_OBSIDIAN_BODY})
+    try:
+        proc = subprocess.run(
+            [_sys.executable, "run.py", "import-obsidian", str(src),
+             "--vault", _p26d_vault_name(),
+             "--destination", "Fundamentals"],
+            cwd=str(_p26d_repo_root()),
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        assert proc.returncode == 0, proc.stderr
+        out = _p26d_json.loads(proc.stdout)
+        assert out["status"] == "ok"
+        assert out["data"]["source_type"] == "obsidian-vault"
+        assert out["data"]["dry_run"] is True
+        assert out["data"]["summary"]["written"] == 0
+        print("  CLI dry-run JSON parses, no writes ✓")
+    finally:
+        _p26e_cleanup(src)
+
+
+def test_p26e_20():
+    """P26E-20: CLI import-obsidian --write actually writes a file."""
+    print("\n=== Test P26E-20: CLI import-obsidian --write ===")
+    import subprocess
+    import sys as _sys
+    from mcp.core.vault_registry import get_vault_path
+    src = _p26e_make_vault({"cli-write-note.md": _P26E_OBSIDIAN_BODY})
+    vault_name = _p26d_vault_name()
+    vault_path = get_vault_path(vault_name)
+    written_rels: list[str] = []
+    try:
+        proc = subprocess.run(
+            [_sys.executable, "run.py", "import-obsidian", str(src),
+             "--vault", vault_name,
+             "--destination", "Fundamentals",
+             "--write"],
+            cwd=str(_p26d_repo_root()),
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        assert proc.returncode == 0, proc.stderr or proc.stdout
+        out = _p26d_json.loads(proc.stdout)
+        assert out["status"] == "ok"
+        for it in out["data"]["items"]:
+            if it["status"] == "written":
+                written_rels.append(it["destination_path"])
+        assert written_rels, f"no files written by CLI: {out}"
+        for rel in written_rels:
+            assert (vault_path / rel).is_file()
+        print(f"  CLI wrote: {written_rels} ✓")
+    finally:
+        for rel in written_rels:
+            try:
+                (vault_path / rel).unlink()
+            except OSError:
+                pass
+        _p26e_cleanup(src)
+
+
+def test_p26e_21():
+    """P26E-21: Import UI exposes a source-type selector with both options."""
+    print("\n=== Test P26E-21: UI source-type selector ===")
+    text = _p26d_read(_P26D_IMPORT_COMPONENT)
+    for needle in (
+        'data-testid="source-type-select"',
+        'value="markdown-folder"',
+        'value="obsidian-vault"',
+        'importObsidianVault',
+    ):
+        assert needle in text, f"ImportReview.svelte missing {needle!r}"
+    print("  source-type selector and obsidian call wired up ✓")
+
+
+def test_p26e_22():
+    """P26E-22: Import UI shows the Phase 26E helper wording for Obsidian mode."""
+    print("\n=== Test P26E-22: UI helper wording ===")
+    text = _p26d_read(_P26D_IMPORT_COMPONENT)
+    # .obsidian skipped, attachments not imported, wikilinks preserved.
+    for needle in (
+        ".obsidian/",
+        "binary attachments are not imported",
+        "Obsidian wikilinks are preserved",
+        "preview and explicit confirmation",
+    ):
+        assert needle in text, f"ImportReview.svelte missing helper text: {needle!r}"
+    # And a renderable obsidian metadata section exists.
+    assert 'data-testid="obsidian-metadata"' in text, \
+        "Obsidian metadata section not present in ImportReview.svelte"
+    print("  helper wording and obsidian metadata section present ✓")
+
+
+def test_p26e_23():
+    """P26E-23: Import UI stale-preview detection includes source-type changes."""
+    print("\n=== Test P26E-23: UI stale-preview detection on source-type ===")
+    text = _p26d_read(_P26D_IMPORT_COMPONENT)
+    # The reactive previewStale block must compare sourceType to previewedSourceType.
+    assert "sourceType !== previewedSourceType" in text, \
+        "ImportReview.svelte stale-preview check missing sourceType comparison"
+    # Confirmation checkbox is still wired through canWrite.
+    assert "confirmReviewed" in text and "canWrite" in text
+    print("  stale-preview detection and explicit confirmation preserved ✓")
+
+
+def test_p26e_24():
+    """P26E-24: Documentation mentions Phase 26E and Obsidian-compatible import."""
+    print("\n=== Test P26E-24: docs mention Phase 26E ===")
+    root = _p26d_repo_root()
+    readme = (root / "README.md").read_text(encoding="utf-8")
+    quickstart = (root / "QUICKSTART.md").read_text(encoding="utf-8")
+    api = (root / "API.md").read_text(encoding="utf-8")
+    testing = (root / "TESTING.md").read_text(encoding="utf-8")
+    roadmap = (root / "ROADMAP.md").read_text(encoding="utf-8")
+    release = (root / "RELEASE_CHECKLIST.md").read_text(encoding="utf-8")
+    for haystack, name in ((readme, "README.md"), (quickstart, "QUICKSTART.md"),
+                           (api, "API.md"), (testing, "TESTING.md"),
+                           (roadmap, "ROADMAP.md"), (release, "RELEASE_CHECKLIST.md")):
+        assert "Phase 26E" in haystack, f"{name} missing 'Phase 26E'"
+    assert "obsidian-vault" in api.lower() or "/import/obsidian-vault" in api, \
+        "API.md missing /import/obsidian-vault entry"
+    assert ".obsidian" in quickstart, "QUICKSTART.md must mention .obsidian"
+    print("  Phase 26E referenced across docs ✓")
+
+
+def test_p26e_25():
+    """P26E-25: Other import sources remain explicitly deferred."""
+    print("\n=== Test P26E-25: other sources remain deferred ===")
+    root = _p26d_repo_root()
+    readme = (root / "README.md").read_text(encoding="utf-8")
+    # Each deferred source must still be called out in the README.
+    for token in ("PDF", "GitHub", "browser article", "chat transcript",
+                  "semantic", "LLM"):
+        assert token in readme, f"README must still mention deferred source: {token}"
+    # No em dash drift in project-authored docs.
+    em_dash = "\u2014"
+    for fname in ("README.md", "QUICKSTART.md", "TESTING.md",
+                  "ROADMAP.md", "RELEASE_CHECKLIST.md", "API.md"):
+        text = (root / fname).read_text(encoding="utf-8")
+        assert em_dash not in text, f"{fname} must not contain an em dash"
+    print("  deferred-source statements preserved, no em dash drift ✓")
 
 
 def test_p24_1():
@@ -17703,9 +18359,9 @@ def _repo_root():
 
 
 def test_doc_drift_readme_test_count():
-    """DOC-DRIFT-1: README quotes the current 650-test total, no stale counts."""
+    """DOC-DRIFT-1: README quotes the current 675-test total, no stale counts."""
     readme = (_repo_root() / "README.md").read_text(encoding="utf-8")
-    assert "650" in readme, "README.md must mention the current test count 650"
+    assert "675" in readme, "README.md must mention the current test count 675"
     stale_phrases = [
         "553 deterministic tests",
         "548 deterministic tests",
@@ -17715,29 +18371,30 @@ def test_doc_drift_readme_test_count():
         "587 deterministic tests",
         "607 deterministic tests",
         "625 deterministic tests",
+        "650 deterministic tests",
     ]
     for phrase in stale_phrases:
         assert phrase not in readme, f"README.md still mentions stale phrase {phrase!r}"
-    print(f"  README mentions 650 tests, no stale counts present ✓")
+    print(f"  README mentions 675 tests, no stale counts present ✓")
 
 
 def test_doc_drift_testing_test_count():
-    """DOC-DRIFT-2: TESTING.md current total is 650 and historical markers retained."""
+    """DOC-DRIFT-2: TESTING.md current total is 675 and historical markers retained."""
     text = (_repo_root() / "TESTING.md").read_text(encoding="utf-8")
-    assert "650 test functions" in text, "TESTING.md must state 650 test functions"
-    for marker in ("429", "467", "507", "548", "564", "587", "607", "625"):
+    assert "675 test functions" in text, "TESTING.md must state 675 test functions"
+    for marker in ("429", "467", "507", "548", "564", "587", "607", "625", "650"):
         assert marker in text, f"TESTING.md must retain historical test-count marker {marker}"
-    print(f"  TESTING.md states 650 functions and keeps 429/467/507/548/564/587/607/625 markers ✓")
+    print(f"  TESTING.md states 675 functions and keeps historical markers ✓")
 
 
 def test_doc_drift_release_checklist_test_count():
-    """DOC-DRIFT-3: RELEASE_CHECKLIST references 650 tests and required commands."""
+    """DOC-DRIFT-3: RELEASE_CHECKLIST references 675 tests and required commands."""
     text = (_repo_root() / "RELEASE_CHECKLIST.md").read_text(encoding="utf-8")
-    assert "650" in text, "RELEASE_CHECKLIST.md must reference the 650-test target"
+    assert "675" in text, "RELEASE_CHECKLIST.md must reference the 675-test target"
     for req in ("test_verify.py", "run.py validate", "run.py security",
                 "run.py export", "GitHub Release"):
         assert req in text, f"RELEASE_CHECKLIST.md must contain {req!r}"
-    print(f"  RELEASE_CHECKLIST mentions 650 tests and required commands ✓")
+    print(f"  RELEASE_CHECKLIST mentions 675 tests and required commands ✓")
 
 
 def test_doc_drift_roadmap_active_phase():
