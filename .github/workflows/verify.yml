@@ -1,5 +1,21 @@
 name: Verify
 
+# Workflow order (do not reorder without re-verifying CI):
+#   1. Checkout repository
+#   2. Set up Python
+#   3. Install base dependencies
+#   4. Install API and test dependencies
+#   5. Set up Node.js
+#   6. Build frontend (ui/dist/ must exist before the verification suite
+#      because test_p26b_20 asserts the built import page is present)
+#   7. Run full verification suite
+#   8. Run validation
+#   9. Run security scan
+#  10. Run feedback smoke check
+#  11. Run export smoke check
+#  12. Check generated artefacts are not tracked (runs last so it catches
+#      anything any earlier step may have left behind)
+
 on:
   push:
   pull_request:
@@ -25,6 +41,19 @@ jobs:
       - name: Install API and test dependencies
         run: python -m pip install -r mcp/requirements.txt
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: ui/package-lock.json
+
+      - name: Build frontend
+        working-directory: ui
+        run: |
+          npm ci
+          npm run build
+
       - name: Run full verification suite
         run: python mcp/test_verify.py
 
@@ -43,18 +72,7 @@ jobs:
       - name: Check generated artefacts are not tracked
         run: |
           git status --short
-          if git status --short | grep -E '^..(dist/|ui/dist/)'; then
+          if git status --short | grep -E '^.. (dist/|ui/dist/)'; then
             echo "ERROR: generated artefacts found in working tree"
             exit 1
           fi
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-
-      - name: Build frontend
-        working-directory: ui
-        run: |
-          npm ci
-          npm run build
