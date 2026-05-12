@@ -48,7 +48,7 @@ from __future__ import annotations
 import logging
 import os
 import tempfile
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any
 
 import yaml
@@ -137,7 +137,17 @@ def _is_safe_relative_destination(dest: str) -> tuple[bool, str | None]:
     if not raw:
         return False, "destination must not be empty"
 
-    if os.path.isabs(dest) or Path(dest).is_absolute():
+    # Reject absolute paths under any platform convention.  On Linux the
+    # native ``Path`` / ``os.path.isabs`` check does not flag Windows
+    # drive-letter paths like ``C:/abs/path``; checking both pure path
+    # flavours keeps validation behaviour identical across Windows and
+    # POSIX CI runners.
+    if (
+        os.path.isabs(dest)
+        or Path(dest).is_absolute()
+        or PureWindowsPath(dest).is_absolute()
+        or PurePosixPath(dest).is_absolute()
+    ):
         return False, "destination must be a vault-relative path"
 
     parts = raw.split("/")
