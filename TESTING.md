@@ -1,13 +1,13 @@
 # Context Vault Engine - Testing
 
-All tests live in `mcp/test_verify.py`. The suite currently has 706 test functions (690 phase tests plus 16 documentation drift guardrails), all of which are executed by the manual runner in `main()` at the bottom of that file. A passing run prints `ALL VERIFICATION TESTS PASSED`. Historical test counts from earlier phases (272, 382, 429, 467, 507, 548, 553, 564, 587, 607, 625, 650, 675, 695) appear later in this document as part of the phase changelog and are not the current total.
+All tests live in `mcp/test_verify.py`. The suite currently has 721 test functions (705 phase tests plus 16 documentation drift guardrails), all of which are executed by the manual runner in `main()` at the bottom of that file. A passing run prints `ALL VERIFICATION TESTS PASSED`. Historical test counts from earlier phases (272, 382, 429, 467, 507, 548, 553, 564, 587, 607, 625, 650, 675, 695, 706) appear later in this document as part of the phase changelog and are not the current total.
 
 ## Current Verification Summary
 
 A full local verification consists of:
 
 ```bash
-py mcp/test_verify.py           # 706 tests, all must pass
+py mcp/test_verify.py           # 721 tests, all must pass
 py run.py validate              # vault schema-compliance
 py run.py security              # status: pass (or warning, never fail)
 py run.py feedback              # exits 0, valid JSON
@@ -2002,7 +2002,7 @@ A small set of deterministic tests guards against the most common documentation 
 
 ## Phase 29A - UI/UX Quality Roadmap Formalisation and Audit
 
-11 new tests (`test_p29a_1` through `test_p29a_11`), bringing the phase-test total to 690. Combined with the 16 documentation drift guardrails, the overall test count is now 706.
+11 new tests (`test_p29a_1` through `test_p29a_11`), bringing the phase-test total to 690. Combined with the 16 documentation drift guardrails, the overall test count after Phase 29A was 706 test functions. (Phase 29B subsequently added 15 more tests, lifting the current total to 721.)
 
 Phase 29A is documentation and audit only. No UI code, no CSS, no components, and no backend behaviour are changed in this phase. The new tests guard against drift between ROADMAP.md, UI_UX_AUDIT.md, TESTING.md, README.md, and the deferral status of Phase 27 (Registry and Reuse Layer) and Phase 28 (Optional Semantic Retrieval).
 
@@ -2023,7 +2023,7 @@ Phase 29A is documentation and audit only. No UI code, no CSS, no components, an
 **Verification steps:**
 
 ```bash
-py mcp/test_verify.py            # 706 tests, all must pass
+py mcp/test_verify.py            # 721 tests, all must pass
 py run.py validate               # vault still valid
 py run.py security               # status: pass
 py run.py feedback               # exits 0, valid JSON
@@ -2032,6 +2032,45 @@ cd ui; npm run build             # builds without errors
 ```
 
 Phase 29A does not implement any UI change. Phase 29B (Navigation and information architecture redesign) is the first sub-phase that touches UI code, and it is not part of Phase 29A.
+
+---
+
+## Phase 29B - Navigation and Information Architecture Redesign
+
+15 new tests (`test_p29b_1` through `test_p29b_15`), bringing the phase-test total to 705. Combined with the 16 documentation drift guardrails, the overall test count is now 721.
+
+Phase 29B is the first Phase 29 sub-phase that touches UI code. It rewrites `ui/src/layouts/AppLayout.astro` with a data-driven, grouped sidebar, preserves every existing `/app/*` route, improves brand/header hierarchy, adds an `aria-current="page"` active state, and adds a visible `:focus-visible` ring for keyboard navigation. No backend behaviour, no API contracts, no route paths, and no dependencies are changed. Page consolidation is deferred to Phase 29D. The full design system is deferred to Phase 29C.
+
+**Tests added:**
+
+- `test_p29b_1_grouped_nav_labels_present` - AppLayout.astro contains the five group labels: Overview, Vault, Context, Review and Governance, Developer.
+- `test_p29b_2_all_app_routes_linked` - AppLayout.astro links to every existing `/app` route (`/app/`, `/app/vault-setup`, `/app/notes`, `/app/validation`, `/app/tasks`, `/app/bundles`, `/app/security`, `/app/exports`, `/app/import`, `/app/feedback`, `/app/graph`, `/app/controller`, `/app/pending`, `/app/trust`, `/app/raw`).
+- `test_p29b_3_nav_landmark_present` - AppLayout.astro uses a semantic `<nav aria-label="Primary">` landmark.
+- `test_p29b_4_aria_current_page_used` - AppLayout.astro uses `aria-current="page"` for the active link.
+- `test_p29b_5_focus_visible_styling_present` - AppLayout.astro defines a visible `:focus-visible` outline or box-shadow for nav links.
+- `test_p29b_6_api_raw_under_developer` - The `API / Raw` label and `/app/raw` link appear after the Developer group label in source order.
+- `test_p29b_7_pending_and_trust_under_governance` - `/app/pending` and `/app/trust` appear after the Review and Governance group label in source order.
+- `test_p29b_8_context_group_items` - `/app/bundles`, `/app/exports`, `/app/graph`, and `/app/controller` all appear after the Context group label and before the Review and Governance group label.
+- `test_p29b_9_roadmap_phase27_still_deferred` - ROADMAP.md status table still marks Phase 27 (Registry and Reuse Layer) Deferred.
+- `test_p29b_10_roadmap_phase28_still_deferred` - ROADMAP.md status table still marks Phase 28 (Optional Semantic Retrieval) Deferred.
+- `test_p29b_11_roadmap_marks_phase29b_complete` - ROADMAP.md records Phase 29B as Complete in its sub-phase block.
+- `test_p29b_12_testing_documents_phase29b` - TESTING.md documents Phase 29B and states the new total of 721 test functions.
+- `test_p29b_13_readme_no_phase29_complete_claim` - README.md does not claim Phase 29 is fully complete.
+- `test_p29b_14_no_em_dashes_in_p29b_docs` - ROADMAP.md, UI_UX_AUDIT.md, TESTING.md, README.md, and RELEASE_CHECKLIST.md contain no em dashes.
+- `test_p29b_15_verification_commands_intact` - The six standard verification commands (`py mcp/test_verify.py`, `py run.py validate`, `py run.py security`, `py run.py feedback`, `py run.py export --overwrite`, `npm run build`) remain documented in TESTING.md and RELEASE_CHECKLIST.md.
+
+**Verification steps:**
+
+```bash
+py mcp/test_verify.py            # 721 tests, all must pass
+py run.py validate               # vault still valid
+py run.py security               # status: pass
+py run.py feedback               # exits 0, valid JSON
+py run.py export --overwrite     # status: ok
+cd ui; npm run build             # builds without errors
+```
+
+Phase 29B does not implement the full design system. Phase 29C (Global design system and shared UI primitives) is the next sub-phase and is not part of Phase 29B.
 
 ---
 

@@ -376,3 +376,11 @@ Each sub-phase is independently shippable and reversible.
 ## 12. Audit Status
 
 Phase 29A is documentation and audit only. This file is the authoritative input for Phase 29B. No UI code has been modified in Phase 29A.
+
+## 13. Phase 29B Implementation Note
+
+Phase 29B has now landed. `ui/src/layouts/AppLayout.astro` has been rewritten with a data-driven `navGroups` array implementing the grouping recommended in sections 5 and 6: Overview, Vault, Context, Review and Governance, Developer. All 15 existing `/app/*` routes are preserved (no renames, no removals, no consolidation). The route originally listed as `/app/api` in the audit corresponds to the existing `raw.astro` page, so it is surfaced as "API / Raw" under Developer at `/app/raw` rather than being renamed.
+
+Accessibility markers added in Phase 29B: a semantic `<nav aria-label="Primary">` landmark, `aria-current="page"` on the active link with a visible left accent rail, and a plain CSS `:focus-visible` outline on every nav link for keyboard users. Brand hierarchy now shows "Context Vault" as the primary label with "Engine" as a secondary uppercase strap.
+
+The full design system (tokens, shared primitives, table/card components) and page consolidation remain out of scope for 29B. They are deferred to Phase 29C and Phase 29D respectively, exactly as recommended in section 10.

@@ -92,7 +92,7 @@ The backend is strong. The local UI has reached a usable application baseline. T
 
 ## Current Active Phase
 
-Phase 29A (Roadmap formalisation and UI/UX audit). Phases 0 to 26 are complete. Phase 29 (UI/UX Quality and Design System) is now active. Phase 27 (Registry and Reuse Layer) and Phase 28 (Optional Semantic Retrieval) remain deferred and are not started by Phase 29.
+Phase 29C (Global design system and shared UI primitives). Phases 0 to 26 are complete. Phase 29A (Roadmap formalisation and UI/UX audit) and Phase 29B (Navigation and information architecture redesign) are complete. Phase 29 (UI/UX Quality and Design System) remains active overall; 29C is the next sub-phase to ship. Phase 27 (Registry and Reuse Layer) and Phase 28 (Optional Semantic Retrieval) remain deferred and are not started by Phase 29.
 
 ## Phase Status Overview
 
@@ -714,7 +714,7 @@ docs(import): finalise Phase 26 import lifecycle
 
 ### Phase 29 - UI/UX Quality and Design System
 
-**Status: Active (Phase 29A in progress).**
+**Status: Active (Phase 29B complete, Phase 29C in progress).**
 
 #### Purpose
 
@@ -784,6 +784,8 @@ docs(phase29a): formalise UI/UX quality phase and produce audit plan
 
 ##### Phase 29B - Navigation and information architecture redesign
 
+**Status:** Complete (Phase 29B - 2026-05-12)
+
 **Purpose**
 
 Reorganise the sidebar and top-level navigation around user intent groups (for example: Overview, Vault, Review/Governance, Context, Imports, Developer) rather than a flat list, and surface the active vault clearly in the chrome. Implements the information architecture recommendation from `UI_UX_AUDIT.md`.
@@ -810,6 +812,16 @@ Reorganise the sidebar and top-level navigation around user intent groups (for e
 - Mobile shell still works.
 - `cd ui; npm run build` succeeds with zero errors.
 - Backend tests are unchanged.
+
+**Delivered**
+
+- `ui/src/layouts/AppLayout.astro` rewritten with a data-driven `navGroups` array. Five groups: Overview, Vault, Context, Review and Governance, Developer. Every existing `/app/*` route is preserved and reachable.
+- Semantic `<nav aria-label="Primary">` landmark wrapping the sidebar.
+- `aria-current="page"` on the active link, with a visible left accent rail and stronger background.
+- Visible keyboard focus state implemented via a plain CSS `:focus-visible` rule on `.cve-nav-link`.
+- Brand/header hierarchy improved: primary label "Context Vault" with secondary label "Engine" in a separate uppercase strap.
+- Footer label refreshed from the stale "Phase 18 - Stable" to "Phase 29B - Navigation".
+- No new dependencies, no React, no client-side JS required for the sidebar, no route renames, no page consolidation.
 
 **Suggested Commit**
 

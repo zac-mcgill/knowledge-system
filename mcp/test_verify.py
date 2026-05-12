@@ -11550,6 +11550,23 @@ def main():
     test_p29a_10_readme_no_phase29_implementation_claim()
     test_p29a_11_verification_commands_intact()
 
+    # Phase 29B - Navigation and information architecture redesign
+    test_p29b_1_grouped_nav_labels_present()
+    test_p29b_2_all_app_routes_linked()
+    test_p29b_3_nav_landmark_present()
+    test_p29b_4_aria_current_page_used()
+    test_p29b_5_focus_visible_styling_present()
+    test_p29b_6_api_raw_under_developer()
+    test_p29b_7_pending_and_trust_under_governance()
+    test_p29b_8_context_group_items()
+    test_p29b_9_roadmap_phase27_still_deferred()
+    test_p29b_10_roadmap_phase28_still_deferred()
+    test_p29b_11_roadmap_marks_phase29b_complete()
+    test_p29b_12_testing_documents_phase29b()
+    test_p29b_13_readme_no_phase29_complete_claim()
+    test_p29b_14_no_em_dashes_in_p29b_docs()
+    test_p29b_15_verification_commands_intact()
+
     print()
     print("=" * 60)
     print("ALL VERIFICATION TESTS PASSED")
@@ -19164,9 +19181,9 @@ def _repo_root():
 
 
 def test_doc_drift_readme_test_count():
-    """DOC-DRIFT-1: README quotes the current 706-test total, no stale counts."""
+    """DOC-DRIFT-1: README quotes the current 721-test total, no stale counts."""
     readme = (_repo_root() / "README.md").read_text(encoding="utf-8")
-    assert "706" in readme, "README.md must mention the current test count 706"
+    assert "721" in readme, "README.md must mention the current test count 721"
     stale_phrases = [
         "553 deterministic tests",
         "548 deterministic tests",
@@ -19179,29 +19196,31 @@ def test_doc_drift_readme_test_count():
         "650 deterministic tests",
         "675 deterministic tests",
         "695 deterministic tests",
+        "706 deterministic tests",
+        "706 tests.",
     ]
     for phrase in stale_phrases:
         assert phrase not in readme, f"README.md still mentions stale phrase {phrase!r}"
-    print(f"  README mentions 706 tests, no stale counts present ✓")
+    print(f"  README mentions 721 tests, no stale counts present ✓")
 
 
 def test_doc_drift_testing_test_count():
-    """DOC-DRIFT-2: TESTING.md current total is 706 and historical markers retained."""
+    """DOC-DRIFT-2: TESTING.md current total is 721 and historical markers retained."""
     text = (_repo_root() / "TESTING.md").read_text(encoding="utf-8")
-    assert "706 test functions" in text, "TESTING.md must state 706 test functions"
-    for marker in ("429", "467", "507", "548", "564", "587", "607", "625", "650", "675", "695"):
+    assert "721 test functions" in text, "TESTING.md must state 721 test functions"
+    for marker in ("429", "467", "507", "548", "564", "587", "607", "625", "650", "675", "695", "706"):
         assert marker in text, f"TESTING.md must retain historical test-count marker {marker}"
-    print(f"  TESTING.md states 706 functions and keeps historical markers ✓")
+    print(f"  TESTING.md states 721 functions and keeps historical markers ✓")
 
 
 def test_doc_drift_release_checklist_test_count():
-    """DOC-DRIFT-3: RELEASE_CHECKLIST references 706 tests and required commands."""
+    """DOC-DRIFT-3: RELEASE_CHECKLIST references 721 tests and required commands."""
     text = (_repo_root() / "RELEASE_CHECKLIST.md").read_text(encoding="utf-8")
-    assert "706" in text, "RELEASE_CHECKLIST.md must reference the 706-test target"
+    assert "721" in text, "RELEASE_CHECKLIST.md must reference the 721-test target"
     for req in ("test_verify.py", "run.py validate", "run.py security",
                 "run.py export", "GitHub Release"):
         assert req in text, f"RELEASE_CHECKLIST.md must contain {req!r}"
-    print(f"  RELEASE_CHECKLIST mentions 706 tests and required commands ✓")
+    print(f"  RELEASE_CHECKLIST mentions 721 tests and required commands ✓")
 
 
 def test_doc_drift_roadmap_active_phase():
@@ -19538,6 +19557,244 @@ def test_p29a_11_verification_commands_intact():
         "npm run build",
     ]
     for cmd in required_cmds:
+        assert cmd in testing, f"TESTING.md must keep verification command {cmd!r}"
+    for cmd in ("python mcp/test_verify.py", "python run.py validate",
+                "python run.py security", "python run.py feedback",
+                "python run.py export --overwrite", "npm run build"):
+        assert cmd in checklist, f"RELEASE_CHECKLIST.md must keep {cmd!r}"
+    print("  Verification commands intact ✓")
+
+
+# ============================================================
+# Phase 29B - Navigation and Information Architecture Redesign
+# ============================================================
+#
+# Phase 29B implements the first real UI change: grouped sidebar
+# navigation. These tests guard the data-driven nav structure in
+# AppLayout.astro, ensure every existing /app/* route remains linked,
+# and guard semantic/accessibility markers (nav landmark, aria-current,
+# focus-visible styling).
+
+
+def _p29b_layout_source() -> str:
+    layout_path = _repo_root() / "ui" / "src" / "layouts" / "AppLayout.astro"
+    assert layout_path.is_file(), f"AppLayout.astro not found at {layout_path}"
+    return layout_path.read_text(encoding="utf-8")
+
+
+def test_p29b_1_grouped_nav_labels_present():
+    """P29B-1: AppLayout.astro contains all five grouped navigation labels."""
+    print("\n=== Test P29B-1: grouped nav labels present ===")
+    source = _p29b_layout_source()
+    for label in ("Overview", "Vault", "Context", "Review and Governance", "Developer"):
+        assert label in source, f"AppLayout.astro must contain nav group label {label!r}"
+    print("  All five grouped nav labels present in AppLayout ✓")
+
+
+def test_p29b_2_all_app_routes_linked():
+    """P29B-2: AppLayout.astro links to every existing /app route."""
+    print("\n=== Test P29B-2: every /app route linked in AppLayout ===")
+    source = _p29b_layout_source()
+    required_routes = [
+        "/app/",
+        "/app/vault-setup",
+        "/app/notes",
+        "/app/validation",
+        "/app/tasks",
+        "/app/bundles",
+        "/app/security",
+        "/app/exports",
+        "/app/import",
+        "/app/feedback",
+        "/app/graph",
+        "/app/controller",
+        "/app/pending",
+        "/app/trust",
+        "/app/raw",
+    ]
+    for route in required_routes:
+        assert route in source, f"AppLayout.astro must link to {route!r}"
+    print(f"  All {len(required_routes)} /app routes linked ✓")
+
+
+def test_p29b_3_nav_landmark_present():
+    """P29B-3: AppLayout.astro uses a semantic <nav> landmark."""
+    print("\n=== Test P29B-3: <nav> landmark present ===")
+    source = _p29b_layout_source()
+    assert "<nav" in source, "AppLayout.astro must include a <nav> element"
+    assert "</nav>" in source, "AppLayout.astro must close the <nav> element"
+    # Accessibility hint: nav landmark should be labelled.
+    assert "aria-label=\"Primary\"" in source or "aria-label='Primary'" in source, (
+        "AppLayout.astro nav landmark should carry an aria-label"
+    )
+    print("  Semantic <nav aria-label=\"Primary\"> present ✓")
+
+
+def test_p29b_4_aria_current_page_used():
+    """P29B-4: AppLayout.astro uses aria-current=\"page\" for the active route."""
+    print("\n=== Test P29B-4: aria-current=\"page\" for active link ===")
+    source = _p29b_layout_source()
+    assert "aria-current" in source, "AppLayout.astro must use aria-current for active state"
+    assert "'page'" in source or '"page"' in source, (
+        "AppLayout.astro aria-current must use the value 'page'"
+    )
+    print("  aria-current=\"page\" active-state markup present ✓")
+
+
+def test_p29b_5_focus_visible_styling_present():
+    """P29B-5: AppLayout.astro defines visible focus styling using :focus-visible."""
+    print("\n=== Test P29B-5: focus-visible styling present ===")
+    source = _p29b_layout_source()
+    assert ":focus-visible" in source, (
+        "AppLayout.astro must define a :focus-visible style for nav links"
+    )
+    # Outline or box-shadow is the expected mechanism; reject silent visibility.
+    assert "outline" in source or "box-shadow" in source, (
+        "AppLayout.astro focus-visible rule must apply a visible outline or box-shadow"
+    )
+    print("  :focus-visible styling present ✓")
+
+
+def test_p29b_6_api_raw_under_developer():
+    """P29B-6: API / Raw appears after the Developer group label."""
+    print("\n=== Test P29B-6: API / Raw under Developer ===")
+    source = _p29b_layout_source()
+    developer_idx = source.find("'Developer'")
+    if developer_idx < 0:
+        developer_idx = source.find('"Developer"')
+    assert developer_idx >= 0, "AppLayout.astro must declare a 'Developer' group label"
+    api_idx = source.find("API / Raw", developer_idx)
+    raw_route_idx = source.find("/app/raw", developer_idx)
+    assert api_idx > developer_idx, (
+        "AppLayout.astro must place the 'API / Raw' label after the Developer group"
+    )
+    assert raw_route_idx > developer_idx, (
+        "AppLayout.astro must place the /app/raw link after the Developer group"
+    )
+    print("  API / Raw is positioned under the Developer group ✓")
+
+
+def test_p29b_7_pending_and_trust_under_governance():
+    """P29B-7: Pending and Trust appear after the Review and Governance group label."""
+    print("\n=== Test P29B-7: Pending and Trust under Review and Governance ===")
+    source = _p29b_layout_source()
+    gov_idx = source.find("Review and Governance")
+    assert gov_idx >= 0, (
+        "AppLayout.astro must declare a 'Review and Governance' group label"
+    )
+    pending_idx = source.find("/app/pending", gov_idx)
+    trust_idx = source.find("/app/trust", gov_idx)
+    assert pending_idx > gov_idx, "Pending must be grouped under Review and Governance"
+    assert trust_idx > gov_idx, "Trust must be grouped under Review and Governance"
+    print("  Pending and Trust grouped under Review and Governance ✓")
+
+
+def test_p29b_8_context_group_items():
+    """P29B-8: Bundles, Exports, Graph, and Controller appear after the Context group label."""
+    print("\n=== Test P29B-8: Context group items ===")
+    source = _p29b_layout_source()
+    ctx_idx = source.find("'Context'")
+    if ctx_idx < 0:
+        ctx_idx = source.find('"Context"')
+    assert ctx_idx >= 0, "AppLayout.astro must declare a 'Context' group label"
+    # The next group label after Context is Review and Governance; constrain
+    # the search window to the Context group so we do not match later sections.
+    end_idx = source.find("Review and Governance", ctx_idx)
+    if end_idx < 0:
+        end_idx = len(source)
+    window = source[ctx_idx:end_idx]
+    for route in ("/app/bundles", "/app/exports", "/app/graph", "/app/controller"):
+        assert route in window, (
+            f"{route!r} must be grouped under the Context group label"
+        )
+    print("  Bundles, Exports, Graph, and Controller are under Context ✓")
+
+
+def test_p29b_9_roadmap_phase27_still_deferred():
+    """P29B-9: ROADMAP.md status table still marks Phase 27 Deferred."""
+    print("\n=== Test P29B-9: Phase 27 still deferred ===")
+    text = (_repo_root() / "ROADMAP.md").read_text(encoding="utf-8")
+    assert "| 27    | Registry and Reuse Layer                | Deferred |" in text, (
+        "ROADMAP.md status table must keep Phase 27 Deferred"
+    )
+    print("  Phase 27 still deferred ✓")
+
+
+def test_p29b_10_roadmap_phase28_still_deferred():
+    """P29B-10: ROADMAP.md status table still marks Phase 28 Deferred."""
+    print("\n=== Test P29B-10: Phase 28 still deferred ===")
+    text = (_repo_root() / "ROADMAP.md").read_text(encoding="utf-8")
+    assert "| 28    | Optional Semantic Retrieval             | Deferred |" in text, (
+        "ROADMAP.md status table must keep Phase 28 Deferred"
+    )
+    print("  Phase 28 still deferred ✓")
+
+
+def test_p29b_11_roadmap_marks_phase29b_complete():
+    """P29B-11: ROADMAP.md marks Phase 29B as Complete."""
+    print("\n=== Test P29B-11: ROADMAP marks Phase 29B Complete ===")
+    text = (_repo_root() / "ROADMAP.md").read_text(encoding="utf-8")
+    assert "Phase 29B" in text, "ROADMAP.md must reference Phase 29B"
+    # Locate the Phase 29B sub-phase block and confirm a Complete status is recorded.
+    idx = text.find("Phase 29B - Navigation and information architecture redesign")
+    assert idx >= 0, "ROADMAP.md must keep the Phase 29B section header"
+    block_end = text.find("##### Phase 29C", idx)
+    if block_end < 0:
+        block_end = len(text)
+    block = text[idx:block_end]
+    assert "Complete" in block, (
+        "ROADMAP.md Phase 29B sub-phase block must record a Complete status"
+    )
+    print("  ROADMAP.md marks Phase 29B Complete ✓")
+
+
+def test_p29b_12_testing_documents_phase29b():
+    """P29B-12: TESTING.md documents Phase 29B."""
+    print("\n=== Test P29B-12: TESTING.md documents Phase 29B ===")
+    text = (_repo_root() / "TESTING.md").read_text(encoding="utf-8")
+    assert "Phase 29B" in text, "TESTING.md must document Phase 29B"
+    assert "721 test functions" in text, (
+        "TESTING.md must reflect the new total of 721 test functions after Phase 29B"
+    )
+    print("  TESTING.md documents Phase 29B ✓")
+
+
+def test_p29b_13_readme_no_phase29_complete_claim():
+    """P29B-13: README.md must not claim Phase 29 is fully complete."""
+    print("\n=== Test P29B-13: README does not over-claim Phase 29 ===")
+    text = (_repo_root() / "README.md").read_text(encoding="utf-8")
+    forbidden = [
+        "Phase 29 is complete",
+        "Phase 29 (UI/UX Quality and Design System) is complete",
+        "UI/UX redesign is complete",
+        "design system is complete",
+    ]
+    for phrase in forbidden:
+        assert phrase not in text, (
+            f"README.md must not claim {phrase!r}; Phase 29 is still in progress"
+        )
+    print("  README does not over-claim Phase 29 ✓")
+
+
+def test_p29b_14_no_em_dashes_in_p29b_docs():
+    """P29B-14: Project-authored docs touched by Phase 29B contain no em dashes."""
+    print("\n=== Test P29B-14: no em dashes in Phase 29B docs ===")
+    em_dash = "\u2014"
+    for fname in ("ROADMAP.md", "UI_UX_AUDIT.md", "TESTING.md",
+                  "README.md", "RELEASE_CHECKLIST.md"):
+        text = (_repo_root() / fname).read_text(encoding="utf-8")
+        assert em_dash not in text, f"{fname} must not contain em dashes"
+    print("  No em dashes in Phase 29B docs ✓")
+
+
+def test_p29b_15_verification_commands_intact():
+    """P29B-15: All six standard verification commands remain documented."""
+    print("\n=== Test P29B-15: verification commands intact ===")
+    testing = (_repo_root() / "TESTING.md").read_text(encoding="utf-8")
+    checklist = (_repo_root() / "RELEASE_CHECKLIST.md").read_text(encoding="utf-8")
+    for cmd in ("py mcp/test_verify.py", "py run.py validate",
+                "py run.py security", "py run.py feedback",
+                "py run.py export --overwrite", "npm run build"):
         assert cmd in testing, f"TESTING.md must keep verification command {cmd!r}"
     for cmd in ("python mcp/test_verify.py", "python run.py validate",
                 "python run.py security", "python run.py feedback",
