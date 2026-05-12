@@ -668,6 +668,9 @@ export interface NoteListItem {
   difficulty: string;
   missing: string[];
   path: string;
+  /** Phase 26C: trust/source frontmatter surfaced for imported-content triage. */
+  source_type?: string | null;
+  trust_level?: string | null;
 }
 
 export interface NotesData {
@@ -1403,4 +1406,124 @@ export function importMarkdownFolder(
 ): Promise<ApiResult<ImportMarkdownFolderResponse>> {
   return post<ImportMarkdownFolderResponse>('/import/markdown-folder', request);
 }
+
+
+// ---------------------------------------------------------------------------
+// Phase 26C — Import Post-Processing and Review Integration
+//
+// Imported Markdown is marked with trust frontmatter where the schema
+// supports it (source_type: imported, trust_level: draft). These helpers
+// expose that signal to the Notes UI, the Import result panel, and the
+// reusable review summary so users can triage imported content without
+// any automatic rewriting or trust promotion.
+// ---------------------------------------------------------------------------
+
+/** A note (frontmatter shape) is considered imported when source_type === 'imported'. */
+export function isImportedNote(
+  fields: Record<string, unknown> | NoteFields | null | undefined,
+): boolean {
+  if (!fields) return false;
+  const value = (fields as Record<string, unknown>).source_type;
+  return typeof value === 'string' && value.trim().toLowerCase() === 'imported';
+}
+
+/** A note (frontmatter shape) is considered draft when trust_level === 'draft'. */
+export function isDraftTrustNote(
+  fields: Record<string, unknown> | NoteFields | null | undefined,
+): boolean {
+  if (!fields) return false;
+  const value = (fields as Record<string, unknown>).trust_level;
+  return typeof value === 'string' && value.trim().toLowerCase() === 'draft';
+}
+
+/** Imported review summary derivable from existing note/trust/validation/task data. */
+export interface ImportedReviewSummary {
+  vault: string;
+  imported_total: number;
+  imported_draft: number;
+  imported_with_validation_issues: number;
+  imported_with_tasks: number;
+  imported_stale: number;
+  imported_deprecated: number;
+  generated_at: string;
+}
+
+/** Pure helper: build an ImportedReviewSummary from already-fetched datasets. */
+export function buildImportedReviewSummary(
+  vault: string,
+  notes: NoteListItem[] | null | undefined,
+  validation: ValidationData | null | undefined,
+  tasks: TasksData | null | undefined,
+  trust: TrustSummaryData | null | undefined,
+): ImportedReviewSummary {
+  const list = notes ?? [];
+  const importedPaths = new Set<string>();
+  let importedDraft = 0;
+  for (const n of list) {
+    const st = (n.source_type ?? '').toString().trim().toLowerCase();
+    if (st === 'imported') {
+      importedPaths.add(n.path);
+      const tl = (n.trust_level ?? '').toString().trim().toLowerCase();
+      if (tl === 'draft') importedDraft += 1;
+    }
+  }
+
+  const invalidPaths = new Set(validation?.invalid_notes ?? []);
+  let importedWithValidationIssues = 0;
+  for (const p of importedPaths) {
+    if (invalidPaths.has(p)) importedWithValidationIssues += 1;
+  }
+
+  const taskPaths = new Set((tasks?.tasks ?? []).map((t) => t.path));
+  let importedWithTasks = 0;
+  for (const p of importedPaths) {
+    if (taskPaths.has(p)) importedWithTasks += 1;
+  }
+
+  let importedStale = 0;
+  let importedDeprecated = 0;
+  if (trust && Array.isArray(trust.notes)) {
+    for (const tn of trust.notes) {
+      if (!importedPaths.has(tn.path)) continue;
+      if (tn.stale) importedStale += 1;
+      if (tn.trust_level === 'deprecated') importedDeprecated += 1;
+    }
+  }
+
+  return {
+    vault,
+    imported_total: importedPaths.size,
+    imported_draft: importedDraft,
+    imported_with_validation_issues: importedWithValidationIssues,
+    imported_with_tasks: importedWithTasks,
+    imported_stale: importedStale,
+    imported_deprecated: importedDeprecated,
+    generated_at: new Date().toISOString(),
+  };
+}
+
+/**
+ * Build a vault- and filter-aware link into the Notes browser.
+ *
+ * Phase 26C uses two safe query parameters:
+ *   - `vault` selects the active vault.
+ *   - `path` deep-links to a specific note (the NoteBrowser will select it).
+ *   - `filter` accepts `imported`, `draft`, or `imported-draft`.
+ *
+ * These are advisory hints only; the Notes UI still validates them.
+ */
+export function buildNotesLink(opts: {
+  vault?: string;
+  path?: string;
+  filter?: 'imported' | 'draft' | 'imported-draft';
+} = {}): string {
+  const params = new URLSearchParams();
+  if (opts.vault) params.set('vault', opts.vault);
+  if (opts.filter) params.set('filter', opts.filter);
+  if (opts.path) params.set('path', opts.path);
+  const qs = params.toString();
+  return qs ? `/app/notes?${qs}` : '/app/notes';
+}
+
+
 

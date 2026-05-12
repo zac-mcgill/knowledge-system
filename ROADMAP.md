@@ -611,7 +611,7 @@ Optional `trust_level`, `source_type`, `last_reviewed`, `review_after` frontmatt
 
 ### Phase 26 - Import Pipelines
 
-**Status: Active - Phase 26A and Phase 26B complete.**
+**Status: Active - Phase 26A, Phase 26B, and Phase 26C complete. Other import sources remain deferred.**
 
 #### Purpose
 
@@ -619,7 +619,7 @@ Make it easier to ingest existing knowledge without bypassing schema controls.
 
 #### Import Sources
 
-- Markdown folder (Phase 26A backend, Phase 26B review UI - implemented)
+- Markdown folder (Phase 26A backend, Phase 26B review UI, Phase 26C post-import review integration - implemented)
 - Obsidian vault (deferred)
 - GitHub repo docs (deferred)
 - Copilot/agent reports (deferred)
@@ -650,6 +650,7 @@ Make it easier to ingest existing knowledge without bypassing schema controls.
 - Invalid imports produce actionable tasks. (Phase 26A - done)
 - No unsafe path writes. (Phase 26A - done)
 - User can preview and confirm imports through the browser before writing. (Phase 26B - done)
+- After import, the user can review imported notes in context (filters, trust metadata, validation, tasks) without any automatic trust promotion or LLM rewriting. (Phase 26C - done)
 
 #### Phase 26A Summary
 
@@ -663,6 +664,16 @@ Phase 26B adds the Import Review UI without changing the Phase 26A backend. It i
 
 ```
 feat(ui): add markdown import review workflow
+```
+
+#### Phase 26C Summary
+
+Phase 26C extends the Phase 26B Import Review UI with a post-import review path and integrates imported notes into the existing Notes browsing surface. After a successful write, the Import Review page renders an Imported Review Summary panel (imported total, imported drafts, imported with validation issues, imported with tasks, imported stale, imported deprecated) and vault-aware follow-up links into Notes (with `imported`, `draft`, and `imported-draft` filters), Validation, Tasks, Trust, Security, and the dashboard. The Notes page now reads `source_type` and `trust_level` from the `/notes` listing (now surfaced by `notes_adapter.get_notes`) and offers Imported-only and Draft-trust-only filters, deep-link URL parameters (`vault`, `filter`, `path`) for cross-page navigation, badges on every row, and a Trust and Import detail panel showing `source_type`, `trust_level`, `last_reviewed`, `review_after`, `confidence`, and `stale`. The Trust and Import panel includes the standing disclaimer that trust metadata reflects review and maintenance state only and does not prove factual correctness. No automatic trust promotion, no automatic LLM rewriting, no new import sources. PDF, browser article, GitHub repo, Obsidian-specific, chat transcript, semantic, and LLM-extraction imports remain deferred.
+
+#### Suggested Commit
+
+```
+feat(ui): add post-import review workflow
 ```
 
 ---

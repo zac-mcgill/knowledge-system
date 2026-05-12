@@ -1,13 +1,13 @@
 # Context Vault Engine - Testing
 
-All tests live in `mcp/test_verify.py`. The suite currently has 607 test functions (591 phase tests plus 16 documentation drift guardrails), all of which are executed by the manual runner in `main()` at the bottom of that file. A passing run prints `ALL VERIFICATION TESTS PASSED`. Historical test counts from earlier phases (272, 382, 429, 467, 507, 548, 553, 564, 587) appear later in this document as part of the phase changelog and are not the current total.
+All tests live in `mcp/test_verify.py`. The suite currently has 625 test functions (609 phase tests plus 16 documentation drift guardrails), all of which are executed by the manual runner in `main()` at the bottom of that file. A passing run prints `ALL VERIFICATION TESTS PASSED`. Historical test counts from earlier phases (272, 382, 429, 467, 507, 548, 553, 564, 587, 607) appear later in this document as part of the phase changelog and are not the current total.
 
 ## Current Verification Summary
 
 A full local verification consists of:
 
 ```bash
-py mcp/test_verify.py           # 607 tests, all must pass
+py mcp/test_verify.py           # 625 tests, all must pass
 py run.py validate              # vault schema-compliance
 py run.py security              # status: pass (or warning, never fail)
 py run.py feedback              # exits 0, valid JSON
@@ -1791,7 +1791,7 @@ cd ui; npm run build       # zero errors
 **Verification steps:**
 
 ```bash
-py mcp/test_verify.py      # 607 tests, all must pass
+py mcp/test_verify.py      # 625 tests, all must pass
 py run.py validate         # vault still valid
 py run.py security         # status: pass
 py run.py import-markdown <source_dir>            # dry-run by default
@@ -1835,12 +1835,45 @@ The Phase 26B suite is mostly static-content verification because the UI runs in
 **Verification steps:**
 
 ```bash
-py mcp/test_verify.py            # 607 tests, all must pass
+py mcp/test_verify.py            # 625 tests, all must pass
 py run.py validate               # vault still valid
 py run.py security               # status: pass
 py run.py feedback               # exits 0, valid JSON
 py run.py export --overwrite     # status: ok
 cd ui; npm run build             # builds the /import page artefact
+```
+
+---
+
+## Phase 26C - Import Post-Processing and Review Integration
+
+18 new tests (`test_p26c_1` through `test_p26c_18`), bringing the phase-test total to 609. Combined with the 16 documentation drift guardrails, the overall test count is now 625.
+
+Phase 26C extends the Phase 26B Import Review UI with a post-import review path and integrates imported notes into the existing Notes browsing surface. No new import sources are introduced, no LLM rewriting is performed, and no automatic trust promotion happens. Other import sources (PDF, browser article, GitHub repo, Obsidian-specific, chat transcript, semantic, LLM-extraction) remain deferred.
+
+**Highlights:**
+
+- `test_p26c_1`: after a successful import, the result panel renders vault-aware follow-up links to Notes, Validation, Tasks, Security, and the dashboard, plus the Trust page.
+- `test_p26c_2`/`test_p26c_3`/`test_p26c_4`: the Phase 26B safety gates remain intact: preview required before write, explicit confirmation required before write, and preview marked stale when vault, source, destination, or overwrite changes.
+- `test_p26c_5`/`test_p26c_6`: the Notes UI exposes an Imported-only filter (`filter-imported-only`) and a Draft-trust-only filter (`filter-draft-trust-only`).
+- `test_p26c_7`: each note row carries `badge-imported` and `badge-draft` test ids when applicable, and Deprecated trust is also surfaced.
+- `test_p26c_8`/`test_p26c_9`: the note detail renders a Trust and Import panel showing `source_type`, `trust_level`, `last_reviewed`, `review_after`, `confidence`, and `stale`, with the disclaimer that trust metadata reflects review and maintenance state only and does not prove factual correctness.
+- `test_p26c_10`: `isImportedNote` helper exists in `api.ts` and the `/notes` adapter surfaces `source_type` and `trust_level` so the helper has real data to act on.
+- `test_p26c_11`/`test_p26c_12`: the `ImportedReviewSummary` component and `buildImportedReviewSummary` helper expose imported total, imported draft, imported with validation issues, imported with tasks, imported stale, and imported deprecated counts, and the component renders a clear no-imported-notes message when the total is zero.
+- `test_p26c_13`: no new import sources are advertised in `ImportReview.svelte`, `ImportedReviewSummary.svelte`, or `NoteBrowser.svelte`.
+- `test_p26c_14`/`test_p26c_15`: the import UI still states the source path is server-local and the scope is Markdown folder import only.
+- `test_p26c_16`: API client adds `buildNotesLink`, `isDraftTrustNote`, an `ImportedReviewSummary` interface, and extends `NoteListItem` with `source_type` and `trust_level`.
+- `test_p26c_17`/`test_p26c_18`: README, QUICKSTART, TESTING, ROADMAP, and RELEASE_CHECKLIST mention Phase 26C, README and ROADMAP reaffirm that other import sources remain deferred, and no em dash regresses into project-authored docs.
+
+**Verification steps:**
+
+```bash
+py mcp/test_verify.py            # 625 tests, all must pass
+py run.py validate               # vault still valid
+py run.py security               # status: pass
+py run.py feedback               # exits 0, valid JSON
+py run.py export --overwrite     # status: ok
+cd ui; npm run build             # builds the /notes and /import page artefacts
 ```
 
 ---

@@ -7,8 +7,11 @@
     queryNotes,
     fetchValidation,
     fetchTasks,
+    fetchTrustSummary,
     updateNote,
     isOk,
+    isImportedNote,
+    isDraftTrustNote,
     type NoteListItem,
     type NoteFields,
     type NoteDetail,
@@ -18,9 +21,12 @@
     type ValidationData,
     type TasksData,
     type Task,
+    type TrustSummaryData,
+    type TrustNoteSummary,
     type NoteUpdateResponse,
   } from '../lib/api.ts';
   import { getStoredVault } from '../lib/vaultState.ts';
+  import ImportedReviewSummary from './ImportedReviewSummary.svelte';
   // ---------------------------------------------------------------------------
 
   type LoadState = 'idle' | 'loading' | 'ok' | 'error';
@@ -38,6 +44,9 @@
     difficulty: string;
     missing: string[];
     score?: number;
+    /** Phase 26C: surface trust/source for badges in the row. */
+    source_type?: string | null;
+    trust_level?: string | null;
   }
 
   // ---------------------------------------------------------------------------
@@ -66,6 +75,9 @@
   let filterStatus = '';
   let filterDifficulty = '';
   let filterMissingOnly = false;
+  // Phase 26C: imported-content triage filters.
+  let filterImportedOnly = false;
+  let filterDraftTrustOnly = false;
 
   // ---------------------------------------------------------------------------
   // Search / query panel state
@@ -112,6 +124,12 @@
   let tasksError = '';
 
   // ---------------------------------------------------------------------------
+  // Trust state (Phase 26C — used to enrich note detail + review summary)
+  // ---------------------------------------------------------------------------
+
+  let trustData: TrustSummaryData | null = null;
+
+  // ---------------------------------------------------------------------------
   // Edit mode state
   // ---------------------------------------------------------------------------
 
@@ -137,6 +155,12 @@
     if (filterStatus && n.status !== filterStatus) return false;
     if (filterDifficulty && n.difficulty !== filterDifficulty) return false;
     if (filterMissingOnly && (!n.missing || n.missing.length === 0)) return false;
+    if (filterImportedOnly && (n.source_type ?? '').toString().trim().toLowerCase() !== 'imported') {
+      return false;
+    }
+    if (filterDraftTrustOnly && (n.trust_level ?? '').toString().trim().toLowerCase() !== 'draft') {
+      return false;
+    }
     return true;
   });
 
@@ -150,6 +174,8 @@
             difficulty: (r.fields?.difficulty as string) ?? '',
             missing: [],
             score: r.score,
+            source_type: (r.fields?.source_type as string | null | undefined) ?? null,
+            trust_level: (r.fields?.trust_level as string | null | undefined) ?? null,
           }),
         )
       : filteredNotes.map(
@@ -159,6 +185,8 @@
             status: n.status,
             difficulty: n.difficulty,
             missing: n.missing ?? [],
+            source_type: n.source_type ?? null,
+            trust_level: n.trust_level ?? null,
           }),
         )
   ) as DisplayNote[];
@@ -209,6 +237,50 @@
   $: noteTask = (tasksData?.tasks ?? []).find((t: Task) => t.path === selectedPath) as
     | Task
     | undefined;
+
+  // ---------------------------------------------------------------------------
+  // Derived: trust/import panel (Phase 26C)
+  //
+  // Notes carry source_type/trust_level via frontmatter where the schema
+  // allows.  We surface them in the detail panel so users can triage
+  // imported content quickly, but we never auto-promote trust or rewrite
+  // the body.  Trust metadata reflects review/maintenance state only.
+  // ---------------------------------------------------------------------------
+
+  $: trustNoteEntry = (trustData?.notes ?? []).find(
+    (t: TrustNoteSummary) => t.path === selectedPath,
+  ) as TrustNoteSummary | undefined;
+
+  $: noteSourceType = (() => {
+    const v = noteDetail?.fields?.source_type;
+    return typeof v === 'string' ? v.trim() : '';
+  })();
+
+  $: noteTrustLevel = (() => {
+    const v = noteDetail?.fields?.trust_level;
+    return typeof v === 'string' ? v.trim() : '';
+  })();
+
+  $: noteLastReviewed = (() => {
+    const v = noteDetail?.fields?.last_reviewed;
+    return typeof v === 'string' ? v.trim() : '';
+  })();
+
+  $: noteReviewAfter = (() => {
+    const v = noteDetail?.fields?.review_after;
+    return typeof v === 'string' ? v.trim() : '';
+  })();
+
+  $: noteAppearsImported = noteDetail
+    ? isImportedNote(noteDetail.fields as Record<string, unknown>)
+    : false;
+
+  $: noteAppearsDraft = noteDetail
+    ? isDraftTrustNote(noteDetail.fields as Record<string, unknown>)
+    : false;
+
+  $: noteImportedMissingReviewMeta =
+    noteAppearsImported && !noteLastReviewed && !noteReviewAfter;
 
   // ---------------------------------------------------------------------------
   // Helpers
@@ -264,6 +336,8 @@
     filterStatus = '';
     filterDifficulty = '';
     filterMissingOnly = false;
+    filterImportedOnly = false;
+    filterDraftTrustOnly = false;
   }
 
   function clearSearch() {
@@ -394,17 +468,56 @@
     if (isOk(result)) {
       vaultList = result.data.vaults;
       if (vaultList.length > 0) {
+        // Phase 26C deep-link: ?vault=, ?filter=, ?path= are advisory hints.
+        const params = readUrlParams();
+        const urlVault = params.vault;
         const stored = getStoredVault();
-        selectedVault = (stored && vaultList.includes(stored)) ? stored : vaultList[0];
+        if (urlVault && vaultList.includes(urlVault)) {
+          selectedVault = urlVault;
+        } else if (stored && vaultList.includes(stored)) {
+          selectedVault = stored;
+        } else {
+          selectedVault = vaultList[0];
+        }
+        applyUrlFilter(params.filter);
         await loadAll();
+        if (params.path && notesList.some((n) => n.path === params.path)) {
+          await selectNote(params.path);
+        }
       }
     } else {
       vaultsError = result.error?.message ?? 'Failed to load vaults';
     }
   }
 
+  function readUrlParams(): { vault: string | null; filter: string | null; path: string | null } {
+    try {
+      const u = new URLSearchParams(window.location.search);
+      return {
+        vault: u.get('vault'),
+        filter: u.get('filter'),
+        path: u.get('path'),
+      };
+    } catch {
+      return { vault: null, filter: null, path: null };
+    }
+  }
+
+  function applyUrlFilter(filter: string | null) {
+    if (!filter) return;
+    const f = filter.trim().toLowerCase();
+    if (f === 'imported') {
+      filterImportedOnly = true;
+    } else if (f === 'draft') {
+      filterDraftTrustOnly = true;
+    } else if (f === 'imported-draft' || f === 'draft-imported') {
+      filterImportedOnly = true;
+      filterDraftTrustOnly = true;
+    }
+  }
+
   async function loadAll() {
-    await Promise.all([loadNotes(), loadValidation(), loadTasks()]);
+    await Promise.all([loadNotes(), loadValidation(), loadTasks(), loadTrust()]);
   }
 
   async function loadNotes() {
@@ -445,6 +558,16 @@
     } else {
       tasksError = result.error?.message ?? 'Failed to load tasks';
       tasksState = 'error';
+    }
+  }
+
+  async function loadTrust() {
+    // Trust data is best-effort: failures here never block the Notes UI.
+    trustData = null;
+    if (!selectedVault) return;
+    const result = await fetchTrustSummary(selectedVault);
+    if (isOk(result)) {
+      trustData = result.data;
     }
   }
 
@@ -581,7 +704,7 @@
         <div class="bg-zinc-900 border border-zinc-800 rounded-lg p-3 flex flex-col gap-2">
           <div class="flex items-center justify-between min-h-[20px]">
             <span class="text-xs font-medium text-zinc-400 uppercase tracking-wide">Filters</span>
-            {#if filterText || filterStatus || filterDifficulty || filterMissingOnly}
+            {#if filterText || filterStatus || filterDifficulty || filterMissingOnly || filterImportedOnly || filterDraftTrustOnly}
               <button
                 on:click={clearFilters}
                 class="text-xs text-sky-400 hover:text-sky-300 transition-colors"
@@ -623,6 +746,23 @@
               class="rounded border-zinc-600 bg-zinc-800 text-sky-500 focus:ring-sky-500"
             />
             Missing sections only
+          </label>
+          <!-- Phase 26C: Imported-content triage filters -->
+          <label class="flex items-center gap-2 text-xs text-zinc-400 cursor-pointer select-none" data-testid="filter-imported-only">
+            <input
+              type="checkbox"
+              bind:checked={filterImportedOnly}
+              class="rounded border-zinc-600 bg-zinc-800 text-sky-500 focus:ring-sky-500"
+            />
+            Imported only (source_type: imported)
+          </label>
+          <label class="flex items-center gap-2 text-xs text-zinc-400 cursor-pointer select-none" data-testid="filter-draft-trust-only">
+            <input
+              type="checkbox"
+              bind:checked={filterDraftTrustOnly}
+              class="rounded border-zinc-600 bg-zinc-800 text-sky-500 focus:ring-sky-500"
+            />
+            Draft trust only (trust_level: draft)
           </label>
         </div>
 
@@ -764,6 +904,19 @@
           {/if}
         </div>
 
+        <!-- Imported review summary (Phase 26C) — only shown when an
+             imported filter is active, so the regular Notes view stays clean. -->
+        {#if (filterImportedOnly || filterDraftTrustOnly) && selectedVault}
+          <ImportedReviewSummary
+            vault={selectedVault}
+            notes={notesList}
+            validation={validationData}
+            tasks={tasksData}
+            trust={trustData}
+            compact={true}
+          />
+        {/if}
+
         <!-- Note list -->
         <div class="bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden">
           <div class="flex items-center justify-between px-3 py-2 border-b border-zinc-800">
@@ -807,13 +960,26 @@
                       </div>
                     </div>
                     <div class="mt-0.5 text-[11px] text-zinc-600 truncate font-mono">{note.path}</div>
-                    {#if note.difficulty || (note.missing && note.missing.length > 0)}
+                    {#if note.difficulty || (note.missing && note.missing.length > 0) || note.source_type || note.trust_level}
                       <div class="mt-1 flex flex-wrap gap-1">
                         {#if note.difficulty}
                           <span class="text-[10px] px-1.5 py-0.5 rounded font-mono {difficultyBadgeClass(note.difficulty)}">{note.difficulty}</span>
                         {/if}
                         {#if note.missing && note.missing.length > 0}
                           <span class="text-[10px] px-1.5 py-0.5 rounded font-mono text-orange-400 bg-orange-950 border border-orange-800">{note.missing.length} missing</span>
+                        {/if}
+                        <!-- Phase 26C: trust/source badges for fast triage of imported content. -->
+                        {#if (note.source_type ?? '').toString().toLowerCase() === 'imported'}
+                          <span class="text-[10px] px-1.5 py-0.5 rounded font-mono text-sky-300 bg-sky-950 border border-sky-800" data-testid="badge-imported">Imported</span>
+                        {/if}
+                        {#if (note.trust_level ?? '').toString().toLowerCase() === 'draft'}
+                          <span class="text-[10px] px-1.5 py-0.5 rounded font-mono text-amber-300 bg-amber-950 border border-amber-800" data-testid="badge-draft">Draft</span>
+                        {/if}
+                        {#if (note.trust_level ?? '').toString().toLowerCase() === 'external'}
+                          <span class="text-[10px] px-1.5 py-0.5 rounded font-mono text-zinc-300 bg-zinc-800 border border-zinc-700">External</span>
+                        {/if}
+                        {#if (note.trust_level ?? '').toString().toLowerCase() === 'deprecated'}
+                          <span class="text-[10px] px-1.5 py-0.5 rounded font-mono text-rose-300 bg-rose-950 border border-rose-800">Deprecated</span>
                         {/if}
                       </div>
                     {/if}
@@ -1110,6 +1276,56 @@
                   class="w-full bg-zinc-800 border border-zinc-700 text-zinc-200 text-xs font-mono rounded px-3 py-2.5 resize-y focus:outline-none focus:ring-1 focus:ring-sky-500 leading-relaxed"
                   placeholder="Markdown body content..."
                 ></textarea>
+              </div>
+            </div>
+          {/if}
+
+          <!-- Trust and Import panel (Phase 26C) -->
+          {#if noteSourceType || noteTrustLevel || noteLastReviewed || noteReviewAfter || trustNoteEntry || noteAppearsImported}
+            <div class="bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden" data-testid="trust-import-panel">
+              <div class="px-4 py-2.5 border-b border-zinc-800 flex items-center justify-between">
+                <span class="text-xs font-medium text-zinc-400 uppercase tracking-wide">Trust and Import</span>
+                {#if noteAppearsImported}
+                  <span class="text-[10px] px-1.5 py-0.5 rounded font-mono text-sky-300 bg-sky-950 border border-sky-800">imported</span>
+                {/if}
+              </div>
+              <div class="px-4 py-3 text-xs text-zinc-300 space-y-1.5">
+                <div class="grid grid-cols-2 gap-y-1 gap-x-4">
+                  <span class="text-zinc-500">source_type</span>
+                  <span class="font-mono">{noteSourceType || '—'}</span>
+                  <span class="text-zinc-500">trust_level</span>
+                  <span class="font-mono">{noteTrustLevel || '—'}</span>
+                  <span class="text-zinc-500">last_reviewed</span>
+                  <span class="font-mono">{noteLastReviewed || '—'}</span>
+                  <span class="text-zinc-500">review_after</span>
+                  <span class="font-mono">{noteReviewAfter || '—'}</span>
+                  {#if trustNoteEntry}
+                    <span class="text-zinc-500">confidence</span>
+                    <span class="font-mono">{trustNoteEntry.confidence}</span>
+                    <span class="text-zinc-500">stale</span>
+                    <span class="font-mono">{trustNoteEntry.stale ? 'yes' : 'no'}</span>
+                  {/if}
+                </div>
+                {#if noteImportedMissingReviewMeta}
+                  <p class="text-amber-300 mt-2">
+                    This note appears to be imported but has no
+                    <code class="text-zinc-200">last_reviewed</code> or
+                    <code class="text-zinc-200">review_after</code> set.
+                    Review the content and add review metadata through
+                    the existing safe editing workflow.
+                  </p>
+                {/if}
+                {#if noteAppearsDraft}
+                  <p class="text-zinc-400 mt-2">
+                    Trust level is <code class="text-zinc-200">draft</code>.
+                    Review content, fix validation/task issues, then update
+                    trust metadata through safe editing.
+                  </p>
+                {/if}
+                <p class="text-[11px] text-zinc-500 mt-2">
+                  Trust metadata reflects review and maintenance state only.
+                  It does not prove factual correctness.
+                </p>
               </div>
             </div>
           {/if}

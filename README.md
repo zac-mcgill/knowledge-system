@@ -4,18 +4,18 @@
 
 Context Vault Engine is a local-first Python pipeline for validating, scanning, and securely packaging structured Markdown content. It enforces a schema contract on every note, scans content for credential leaks, prompt-injection patterns, and suspicious executable/script blocks, then exports integrity-verified packages with SHA-256 manifests. All security rules are deterministic and regex-based, so every finding is explainable, reproducible, and auditable without an LLM or cloud dependency.
 
-**Local-first Python pipeline: credential leak scanning, prompt-injection detection, schema enforcement, rate-limited API, path-traversal blocking, SHA-256 artefact integrity, MCP stdio compatibility layer, private cloud mode, session and project state, safe memory write queue, trust/staleness/evidence metadata, safe Markdown folder import with browser review UI. 607 tests.**
+**Local-first Python pipeline: credential leak scanning, prompt-injection detection, schema enforcement, rate-limited API, path-traversal blocking, SHA-256 artefact integrity, MCP stdio compatibility layer, private cloud mode, session and project state, safe memory write queue, trust/staleness/evidence metadata, safe Markdown folder import with browser review UI and post-import review integration. 625 tests.**
 
 ---
 
 ## Current Status
 
 - Phases 0 to 25 are complete.
-- Phase 26 (Import Pipelines) is the active development phase. Phase 26A (safe Markdown folder import backend) and Phase 26B (Import Review UI) are implemented; PDF, browser article, GitHub repo, Obsidian-specific, chat transcript, semantic, and LLM-extraction imports remain deferred.
+- Phase 26 (Import Pipelines) is the active development phase. Phase 26A (safe Markdown folder import backend), Phase 26B (Import Review UI), and Phase 26C (post-import review integration) are implemented; PDF, browser article, GitHub repo, Obsidian-specific, chat transcript, semantic, and LLM-extraction imports remain deferred.
 - Phase 27 (Registry and Reuse Layer) is deferred.
 - Phase 28 (Optional Semantic Retrieval) is deferred.
 - The local app, CLI, HTTP API, and MCP stdio surface are all production-quality for local use.
-- 607 deterministic tests cover phases 0 to 25, the Phase 26A import pipeline and Phase 26B import review UI, plus documentation drift guardrails.
+- 625 deterministic tests cover phases 0 to 25, the Phase 26A import pipeline, Phase 26B import review UI, and Phase 26C post-import review integration, plus documentation drift guardrails.
 
 ---
 
@@ -37,6 +37,7 @@ Context Vault Engine is a local-first Python pipeline for validating, scanning, 
 - Trust, Staleness, and Evidence Metadata: optional `trust_level`, `source_type`, `last_reviewed`, `review_after` frontmatter fields; `/trust`, `/stale`, `/evidence` endpoints; confidence scoring (verified/working/draft/external/deprecated); stale detection; evidence builder returns trust-ranked source notes with cite-able paths
 - Safe Markdown Folder Import (Phase 26A): `POST /import/markdown-folder` and `py run.py import-markdown` discover Markdown files in a source folder, scan each file for security findings, drop unknown frontmatter, recompute section booleans from body content, mark imports as drafts (`trust_level: draft`, `source_type: imported`), serialise candidate notes, validate against the vault schema, and only then write inside the vault (default destination `Imported/`, default dry-run, no overwrite, no writes inside `Vault Files/`). PDF, browser article, GitHub repo, and Obsidian-specific imports remain deferred.
 - Import Review UI (Phase 26B): browser page at `/app/import` lets a local user choose a vault, type a server-local source folder path, choose a destination, run a dry-run preview against `POST /import/markdown-folder`, review every planned item with its security/validation/warning/error state, and only then write after an explicit confirmation checkbox. Preview is required before writing, and any change to vault, source, destination, or overwrite marks the preview stale until re-run. Markdown folder import only; no semantic or LLM import.
+- Post-Import Review Integration (Phase 26C): after a successful import, the Import Review page renders an Imported Review Summary (imported total, imported drafts, imported notes with validation issues, imported notes with tasks, imported stale, imported deprecated) and vault-aware follow-up links into Notes (with `imported`, `draft`, and `imported-draft` filters), Validation, Tasks, Trust, Security, and the dashboard. The Notes page surfaces `source_type` and `trust_level` on every row, adds Imported-only and Draft-trust-only filters, and shows a Trust and Import panel in the note detail (source_type, trust_level, last_reviewed, review_after, confidence, stale) along with the disclaimer that trust metadata reflects review and maintenance state only and does not prove factual correctness. No automatic trust promotion, no automatic LLM rewriting, no new import sources. Other import sources (PDF, browser article, GitHub repo, Obsidian-specific, chat transcript, semantic, LLM-extraction) remain deferred.
 
 ---
 
@@ -58,7 +59,7 @@ python run.py security
 # Export - writes integrity-verified package to dist/ with SHA-256 manifest
 python run.py export --overwrite
 
-# Full test suite (607 deterministic tests covering phases 0 to 25, Phase 26A backend, and Phase 26B UI)
+# Full test suite (625 deterministic tests covering phases 0 to 25, Phase 26A backend, Phase 26B UI, and Phase 26C post-import review integration)
 python mcp/test_verify.py
 ```
 

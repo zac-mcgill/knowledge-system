@@ -1483,6 +1483,26 @@ Safety rules enforced by the UI on top of the backend:
 - The destination field defaults to `Imported` and inherits the backend safety checks (no traversal, no absolute paths, no writes inside `Vault Files/`).
 - The UI mounts only the Markdown folder import workflow. PDF, GitHub repo, browser article, Obsidian-specific, chat transcript, semantic, and LLM-extraction imports are explicitly listed as not implemented yet and are not exposed as buttons or actions.
 
+### Post-Import Review Integration (Phase 26C)
+
+Phase 26C closes the loop after a successful import without introducing any new import sources, any LLM rewriting, or any automatic trust promotion. Other import sources remain deferred.
+
+After clicking **Write Import**, the Import Review page shows:
+
+1. An **Imported Review Summary** panel for the chosen vault with six counts: imported total, imported drafts, imported with validation issues, imported with tasks, imported stale, and imported deprecated.
+2. Vault-aware follow-up links that deep-link into the rest of the app: Notes filtered by `imported`, Notes filtered by `draft` trust, Notes filtered by `imported-draft` (both), Validation, Tasks, Trust, Security, and the dashboard.
+3. A short safety note reaffirming that trust metadata is not promoted automatically and no LLM rewriting is performed.
+
+The Notes page (`/app/notes`) now uses `source_type` and `trust_level` from the `/notes` listing and adds:
+
+- An **Imported only** filter checkbox (`source_type: imported`).
+- A **Draft trust only** filter checkbox (`trust_level: draft`).
+- Per-row badges for imported, draft, external, and deprecated notes.
+- A **Trust and Import** panel in the note detail showing `source_type`, `trust_level`, `last_reviewed`, `review_after`, `confidence`, and `stale`, plus the disclaimer that trust metadata reflects review and maintenance state only and does not prove factual correctness.
+- URL parameters `vault`, `filter` (`imported`, `draft`, `imported-draft`), and `path` so links from the Import Review page open directly on the right filter or note.
+
+Phase 26C does not change the Phase 26A backend behaviour or the Phase 26B safety gates. Preview is still required before writing, an explicit confirmation checkbox is still required, and the preview is still marked stale when vault, source, destination, or overwrite changes.
+
 ---
 
 ## 31. Run Verification Tests (Optional)

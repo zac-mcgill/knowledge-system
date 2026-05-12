@@ -21,13 +21,23 @@
   import { onMount } from 'svelte';
   import {
     fetchVaults,
+    fetchNotes,
+    fetchValidation,
+    fetchTasks,
+    fetchTrustSummary,
     importMarkdownFolder,
     isOk,
+    buildNotesLink,
     type ImportMarkdownFolderRequest,
     type ImportMarkdownFolderResponse,
     type ImportMarkdownItem,
+    type NoteListItem,
+    type TasksData,
+    type TrustSummaryData,
+    type ValidationData,
   } from '../lib/api.ts';
   import { getStoredVault } from '../lib/vaultState.ts';
+  import ImportedReviewSummary from './ImportedReviewSummary.svelte';
 
   // ── Vault list ─────────────────────────────────────────────────────────────
   let vaultList: string[] = [];
@@ -55,6 +65,16 @@
 
   let preview: ImportMarkdownFolderResponse | null = null;
   let writeResult: ImportMarkdownFolderResponse | null = null;
+
+  // ── Phase 26C: post-write review data ──────────────────────────────────────
+  // Populated after a successful write so the result panel can render the
+  // ImportedReviewSummary derived from existing endpoints (no new backend
+  // tables, no async background jobs).
+  let postWriteNotes: NoteListItem[] | null = null;
+  let postWriteValidation: ValidationData | null = null;
+  let postWriteTasks: TasksData | null = null;
+  let postWriteTrust: TrustSummaryData | null = null;
+  let postWriteLoading = false;
 
   // ── Confirmation state ─────────────────────────────────────────────────────
   let confirmReviewed = false;
@@ -160,11 +180,39 @@
     if (isOk(result)) {
       writeResult = result.data;
       opState = 'write_ok';
+      await loadPostWriteData();
     } else {
       opErrorCode = result.error?.code ?? 'UNKNOWN';
       opErrorMsg = result.error?.message ?? 'Import failed.';
       opState = 'error';
     }
+  }
+
+  /**
+   * Phase 26C: after a successful write, fetch notes/validation/tasks/trust
+   * so the result panel can render the imported review summary derived from
+   * existing endpoints.  Failures here never block the write result; the
+   * summary simply falls back to the zero/missing-data state.
+   */
+  async function loadPostWriteData(): Promise<void> {
+    if (!writeResult) return;
+    postWriteLoading = true;
+    postWriteNotes = null;
+    postWriteValidation = null;
+    postWriteTasks = null;
+    postWriteTrust = null;
+    const vault = writeResult.vault;
+    const [nRes, vRes, tRes, trRes] = await Promise.all([
+      fetchNotes(vault),
+      fetchValidation(vault),
+      fetchTasks(vault, { limit: 500, include_feedback: false }),
+      fetchTrustSummary(vault),
+    ]);
+    if (isOk(nRes)) postWriteNotes = nRes.data.notes;
+    if (isOk(vRes)) postWriteValidation = vRes.data;
+    if (isOk(tRes)) postWriteTasks = tRes.data;
+    if (isOk(trRes)) postWriteTrust = trRes.data;
+    postWriteLoading = false;
   }
 
   function resetAll(): void {
@@ -176,6 +224,11 @@
     opState = 'idle';
     opErrorCode = '';
     opErrorMsg = '';
+    postWriteNotes = null;
+    postWriteValidation = null;
+    postWriteTasks = null;
+    postWriteTrust = null;
+    postWriteLoading = false;
   }
 
   function errorTitle(code: string): string {
@@ -444,15 +497,46 @@
           <div class="mt-4 pt-3 border-t border-zinc-800 text-xs text-zinc-400">
             <div class="font-medium text-zinc-200 mb-2">Follow up:</div>
             <ul class="flex flex-wrap gap-x-3 gap-y-1">
-              <li><a class="text-sky-400 hover:underline" href="/app/notes">Notes</a></li>
+              <li>
+                <a class="text-sky-400 hover:underline"
+                   href={buildNotesLink({ vault: writeResult.vault, filter: 'imported' })}>
+                  Notes (imported only)
+                </a>
+              </li>
+              <li>
+                <a class="text-sky-400 hover:underline"
+                   href={buildNotesLink({ vault: writeResult.vault, filter: 'draft' })}>
+                  Notes (draft trust)
+                </a>
+              </li>
               <li><a class="text-sky-400 hover:underline" href="/app/validation">Validation</a></li>
               <li><a class="text-sky-400 hover:underline" href="/app/tasks">Tasks</a></li>
+              <li><a class="text-sky-400 hover:underline" href="/app/trust">Trust and evidence</a></li>
               <li><a class="text-sky-400 hover:underline" href="/app/security">Security</a></li>
               <li><a class="text-sky-400 hover:underline" href="/app/">Dashboard</a></li>
             </ul>
+            <p class="text-[11px] text-zinc-500 mt-2">
+              Imported notes carry <code class="text-zinc-300">source_type: imported</code>
+              (and <code class="text-zinc-300">trust_level: draft</code> when the schema allows it).
+              Promote or update them through the existing safe editing workflow.
+              Trust metadata is never promoted automatically.
+            </p>
           </div>
         {/if}
       </div>
+
+      {#if writeResult !== null}
+        <ImportedReviewSummary
+          vault={writeResult.vault}
+          notes={postWriteNotes}
+          validation={postWriteValidation}
+          tasks={postWriteTasks}
+          trust={postWriteTrust}
+        />
+        {#if postWriteLoading}
+          <p class="text-xs text-zinc-500 -mt-2">Loading post-import review data...</p>
+        {/if}
+      {/if}
 
       <!-- Item review -->
       <div class="bg-zinc-900 border border-zinc-800 rounded-lg p-5">

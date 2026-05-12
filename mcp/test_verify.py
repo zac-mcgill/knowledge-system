@@ -11372,6 +11372,26 @@ def main():
     test_p26b_19()
     test_p26b_20()
 
+    # Phase 26C — Import Post-Processing and Review Integration
+    test_p26c_1()
+    test_p26c_2()
+    test_p26c_3()
+    test_p26c_4()
+    test_p26c_5()
+    test_p26c_6()
+    test_p26c_7()
+    test_p26c_8()
+    test_p26c_9()
+    test_p26c_10()
+    test_p26c_11()
+    test_p26c_12()
+    test_p26c_13()
+    test_p26c_14()
+    test_p26c_15()
+    test_p26c_16()
+    test_p26c_17()
+    test_p26c_18()
+
     # Documentation drift guardrails (added in the Phase 25 production-docs pass)
     test_doc_drift_readme_test_count()
     test_doc_drift_testing_test_count()
@@ -13178,6 +13198,269 @@ def test_p26b_20():
     text = dist_html.read_text(encoding="utf-8")
     assert "Import Markdown Folder" in text, "built page must contain header text"
     print("  /import page built and contains expected header ✓")
+
+
+# ============================================================
+# Phase 26C — Import Post-Processing and Review Integration
+# ============================================================
+
+def _p26c_repo_root():
+    from pathlib import Path
+    return Path(__file__).resolve().parent.parent
+
+
+def _p26c_read(relpath: str) -> str:
+    return (_p26c_repo_root() / relpath).read_text(encoding="utf-8")
+
+
+_P26C_IMPORT_COMPONENT = "ui/src/components/ImportReview.svelte"
+_P26C_NOTE_BROWSER = "ui/src/components/NoteBrowser.svelte"
+_P26C_REVIEW_SUMMARY = "ui/src/components/ImportedReviewSummary.svelte"
+_P26C_API = "ui/src/lib/api.ts"
+_P26C_NOTES_ADAPTER = "mcp/core/adapters/notes_adapter.py"
+
+
+def test_p26c_1():
+    """P26C-1: Import result panel exposes follow-up links to Notes, Validation, Tasks, Security, Dashboard."""
+    print("\n=== Test P26C-1: import result follow-up links ===")
+    text = _p26c_read(_P26C_IMPORT_COMPONENT)
+    # Notes link is now a vault-aware deep link built by buildNotesLink.
+    assert "buildNotesLink" in text, \
+        "ImportReview must use buildNotesLink for vault-aware Notes deep links"
+    assert "/app/validation" in text, "must link to /app/validation"
+    assert "/app/tasks" in text, "must link to /app/tasks"
+    assert "/app/security" in text, "must link to /app/security"
+    assert 'href="/app/"' in text or "href=\"/app/\"" in text, "must link to dashboard /app/"
+    print("  Import result follow-up links present ✓")
+
+
+def test_p26c_2():
+    """P26C-2: Import Review still requires preview before write (gate preserved)."""
+    print("\n=== Test P26C-2: preview required before write ===")
+    text = _p26c_read(_P26C_IMPORT_COMPONENT)
+    assert "canWrite" in text, "must expose canWrite gate"
+    assert "preview !== null" in text, "canWrite must require preview"
+    print("  preview gate intact ✓")
+
+
+def test_p26c_3():
+    """P26C-3: Import Review still requires explicit confirmation before write."""
+    print("\n=== Test P26C-3: confirmation required ===")
+    text = _p26c_read(_P26C_IMPORT_COMPONENT)
+    assert "confirmReviewed" in text, "canWrite must require confirmReviewed"
+    assert "I have reviewed the import preview and want to write these files." in text, \
+        "explicit confirmation phrase must remain"
+    print("  confirmation gate intact ✓")
+
+
+def test_p26c_4():
+    """P26C-4: Preview is still marked stale when vault/source/destination/overwrite change."""
+    print("\n=== Test P26C-4: stale-preview detection preserved ===")
+    text = _p26c_read(_P26C_IMPORT_COMPONENT)
+    assert "previewStale" in text, "previewStale computation must remain"
+    for snap in ("previewedVault", "previewedSourceDir",
+                 "previewedDestination", "previewedOverwrite"):
+        assert snap in text, f"missing snapshot variable {snap}"
+    print("  stale-preview tracking intact ✓")
+
+
+def test_p26c_5():
+    """P26C-5: Notes UI exposes an Imported-only filter."""
+    print("\n=== Test P26C-5: Notes UI imported-only filter ===")
+    text = _p26c_read(_P26C_NOTE_BROWSER)
+    assert "filterImportedOnly" in text, "must declare filterImportedOnly state"
+    assert "Imported only" in text, "filter label must read 'Imported only'"
+    assert "data-testid=\"filter-imported-only\"" in text, \
+        "imported-only filter must carry a stable test id"
+    print("  Imported-only filter present ✓")
+
+
+def test_p26c_6():
+    """P26C-6: Notes UI exposes a Draft trust filter."""
+    print("\n=== Test P26C-6: Notes UI draft-trust filter ===")
+    text = _p26c_read(_P26C_NOTE_BROWSER)
+    assert "filterDraftTrustOnly" in text, "must declare filterDraftTrustOnly state"
+    assert "Draft trust only" in text, "filter label must read 'Draft trust only'"
+    assert "data-testid=\"filter-draft-trust-only\"" in text, \
+        "draft-trust filter must carry a stable test id"
+    print("  Draft-trust filter present ✓")
+
+
+def test_p26c_7():
+    """P26C-7: Notes UI shows imported/draft badges on rows."""
+    print("\n=== Test P26C-7: imported/draft badges ===")
+    text = _p26c_read(_P26C_NOTE_BROWSER)
+    assert "data-testid=\"badge-imported\"" in text, "row must show an Imported badge"
+    assert "data-testid=\"badge-draft\"" in text, "row must show a Draft badge"
+    # Deprecated label should also appear so deprecated trust is visible.
+    assert "Deprecated" in text, "row should surface Deprecated trust level"
+    print("  imported/draft/deprecated badges present ✓")
+
+
+def test_p26c_8():
+    """P26C-8: Note detail displays source_type and trust_level when present."""
+    print("\n=== Test P26C-8: trust/import panel in note detail ===")
+    text = _p26c_read(_P26C_NOTE_BROWSER)
+    assert "data-testid=\"trust-import-panel\"" in text, \
+        "note detail must render a Trust and Import panel"
+    assert ">source_type<" in text, "panel must label source_type"
+    assert ">trust_level<" in text, "panel must label trust_level"
+    assert ">last_reviewed<" in text, "panel must label last_reviewed"
+    assert ">review_after<" in text, "panel must label review_after"
+    print("  Trust and Import panel renders all required fields ✓")
+
+
+def test_p26c_9():
+    """P26C-9: Note detail includes safe wording about trust metadata."""
+    print("\n=== Test P26C-9: safe trust-metadata wording ===")
+    text = _p26c_read(_P26C_NOTE_BROWSER)
+    expected = "does not prove factual correctness"
+    assert expected in text, \
+        f"trust panel must include the phrase '{expected}'"
+    print("  safe trust-metadata wording present ✓")
+
+
+def test_p26c_10():
+    """P26C-10: Imported notes can be identified via isImportedNote helper."""
+    print("\n=== Test P26C-10: isImportedNote helper ===")
+    api = _p26c_read(_P26C_API)
+    assert "export function isImportedNote" in api, \
+        "api.ts must export isImportedNote helper"
+    assert "'imported'" in api, "helper must compare against 'imported'"
+    # Backend adapter must surface source_type/trust_level so the helper works
+    # against the notes-list response.
+    adapter = _p26c_read(_P26C_NOTES_ADAPTER)
+    assert '"source_type"' in adapter, "notes adapter must return source_type"
+    assert '"trust_level"' in adapter, "notes adapter must return trust_level"
+    print("  isImportedNote helper + backend wiring present ✓")
+
+
+def test_p26c_11():
+    """P26C-11: Imported review summary exposes imported total and draft count."""
+    print("\n=== Test P26C-11: review summary counts ===")
+    api = _p26c_read(_P26C_API)
+    assert "interface ImportedReviewSummary" in api, \
+        "api.ts must declare ImportedReviewSummary interface"
+    assert "buildImportedReviewSummary" in api, \
+        "api.ts must export buildImportedReviewSummary"
+    for field in (
+        "imported_total",
+        "imported_draft",
+        "imported_with_validation_issues",
+        "imported_with_tasks",
+        "imported_stale",
+        "imported_deprecated",
+    ):
+        assert field in api, f"ImportedReviewSummary must include {field}"
+
+    summary = _p26c_read(_P26C_REVIEW_SUMMARY)
+    assert "Imported notes" in summary, "summary must render an imported total label"
+    assert "Imported draft" in summary, "summary must render imported-draft count"
+    assert "data-testid=\"imported-review-summary\"" in summary, \
+        "summary must expose a stable test id"
+    print("  imported review summary counts present ✓")
+
+
+def test_p26c_12():
+    """P26C-12: Imported review summary handles zero imported notes cleanly."""
+    print("\n=== Test P26C-12: zero imported handled ===")
+    summary = _p26c_read(_P26C_REVIEW_SUMMARY)
+    # When no imported notes exist, surface a clear empty-state message.
+    assert "No imported notes" in summary, \
+        "summary must render an explicit no-imported-notes message"
+    # And the helper must not throw on missing/empty inputs — verified via
+    # the pure-function contract in api.ts.
+    api = _p26c_read(_P26C_API)
+    assert "notes ?? []" in api, \
+        "buildImportedReviewSummary must accept null/undefined notes"
+    print("  zero-imported path is explicit and safe ✓")
+
+
+def test_p26c_13():
+    """P26C-13: No new import sources (PDF/GitHub/browser/semantic/LLM) are advertised."""
+    print("\n=== Test P26C-13: deferred import sources still deferred ===")
+    import re as _re
+    for relpath in (_P26C_IMPORT_COMPONENT, _P26C_REVIEW_SUMMARY, _P26C_NOTE_BROWSER):
+        text = _p26c_read(relpath)
+        forbidden_labels = [
+            "Import PDF", "Import GitHub", "Import Article",
+            "Semantic Import", "LLM Extract",
+        ]
+        for label in forbidden_labels:
+            assert label not in text, \
+                f"{relpath} must not advertise deferred source {label!r}"
+        assert not _re.search(
+            r"<button[^>]*>\s*(PDF|GitHub|Article|Semantic|LLM)\b", text
+        ), f"{relpath} must not expose a button for a deferred import source"
+    print("  deferred import sources remain deferred ✓")
+
+
+def test_p26c_14():
+    """P26C-14: Import UI still states the source path is server-local."""
+    print("\n=== Test P26C-14: server-local helper text retained ===")
+    text = _p26c_read(_P26C_IMPORT_COMPONENT)
+    assert "server-local" in text or "resolved on the backend host" in text, \
+        "import UI must still explain the server-local path constraint"
+    print("  server-local constraint still surfaced ✓")
+
+
+def test_p26c_15():
+    """P26C-15: Import UI still states Markdown-only scope."""
+    print("\n=== Test P26C-15: Markdown-only scope retained ===")
+    text = _p26c_read(_P26C_IMPORT_COMPONENT)
+    assert "Markdown folder import only" in text, \
+        "header must still state Markdown folder import only"
+    print("  Markdown-only scope still stated ✓")
+
+
+def test_p26c_16():
+    """P26C-16: API client types and helpers cover the post-import workflow."""
+    print("\n=== Test P26C-16: api.ts post-import helpers ===")
+    api = _p26c_read(_P26C_API)
+    assert "export function buildNotesLink" in api, \
+        "api.ts must export buildNotesLink for deep-linking from import results"
+    assert "filter=" in api or "'filter'" in api, \
+        "buildNotesLink must accept a filter query parameter"
+    assert "isDraftTrustNote" in api, "api.ts must export isDraftTrustNote helper"
+    # NoteListItem must expose the trust/source signals used by the Notes UI.
+    assert "source_type?:" in api, "NoteListItem must carry source_type"
+    assert "trust_level?:" in api, "NoteListItem must carry trust_level"
+    print("  api.ts post-import helpers and types present ✓")
+
+
+def test_p26c_17():
+    """P26C-17: Documentation mentions Phase 26C post-import review integration."""
+    print("\n=== Test P26C-17: docs mention Phase 26C ===")
+    root = _p26c_repo_root()
+    for fname, marker in (
+        ("README.md", "Phase 26C"),
+        ("QUICKSTART.md", "Phase 26C"),
+        ("TESTING.md", "Phase 26C"),
+        ("ROADMAP.md", "Phase 26C"),
+        ("RELEASE_CHECKLIST.md", "Phase 26C"),
+    ):
+        text = (root / fname).read_text(encoding="utf-8")
+        assert marker in text, f"{fname} must reference Phase 26C"
+    print("  Phase 26C documented across required files ✓")
+
+
+def test_p26c_18():
+    """P26C-18: Documentation reaffirms that other import sources remain deferred and no em dash leaks in."""
+    print("\n=== Test P26C-18: deferred sources documented + no em dash drift ===")
+    root = _p26c_repo_root()
+    readme = (root / "README.md").read_text(encoding="utf-8")
+    roadmap = (root / "ROADMAP.md").read_text(encoding="utf-8")
+    assert "deferred" in readme.lower(), \
+        "README.md must state that other import sources remain deferred"
+    assert "deferred" in roadmap.lower(), \
+        "ROADMAP.md must state that other import sources remain deferred"
+    # Drift guardrail: project-authored docs must not regress to em dashes.
+    em_dash = "\u2014"
+    for fname in ("README.md", "QUICKSTART.md", "TESTING.md", "ROADMAP.md",
+                  "RELEASE_CHECKLIST.md"):
+        text = (root / fname).read_text(encoding="utf-8")
+        assert em_dash not in text, f"{fname} must not contain an em dash"
+    print("  deferred-source statement present and no em dash drift ✓")
 
 
 def test_p24_1():
@@ -16708,9 +16991,9 @@ def _repo_root():
 
 
 def test_doc_drift_readme_test_count():
-    """DOC-DRIFT-1: README quotes the current 607-test total, no stale counts."""
+    """DOC-DRIFT-1: README quotes the current 625-test total, no stale counts."""
     readme = (_repo_root() / "README.md").read_text(encoding="utf-8")
-    assert "607" in readme, "README.md must mention the current test count 607"
+    assert "625" in readme, "README.md must mention the current test count 625"
     stale_phrases = [
         "553 deterministic tests",
         "548 deterministic tests",
@@ -16718,29 +17001,30 @@ def test_doc_drift_readme_test_count():
         "382 tests",
         "272 tests",
         "587 deterministic tests",
+        "607 deterministic tests",
     ]
     for phrase in stale_phrases:
         assert phrase not in readme, f"README.md still mentions stale phrase {phrase!r}"
-    print(f"  README mentions 607 tests, no stale counts present ✓")
+    print(f"  README mentions 625 tests, no stale counts present ✓")
 
 
 def test_doc_drift_testing_test_count():
-    """DOC-DRIFT-2: TESTING.md current total is 607 and historical markers retained."""
+    """DOC-DRIFT-2: TESTING.md current total is 625 and historical markers retained."""
     text = (_repo_root() / "TESTING.md").read_text(encoding="utf-8")
-    assert "607 test functions" in text, "TESTING.md must state 607 test functions"
-    for marker in ("429", "467", "507", "548", "564", "587"):
+    assert "625 test functions" in text, "TESTING.md must state 625 test functions"
+    for marker in ("429", "467", "507", "548", "564", "587", "607"):
         assert marker in text, f"TESTING.md must retain historical test-count marker {marker}"
-    print(f"  TESTING.md states 607 functions and keeps 429/467/507/548/564/587 markers ✓")
+    print(f"  TESTING.md states 625 functions and keeps 429/467/507/548/564/587/607 markers ✓")
 
 
 def test_doc_drift_release_checklist_test_count():
-    """DOC-DRIFT-3: RELEASE_CHECKLIST references 607 tests and required commands."""
+    """DOC-DRIFT-3: RELEASE_CHECKLIST references 625 tests and required commands."""
     text = (_repo_root() / "RELEASE_CHECKLIST.md").read_text(encoding="utf-8")
-    assert "607" in text, "RELEASE_CHECKLIST.md must reference the 607-test target"
+    assert "625" in text, "RELEASE_CHECKLIST.md must reference the 625-test target"
     for req in ("test_verify.py", "run.py validate", "run.py security",
                 "run.py export", "GitHub Release"):
         assert req in text, f"RELEASE_CHECKLIST.md must contain {req!r}"
-    print(f"  RELEASE_CHECKLIST mentions 607 tests and required commands ✓")
+    print(f"  RELEASE_CHECKLIST mentions 625 tests and required commands ✓")
 
 
 def test_doc_drift_roadmap_active_phase():

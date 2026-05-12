@@ -23,10 +23,17 @@ def get_notes(vault_name: str | None = None) -> dict:
                     "status": str,
                     "difficulty": str,
                     "missing": [str],
-                    "path": str
+                    "path": str,
+                    "source_type": str | None,
+                    "trust_level": str | None
                 }
             ]
         }
+
+    The ``source_type`` and ``trust_level`` fields are derived directly from
+    note frontmatter when present, and are ``None`` otherwise.  They are used
+    by the Phase 26C import review workflow (Notes UI imported/draft filters
+    and badges) to triage imported Markdown without an extra round-trip.
     """
     try:
         if vault_name is None:
@@ -73,9 +80,19 @@ def get_notes(vault_name: str | None = None) -> dict:
                 "difficulty": fields.get("difficulty", "unknown"),
                 "missing": missing,
                 "path": rel_path,
+                "source_type": _normalise_optional_str(fields.get("source_type")),
+                "trust_level": _normalise_optional_str(fields.get("trust_level")),
             })
 
         return {"notes": notes}
 
     except Exception as exc:
         return {"error": str(exc)}
+
+
+def _normalise_optional_str(value):
+    """Return a stripped string or None for absent/blank frontmatter values."""
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
