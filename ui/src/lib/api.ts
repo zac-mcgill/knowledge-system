@@ -448,6 +448,57 @@ export function normaliseFeedback(vault: string): Promise<ApiResult<FeedbackNorm
 // Context Bundle — POST /context/bundle
 // ---------------------------------------------------------------------------
 
+// -- Profile metadata (Phase 24) --
+
+export interface EffectiveBudget {
+  max_notes: number | null;
+  max_chars: number | null;
+}
+
+export interface ProfileMetadata {
+  profile_used: string | null;
+  mode_used: string | null;
+  profile_source: 'builtin' | 'config' | 'none';
+  effective_budget: EffectiveBudget;
+  require_security_scan: boolean;
+}
+
+// -- Context Profile / Mode types --
+
+export interface ContextProfileDefinition {
+  name: string;
+  label: string;
+  description: string;
+  max_notes: number;
+  max_chars: number;
+  include_body: boolean;
+  include_related: boolean;
+  include_sections: string[];
+  allow_partial: boolean;
+  require_security_scan: boolean;
+  prefer_complete: boolean;
+}
+
+export interface ContextProfilesData {
+  profiles: Record<string, ContextProfileDefinition>;
+  modes: Record<string, ContextProfileDefinition>;
+  defaults: { mode: string; profile: string | null };
+}
+
+/** GET /context/profiles — list all built-in context profiles and modes. */
+export function fetchContextProfiles(): Promise<ApiResult<ContextProfilesData>> {
+  return get<ContextProfilesData>('/context/profiles');
+}
+
+/** GET /context/profiles/{name} — get a single profile or mode by name. */
+export function fetchContextProfile(
+  name: string,
+): Promise<ApiResult<{ profile: ContextProfileDefinition; source: string }>> {
+  return get<{ profile: ContextProfileDefinition; source: string }>(
+    `/context/profiles/${encodeURIComponent(name)}`,
+  );
+}
+
 export interface ContextBundleRequest {
   vault: string;
   filters?: Record<string, string | string[]>;
@@ -457,6 +508,10 @@ export interface ContextBundleRequest {
   max_notes?: number;
   max_chars?: number;
   allow_partial?: boolean;
+  /** Named device profile (e.g. 'phone-local-llm'). Overrides mode if both supplied. */
+  profile?: string;
+  /** Named bundle mode (e.g. 'tiny', 'small', 'medium', 'large', 'agent'). */
+  mode?: string;
 }
 
 export interface BundleNoteFields {
@@ -519,6 +574,7 @@ export interface ContextBundleResponse {
   warnings: string[];
   manifest: BundleManifest;
   feedback: BundleFeedback;
+  profile_metadata?: ProfileMetadata;
 }
 
 /**

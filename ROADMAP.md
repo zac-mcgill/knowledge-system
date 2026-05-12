@@ -92,7 +92,7 @@ The backend is strong. The local UI has reached a usable application baseline. T
 
 ## Current Active Phase
 
-**Phase 23 - Safe Memory Write Queue**
+**Phase 25 - Trust, Staleness, and Evidence Metadata**
 
 ## Phase Status Overview
 
@@ -123,8 +123,8 @@ The backend is strong. The local UI has reached a usable application baseline. T
 | 21    | Private Cloud Mode                      | Complete |
 | 22    | Session and Project State Layer         | Complete |
 | 23    | Safe Memory Write Queue                 | Complete |
-| 24    | Device Profiles and Context Budgets     | Active   |
-| 25    | Trust, Staleness, and Evidence Metadata | Planned  |
+| 24    | Device Profiles and Context Budgets     | Complete |
+| 25    | Trust, Staleness, and Evidence Metadata | Active   |
 | 26    | Import Pipelines                        | Planned  |
 | 27    | Registry and Reuse Layer                | Deferred |
 | 28    | Optional Semantic Retrieval             | Deferred |
@@ -514,7 +514,7 @@ feat(state): add sessions and project state (Phase 22)
 
 **Status:** Complete
 
-**Backend tests:** 467 (38 new Phase 23 tests; all pass)
+**Backend tests:** 507 (38 new Phase 23 tests; all pass)
 **UI build:** PASS
 
 #### Purpose
@@ -560,13 +560,46 @@ feat(memory): add pending change review queue (Phase 23)
 
 ### Phase 24 - Device Profiles and Context Budgets
 
+**Status:** Complete
+
+**Backend tests:** 507 (40 new Phase 24 tests; all pass)
+**UI build:** PASS
+
 #### Purpose
 
 Make context output usable by different clients, especially small local LLMs on phones.
 
-#### Deliver
+#### Delivered
 
-Pending change objects:
+- `mcp/core/context_profiles.py` (NEW) — profile service: `get_builtin_modes`, `get_builtin_profiles`, `list_context_profiles`, `get_context_profile`, `resolve_context_profile`, `validate_context_profile`, `apply_context_profile_to_request`, `profile_status_summary`. Pure stdlib.
+- Built-in modes: `tiny` (2 notes / 2k chars), `small` (5 / 8k), `medium` (10 / 20k), `large` (25 / 80k), `agent` (50 / 200k).
+- Built-in device profiles: `phone-local-llm`, `desktop-agent`, `full-review`.
+- New endpoints: `GET /context/profiles`, `GET /context/profiles/{name}`.
+- `POST /context/bundle`, `POST /context/export`, `POST /context/security` now accept `profile` and `mode` fields; responses include `profile_metadata`.
+- 1 new MCP tool: `cve.list_context_profiles`.
+- Updated MCP tools: `cve.build_context_bundle` and `cve.security_scan` accept `profile`/`mode`.
+- New MCP resource: `cve://context/profiles`; per-profile resources `cve://context/profile/{name}`.
+- 1 new CLI command: `py run.py profiles`.
+- `ui/src/components/BundleBuilder.svelte` — profile/mode selector panel; mode badges; device profile badges; effective budget summary; override labels (⚠); `profile_metadata` in result panel.
+- `ui/src/lib/api.ts` — `ProfileMetadata`, `ContextProfileDefinition`, `ContextProfilesData` types; `fetchContextProfiles`, `fetchContextProfile` functions.
+
+#### Acceptance Criteria — Met
+
+- User can select a profile/mode in Bundle Builder; defaults applied to manual controls.
+- Local LLM receives bounded context; profile enforces max_notes/max_chars.
+- Profile values are defaults only; explicit request fields always override.
+- Hard caps (`max_notes ≤ 100`, `max_chars ≤ 500,000`) always enforced.
+- `profile_metadata` in all context endpoint responses.
+- `GET /context/profiles` and `GET /context/profiles/{name}` accessible in read-only mode.
+- 40 new tests; all 507 tests pass.
+
+#### Suggested Commit
+
+```
+feat(context): add device profiles and context budgets (Phase 24)
+```
+
+---
 
 - `create_note_draft`
 - `suggest_note_update`

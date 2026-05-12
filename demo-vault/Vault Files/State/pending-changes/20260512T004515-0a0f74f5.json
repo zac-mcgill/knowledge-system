@@ -1,7 +1,7 @@
 {
   "applied_at": null,
   "audit_note": null,
-  "created_at": "2026-05-11T13:09:38Z",
+  "created_at": "2026-05-12T00:45:15Z",
   "diff": [
     "--- original",
     "+++ proposed",
@@ -63,15 +63,15 @@
     "-\n",
     "-- Introduction to Algorithms (Cormen et al.)\n",
     "-- Algorithm Design Manual (Skiena)\n",
-    "+HTTP accept test update.\n"
+    "+Updated algorithms overview.\n"
   ],
-  "id": "20260511T130938-459c47f4",
+  "id": "20260512T004515-0a0f74f5",
   "original_content_hash": "e1326f6318736f62d5c6a53200a9dd217b63c8800d6e4730cafa683c74a1fb94",
   "path": "Fundamentals/Algorithms.md",
   "project": null,
-  "proposed_content": "---\ntype: core-concept\ndomain: fundamentals\nstatus: complete\nhas_key_principles: true\nhas_how_it_works: true\nhas_tradeoffs: true\ndifficulty: intermediate\n---\n\n## Overview\n\nHTTP accept test update.\n",
-  "proposed_content_hash": "31046dbce7ace473ace98086ab12171a527cff6e1402e275032f63cd6ddc4cbe",
-  "reason": "HTTP accept test",
+  "proposed_content": "---\ntype: core-concept\ndomain: fundamentals\nstatus: complete\nhas_key_principles: true\nhas_how_it_works: true\nhas_tradeoffs: true\ndifficulty: intermediate\n---\n\n## Overview\n\nUpdated algorithms overview.\n",
+  "proposed_content_hash": "1c3d264aeb2a44e4b2814ccbdee08efe8c87decda09b2964475e1dc4a0eded39",
+  "reason": "Improve overview",
   "rejected_at": null,
   "reviewer": null,
   "section": null,
@@ -79,7 +79,7 @@
   "source": "agent",
   "status": "invalid",
   "type": "suggest_note_update",
-  "updated_at": "2026-05-11T13:09:38Z",
+  "updated_at": "2026-05-12T00:45:15Z",
   "validation_errors": [
     "Validation error: 'str' object has no attribute 'relative_to'"
   ],

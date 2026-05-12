@@ -81,7 +81,11 @@ TOOLS = [
         "name": "cve.build_context_bundle",
         "description": (
             "Build a deterministic context bundle in memory. "
-            "Does not write export packages."
+            "Does not write export packages. "
+            "Accepts an optional profile (device profile name) or mode (bundle mode name) "
+            "to apply deterministic budget defaults for the target client. "
+            "Explicit parameters override profile/mode defaults. "
+            "Profile takes precedence over mode if both are supplied."
         ),
         "inputSchema": {
             "type": "object",
@@ -94,6 +98,18 @@ TOOLS = [
                 "max_notes": {"type": "integer", "minimum": 1, "maximum": 200},
                 "max_chars": {"type": "integer", "minimum": 1000, "maximum": 1000000},
                 "allow_partial": {"type": "boolean"},
+                "profile": {
+                    "type": "string",
+                    "description": (
+                        "Named device profile (e.g. 'phone-local-llm', 'desktop-agent'). "
+                        "Takes precedence over mode."
+                    ),
+                },
+                "mode": {
+                    "type": "string",
+                    "enum": ["tiny", "small", "medium", "large", "agent"],
+                    "description": "Named bundle mode. Ignored when profile is also given.",
+                },
             },
             "required": ["vault"],
             "additionalProperties": False,
@@ -226,6 +242,19 @@ TOOLS = [
         },
     },
     {
+        "name": "cve.list_context_profiles",
+        "description": (
+            "List all available context profiles and bundle modes. "
+            "Profiles are named device configurations (e.g. phone-local-llm, desktop-agent). "
+            "Modes are named budget presets (tiny, small, medium, large, agent). "
+            "Use these names with cve.build_context_bundle profile/mode parameters."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "additionalProperties": False,
+        },
+    },
+    {
         "name": "cve.list_pending_changes",
         "description": (
             "List pending change proposals for a vault. "
@@ -332,11 +361,24 @@ TOOLS = [
     },
     {
         "name": "cve.security_scan",
-        "description": "Run deterministic security scan over vault notes.",
+        "description": (
+            "Run deterministic security scan over vault notes. "
+            "Accepts an optional profile or mode to apply budget constraints "
+            "for scoped/bounded scanning."
+        ),
         "inputSchema": {
             "type": "object",
             "properties": {
                 "vault": {"type": "string"},
+                "profile": {
+                    "type": "string",
+                    "description": "Named device profile to scope the scan. Takes precedence over mode.",
+                },
+                "mode": {
+                    "type": "string",
+                    "enum": ["tiny", "small", "medium", "large", "agent"],
+                    "description": "Named bundle mode to scope the scan. Ignored when profile is given.",
+                },
             },
             "required": ["vault"],
             "additionalProperties": False,
@@ -559,6 +601,7 @@ def _execute_tool(tool_name: str, args: dict) -> dict:
         "cve.get_note": _tool_get_note,
         "cve.get_project_state": _tool_get_project_state,
         "cve.get_tasks": _tool_get_tasks,
+        "cve.list_context_profiles": _tool_list_context_profiles,
         "cve.list_pending_changes": _tool_list_pending_changes,
         "cve.list_vaults": _tool_list_vaults,
         "cve.query_notes": _tool_query_notes,
@@ -681,51 +724,108 @@ def _tool_get_missing_concepts(args: dict) -> dict:
     return _tool_ok(result)
 
 
+def _tool_list_context_profiles(args: dict) -> dict:
+    from mcp.core import context_profiles as _cp  # noqa: PLC0415
+    data = _cp.list_context_profiles()
+    mode_count = len(data["modes"])
+    profile_count = len(data["profiles"])
+    summary = (
+        f"Profiles: {sorted(data['profiles'])} | "
+        f"Modes: {sorted(data['modes'])}"
+    )
+    return _tool_ok(data, summary)
+
+
 def _tool_security_scan(args: dict) -> dict:
     from mcp.core.note_index import build_index  # noqa: PLC0415
     from core.shared.context_security import scan_vault_context  # noqa: PLC0415
+    from mcp.core import context_profiles as _cp  # noqa: PLC0415
     vault = args["vault"]
-    # Full-vault scan defaults: include all content notes, allow partial,
-    # no filter — matches the CLI security command behaviour.
+
+    # Resolve profile/mode defaults for scoped scanning
+    explicit: dict = {}
+    profile_result = _cp.apply_context_profile_to_request(
+        explicit,
+        profile_name=args.get("profile"),
+        mode=args.get("mode"),
+    )
+    if profile_result["error"]:
+        err = profile_result["error"]
+        return _tool_error(f"{err['code']}: {err['message']}")
+
+    merged = profile_result["request"]
+    profile_meta = profile_result["profile_metadata"]
+
+    # Full-vault scan defaults: include all content notes, allow partial
     build_index(vault)
     result = scan_vault_context(
         vault_name=vault,
         filters={},
-        include_sections=["Key Principles", "How It Works", "Trade-offs"],
-        include_body=True,
-        max_notes=1000,
-        max_chars=10_000_000,
-        allow_partial=True,
+        include_sections=merged.get(
+            "include_sections", ["Key Principles", "How It Works", "Trade-offs"]
+        ),
+        include_body=merged.get("include_body", True),
+        max_notes=merged.get("max_notes", 1000),
+        max_chars=merged.get("max_chars", 10_000_000),
+        allow_partial=merged.get("allow_partial", True),
     )
     if result.get("status") == "error":
         return _tool_error(f"SECURITY_SCAN_ERROR: {result.get('error', 'unknown')}")
+
+    result["profile_metadata"] = profile_meta
     return _tool_ok(result)
 
 
 def _tool_build_context_bundle(args: dict) -> dict:
     from core.shared.context_bundle import generate_bundle  # noqa: PLC0415
+    from mcp.core import context_profiles as _cp  # noqa: PLC0415
     vault = args["vault"]
     filters = args.get("filters") or {}
-    include_body = args.get("include_body", True)
     include_graph = args.get("include_graph", False)
-    max_notes = args.get("max_notes", 50)
-    max_chars = args.get("max_chars", 100_000)
     allow_partial = args.get("allow_partial", True)
-    # Note: include_feedback is accepted but generate_bundle handles
-    # feedback automatically; no separate parameter required.
+
+    # Resolve profile/mode defaults; explicit args override them
+    explicit: dict = {}
+    if "include_body" in args:
+        explicit["include_body"] = args["include_body"]
+    if "max_notes" in args:
+        explicit["max_notes"] = args["max_notes"]
+    if "max_chars" in args:
+        explicit["max_chars"] = args["max_chars"]
+    if "include_related" in args:
+        explicit["include_related"] = include_graph
+
+    profile_result = _cp.apply_context_profile_to_request(
+        explicit,
+        profile_name=args.get("profile"),
+        mode=args.get("mode"),
+    )
+    if profile_result["error"]:
+        err = profile_result["error"]
+        return _tool_error(f"{err['code']}: {err['message']}")
+
+    merged = profile_result["request"]
+    profile_meta = profile_result["profile_metadata"]
 
     result = generate_bundle(
         vault_name=vault,
         filters=filters,
-        include_body=include_body,
-        include_related=include_graph,
-        max_notes=max_notes,
-        max_chars=max_chars,
+        include_body=merged.get("include_body", True),
+        include_related=merged.get("include_related", include_graph),
+        max_notes=merged.get("max_notes", 50),
+        max_chars=merged.get("max_chars", 100_000),
         allow_partial=allow_partial,
     )
     if result.get("status") == "error":
         err = result["error"]
         return _tool_error(f"{err['code']}: {err['message']}")
+
+    result["profile_metadata"] = profile_meta
+    if profile_meta.get("require_security_scan"):
+        result.setdefault("warnings", [])
+        result["warnings"].append(
+            "Profile requires security scan. Use cve.security_scan to verify content."
+        )
     return _tool_ok(result)
 
 

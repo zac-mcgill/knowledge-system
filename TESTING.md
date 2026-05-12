@@ -1,6 +1,6 @@
 # Context Vault Engine — Testing
 
-All tests live in `mcp/test_verify.py`. There are 467 test functions covering all implemented phases.
+All tests live in `mcp/test_verify.py`. There are 507 test functions covering all implemented phases.
 
 ---
 
@@ -743,7 +743,7 @@ File-backed session tracking and project state layer. Local LLMs can answer "whe
 **Verification steps:**
 
 ```bash
-py mcp/test_verify.py      # 467 tests — all must pass (38 new P23 tests added)
+py mcp/test_verify.py      # 507 tests — all must pass (38 new P23 tests added)
 py run.py validate         # 19/19 valid
 py run.py security         # status: pass
 py run.py session          # prints session summary as JSON
@@ -825,7 +825,7 @@ LLM-proposed note changes are stored as pending change proposals in a file-backe
 **Verification steps:**
 
 ```bash
-py mcp/test_verify.py      # 467 tests — all must pass (38 new P23 tests added)
+py mcp/test_verify.py      # 507 tests — all must pass (38 new P23 tests added)
 py run.py validate         # 19/19 valid
 py run.py security         # status: pass
 py run.py pending          # prints pending changes as JSON
@@ -905,6 +905,144 @@ cd ui && npm run build     # must complete with 0 errors
 - `TESTING.md` — added Phase 23 section (this entry); updated test count to 467.
 - `ROADMAP.md` — Phase 23 marked Complete; Phase 24 set as next.
 - `mcp/test_verify.py` — 38 new Phase 23 tests.
+
+---
+
+## Phase 24 — Context Profiles and Budget Modes
+
+40 new tests (`test_p24_1` through `test_p24_40`).
+
+**Key tests:**
+- `test_p24_1` — `context_profiles` module imports without error.
+- `test_p24_2` — built-in modes include tiny / small / medium / large / agent.
+- `test_p24_3` — built-in device profiles include phone-local-llm / desktop-agent.
+- `test_p24_4` — profile validation rejects unknown keys.
+- `test_p24_5` — profile validation rejects empty include_sections.
+- `test_p24_6` — profile validation enforces max_chars hard cap.
+- `test_p24_7` — profile validation enforces max_notes hard cap.
+- `test_p24_8` — `resolve_context_profile` returns deterministic data.
+- `test_p24_9` — unknown profile name returns INVALID_PROFILE.
+- `test_p24_10` — `GET /context/profiles` returns profiles and modes.
+- `test_p24_11` — `GET /context/profiles/{name}` returns expected profile.
+- `test_p24_12` — `POST /context/bundle` accepts mode=tiny.
+- `test_p24_13` — `POST /context/bundle` accepts profile=phone-local-llm.
+- `test_p24_14` — bundle response includes profile_metadata.
+- `test_p24_15` — bundle ID is deterministic for identical profile request.
+- `test_p24_16` — explicit non-profile bundle request remains backwards-compatible.
+- `test_p24_17` — profile max_chars is enforced.
+- `test_p24_18` — profile max_notes is enforced.
+- `test_p24_19` — include_body=false profile excludes body.
+- `test_p24_20` — include_related=true profile includes related.
+- `test_p24_21` — include_sections in profile controls section extraction.
+- `test_p24_22` — `POST /context/security` accepts profile/mode.
+- `test_p24_23` — `POST /context/export` accepts profile/mode.
+- `test_p24_24` — export manifest includes profile_metadata when used.
+- `test_p24_25` — require_security_scan profile behaviour enforced/warned.
+- `test_p24_26` — private-cloud auth protects profile endpoints when enabled.
+- `test_p24_27` — private-cloud read-only does not block GET profile endpoints.
+- `test_p24_28` — private-cloud read-only still blocks export writes.
+- `test_p24_29` — MCP `cve.list_context_profiles` tool is listed.
+- `test_p24_30` — MCP `cve.build_context_bundle` accepts profile/mode.
+- `test_p24_31` — MCP `cve.security_scan` accepts profile/mode.
+- `test_p24_32` — MCP resources expose profiles.
+- `test_p24_33` — Bundle Builder UI builds with profile selector.
+- `test_p24_34` — `API.md` documents profile endpoints.
+- `test_p24_35` — `QUICKSTART.md` documents profile bundle usage.
+- `test_p24_36` — `TESTING.md` mentions test count 507.
+- `test_p24_37` — `ROADMAP.md` marks Phase 24 complete.
+- `test_p24_38` — Existing Phase 21/22/23 tests still pass.
+- `test_p24_39` — Existing CLI commands still pass.
+- `test_p24_40` — No dist artefacts committed.
+
+**Verification steps:**
+
+```bash
+py mcp/test_verify.py      # 507 tests — all must pass
+py run.py validate         # 19/19 valid
+py run.py security         # status: pass
+py run.py profiles         # prints profiles/modes as JSON
+py run.py feedback         # exits 0, valid JSON
+py run.py export --overwrite   # status: ok
+cd ui && npm run build     # must complete with 0 errors
+```
+
+**Files modified:**
+- `mcp/core/context_profiles.py` — new profile service module.
+- `mcp/server/mcp_server.py` — new endpoints; profile/mode on bundle/export/security.
+- `mcp/core/mcp_tools.py` — `cve.list_context_profiles` tool; profile/mode on bundle/security tools.
+- `mcp/core/mcp_resources.py` — `cve://context/profiles` resource and per-profile resources.
+- `ui/src/lib/api.ts` — `ProfileMetadata` type; `fetchContextProfiles`; `fetchContextProfile`.
+- `ui/src/components/BundleBuilder.svelte` — profile/mode selector; override labels; profile_metadata display.
+- `run.py` — `profiles` CLI command.
+- `README.md` — profiles endpoints table; CLI command.
+- `QUICKSTART.md` — Phase 24 section added.
+- `API.md` — Phase 24 endpoints documented.
+- `TESTING.md` — added Phase 24 section (this entry); updated test count to 507.
+- `ROADMAP.md` — Phase 24 marked Complete; Phase 25 set as next.
+- `mcp/test_verify.py` — 40 new Phase 24 tests.
+
+---
+
+## Phase 24 — Context Profiles and Budget Modes
+
+40 new tests (`test_p24_1` through `test_p24_40`).
+
+**Key tests:**
+- `test_p24_1` — `context_profiles` module imports without error.
+- `test_p24_2` — built-in modes include tiny / small / medium / large / agent.
+- `test_p24_3` — built-in device profiles include phone-local-llm / desktop-agent.
+- `test_p24_4` — profile validation rejects unknown keys.
+- `test_p24_5` — profile validation rejects empty include_sections.
+- `test_p24_6` — profile validation enforces max_chars hard cap.
+- `test_p24_7` — profile validation enforces max_notes hard cap.
+- `test_p24_8` — `resolve_context_profile` returns deterministic data.
+- `test_p24_9` — unknown profile name returns INVALID_PROFILE.
+- `test_p24_10` — `GET /context/profiles` returns profiles and modes.
+- `test_p24_11` — `GET /context/profiles/{name}` returns expected profile.
+- `test_p24_12` — `POST /context/bundle` accepts mode=tiny.
+- `test_p24_13` — `POST /context/bundle` accepts profile=phone-local-llm.
+- `test_p24_14` — bundle response includes profile_metadata.
+- `test_p24_15` — bundle ID is deterministic for identical profile request.
+- `test_p24_16` — explicit non-profile bundle request remains backwards-compatible.
+- `test_p24_17` — profile max_chars is enforced.
+- `test_p24_18` — profile max_notes is enforced.
+- `test_p24_19` — include_body=false profile excludes body.
+- `test_p24_20` — include_related=true profile includes related.
+- `test_p24_21` — include_sections in profile controls section extraction.
+- `test_p24_22` — `POST /context/security` accepts profile/mode.
+- `test_p24_23` — `POST /context/export` accepts profile/mode.
+- `test_p24_24` — export manifest includes profile_metadata when used.
+- `test_p24_25` — require_security_scan profile behaviour enforced/warned.
+- `test_p24_26` — private-cloud auth protects profile endpoints when enabled.
+- `test_p24_27` — private-cloud read-only does not block GET profile endpoints.
+- `test_p24_28` — private-cloud read-only still blocks export writes.
+- `test_p24_29` — MCP `cve.list_context_profiles` tool is listed.
+- `test_p24_30` — MCP `cve.build_context_bundle` accepts profile/mode.
+- `test_p24_31` — MCP `cve.security_scan` accepts profile/mode.
+- `test_p24_32` — MCP resources expose profiles.
+- `test_p24_33` — Bundle Builder UI builds with profile selector.
+- `test_p24_34` — `API.md` documents profile endpoints.
+- `test_p24_35` — `QUICKSTART.md` documents profile bundle usage.
+- `test_p24_36` — `TESTING.md` mentions test count 507.
+- `test_p24_37` — `ROADMAP.md` marks Phase 24 complete.
+- `test_p24_38` — Existing Phase 21/22/23 tests still pass.
+- `test_p24_39` — Existing CLI commands still pass.
+- `test_p24_40` — No dist artefacts committed.
+
+**Files modified:**
+- `mcp/core/context_profiles.py` — new profile service module.
+- `mcp/server/mcp_server.py` — new endpoints; profile/mode on bundle/export/security.
+- `mcp/core/mcp_tools.py` — `cve.list_context_profiles` tool; profile/mode on bundle/security tools.
+- `mcp/core/mcp_resources.py` — `cve://context/profiles` resource and per-profile resources.
+- `ui/src/lib/api.ts` — `ProfileMetadata` type; `fetchContextProfiles`; `fetchContextProfile`.
+- `ui/src/components/BundleBuilder.svelte` — profile/mode selector; override labels; profile_metadata display.
+- `run.py` — `profiles` CLI command.
+- `README.md` — profiles endpoints table; CLI command.
+- `QUICKSTART.md` — Phase 24 section added.
+- `API.md` — Phase 24 endpoints documented.
+- `TESTING.md` — added Phase 24 section (this entry); updated test count to 507.
+- `ROADMAP.md` — Phase 24 marked Complete; Phase 25 set as next.
+- `mcp/test_verify.py` — 40 new Phase 24 tests.
 
 
 Safe vault deletion through API and UI. Users can permanently delete non-demo vaults via `DELETE /vault/{vault_name}` with explicit typed confirmation. A Danger Zone section was added to the Vault Setup page. 18 backend tests added.

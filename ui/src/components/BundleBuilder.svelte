@@ -2,11 +2,14 @@
   import { onMount } from 'svelte';
   import {
     fetchVaults,
+    fetchContextProfiles,
     generateContextBundle,
     isOk,
     type ContextBundleRequest,
     type ContextBundleResponse,
     type BundleNote,
+    type ContextProfileDefinition,
+    type ContextProfilesData,
   } from '../lib/api.ts';
   import { getStoredVault } from '../lib/vaultState.ts';
 
@@ -17,6 +20,42 @@
   let vaultList: string[] = [];
   let vaultsLoading = true;
   let vaultsError = '';
+
+  // ---------------------------------------------------------------------------
+  // Profile state (Phase 24)
+  // ---------------------------------------------------------------------------
+
+  let profilesData: ContextProfilesData | null = null;
+  let profilesLoading = true;
+
+  /** All known mode names in display order. */
+  const MODE_NAMES = ['tiny', 'small', 'medium', 'large', 'agent'] as const;
+  /** All known device profile names. */
+  const DEVICE_PROFILE_NAMES = ['phone-local-llm', 'desktop-agent', 'full-review'] as const;
+
+  /** Currently selected profile/mode (or '' for none). */
+  let selectedProfile = '';
+  let selectedMode = '';
+
+  /** When true, show the effective budget summary from the selected profile/mode. */
+  $: activeProfileDef = resolveActiveProfile(selectedProfile, selectedMode, profilesData);
+
+  function resolveActiveProfile(
+    prof: string,
+    mode: string,
+    data: ContextProfilesData | null,
+  ): ContextProfileDefinition | null {
+    if (!data) return null;
+    if (prof && data.profiles[prof]) return data.profiles[prof];
+    if (mode && data.modes[mode]) return data.modes[mode];
+    return null;
+  }
+
+  /** True when a manual control value differs from the active profile default. */
+  function isOverride(field: keyof ContextProfileDefinition, value: unknown): boolean {
+    if (!activeProfileDef) return false;
+    return activeProfileDef[field] !== value;
+  }
 
   // ---------------------------------------------------------------------------
   // Form state
@@ -85,18 +124,58 @@
   onMount(async () => {
     vaultsLoading = true;
     vaultsError = '';
-    const result = await fetchVaults();
-    if (isOk(result)) {
-      vaultList = result.data.vaults ?? [];
+
+    // Load vaults and profiles in parallel
+    const [vaultsResult, profResult] = await Promise.all([
+      fetchVaults(),
+      fetchContextProfiles(),
+    ]);
+
+    if (isOk(vaultsResult)) {
+      vaultList = vaultsResult.data.vaults ?? [];
       if (vaultList.length > 0) {
         const stored = getStoredVault();
         selectedVault = (stored && vaultList.includes(stored)) ? stored : vaultList[0];
       }
     } else {
-      vaultsError = result.error?.message ?? 'Failed to load vaults';
+      vaultsError = vaultsResult.error?.message ?? 'Failed to load vaults';
     }
+
+    if (isOk(profResult)) {
+      profilesData = profResult.data;
+    }
+
     vaultsLoading = false;
+    profilesLoading = false;
   });
+
+  // ---------------------------------------------------------------------------
+  // Profile application
+  // ---------------------------------------------------------------------------
+
+  /** Apply a profile/mode's defaults to the manual form controls. */
+  function applyProfileDefaults(def: ContextProfileDefinition) {
+    includeBody = def.include_body;
+    includeRelated = def.include_related;
+    allowPartial = def.allow_partial;
+    maxNotes = def.max_notes;
+    maxChars = def.max_chars;
+    if (def.include_sections && def.include_sections.length > 0) {
+      includeSections = [...def.include_sections];
+    }
+  }
+
+  function onProfileChange() {
+    selectedMode = ''; // profile takes precedence; clear mode
+    const def = resolveActiveProfile(selectedProfile, '', profilesData);
+    if (def) applyProfileDefaults(def);
+  }
+
+  function onModeChange() {
+    selectedProfile = ''; // clear device profile when mode chosen
+    const def = resolveActiveProfile('', selectedMode, profilesData);
+    if (def) applyProfileDefaults(def);
+  }
 
   // ---------------------------------------------------------------------------
   // Section management
@@ -154,6 +233,10 @@
       max_notes: Math.max(1, Math.min(100, maxNotes)),
       max_chars: Math.max(100, Math.min(500000, maxChars)),
     };
+
+    // Phase 24: attach profile/mode if selected
+    if (selectedProfile) req.profile = selectedProfile;
+    else if (selectedMode) req.mode = selectedMode;
 
     return req;
   }
@@ -318,6 +401,68 @@
         </select>
       </div>
 
+      <!-- Phase 24: Profile / Mode selector -->
+      <div class="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
+        <h2 class="text-sm font-semibold text-zinc-300 mb-1">Context Profile / Mode</h2>
+        <p class="text-xs text-zinc-500 mb-3">
+          Select a profile or mode to apply deterministic budget defaults for your target client.
+          Manual controls below will override profile defaults (labelled with ⚠).
+        </p>
+
+        <!-- Mode badges -->
+        <div class="mb-3">
+          <p class="text-xs font-medium text-zinc-400 mb-1.5">Bundle Modes</p>
+          <div class="flex flex-wrap gap-1.5">
+            {#each MODE_NAMES as m}
+              <button
+                type="button"
+                on:click={() => { selectedMode = selectedMode === m ? '' : m; if (selectedMode) onModeChange(); else selectedProfile = ''; }}
+                class="px-2.5 py-1 rounded-md text-xs font-medium border transition-colors
+                  {selectedMode === m
+                    ? 'bg-sky-700 text-sky-100 border-sky-600'
+                    : 'bg-zinc-800 text-zinc-400 border-zinc-700 hover:border-zinc-500'}"
+              >{m}</button>
+            {/each}
+          </div>
+        </div>
+
+        <!-- Device profile badges -->
+        <div class="mb-3">
+          <p class="text-xs font-medium text-zinc-400 mb-1.5">Device Profiles</p>
+          <div class="flex flex-wrap gap-1.5">
+            {#each DEVICE_PROFILE_NAMES as p}
+              <button
+                type="button"
+                on:click={() => { selectedProfile = selectedProfile === p ? '' : p; if (selectedProfile) onProfileChange(); else selectedMode = ''; }}
+                class="px-2.5 py-1 rounded-md text-xs font-medium border transition-colors
+                  {selectedProfile === p
+                    ? 'bg-violet-700 text-violet-100 border-violet-600'
+                    : 'bg-zinc-800 text-zinc-400 border-zinc-700 hover:border-zinc-500'}"
+              >{p}</button>
+            {/each}
+          </div>
+        </div>
+
+        <!-- Effective budget summary when a profile/mode is active -->
+        {#if activeProfileDef}
+          <div class="mt-2 bg-zinc-800/60 border border-zinc-700 rounded-md p-3 text-xs space-y-1">
+            <p class="font-medium text-zinc-200 mb-1.5">
+              Effective budget:
+              <span class="text-zinc-400 font-normal">{activeProfileDef.description}</span>
+            </p>
+            <div class="grid grid-cols-2 gap-x-4 gap-y-1 text-zinc-400">
+              <span>max_notes: <span class="text-zinc-200">{activeProfileDef.max_notes}</span></span>
+              <span>max_chars: <span class="text-zinc-200">{activeProfileDef.max_chars.toLocaleString()}</span></span>
+              <span>include_body: <span class="text-zinc-200">{activeProfileDef.include_body ? 'yes' : 'no'}</span></span>
+              <span>include_related: <span class="text-zinc-200">{activeProfileDef.include_related ? 'yes' : 'no'}</span></span>
+              <span>allow_partial: <span class="text-zinc-200">{activeProfileDef.allow_partial ? 'yes' : 'no'}</span></span>
+              <span>require_scan: <span class="{activeProfileDef.require_security_scan ? 'text-amber-400' : 'text-zinc-200'}">{activeProfileDef.require_security_scan ? 'yes' : 'no'}</span></span>
+            </div>
+            <p class="text-zinc-500 mt-1">Sections: {activeProfileDef.include_sections.join(', ')}</p>
+          </div>
+        {/if}
+      </div>
+
       <!-- Filters -->
       <div class="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
         <h2 class="text-sm font-semibold text-zinc-300 mb-3">Filters</h2>
@@ -468,6 +613,9 @@
             <label class="block text-xs font-medium text-zinc-400 mb-1">
               Max notes
               <span class="text-zinc-600 font-normal">(1–100)</span>
+              {#if activeProfileDef && isOverride('max_notes', maxNotes)}
+                <span class="text-amber-400 ml-1">⚠ overrides profile</span>
+              {/if}
             </label>
             <input
               bind:value={maxNotes}
@@ -482,6 +630,9 @@
             <label class="block text-xs font-medium text-zinc-400 mb-1">
               Max chars
               <span class="text-zinc-600 font-normal">(100–500,000)</span>
+              {#if activeProfileDef && isOverride('max_chars', maxChars)}
+                <span class="text-amber-400 ml-1">⚠ overrides profile</span>
+              {/if}
             </label>
             <input
               bind:value={maxChars}
@@ -613,6 +764,31 @@
                 <dd class="text-zinc-200 text-xs mt-0.5">{bundle.manifest?.source_paths?.length ?? 0} file(s)</dd>
               </div>
             </dl>
+
+            <!-- Phase 24: Profile metadata summary -->
+            {#if bundle.profile_metadata && bundle.profile_metadata.profile_source !== 'none'}
+              {@const pm = bundle.profile_metadata}
+              <div class="mt-3 bg-zinc-800/60 border border-zinc-700 rounded-md p-3 text-xs space-y-1">
+                <p class="font-medium text-zinc-300 mb-1">
+                  Profile applied:
+                  <span class="font-mono text-sky-300">
+                    {pm.profile_used ?? pm.mode_used ?? '—'}
+                  </span>
+                  <span class="text-zinc-500 ml-1">({pm.profile_source})</span>
+                </p>
+                <div class="grid grid-cols-2 gap-x-4 gap-y-0.5 text-zinc-400">
+                  {#if pm.effective_budget.max_notes !== null}
+                    <span>max_notes: <span class="text-zinc-200">{pm.effective_budget.max_notes}</span></span>
+                  {/if}
+                  {#if pm.effective_budget.max_chars !== null}
+                    <span>max_chars: <span class="text-zinc-200">{pm.effective_budget.max_chars.toLocaleString()}</span></span>
+                  {/if}
+                  {#if pm.require_security_scan}
+                    <span class="col-span-2 text-amber-400">⚠ security scan required by profile</span>
+                  {/if}
+                </div>
+              </div>
+            {/if}
           </div>
 
           <!-- ── Budget panel ──────────────────────────────── -->

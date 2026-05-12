@@ -48,6 +48,7 @@ Commands:
   session        Print current/resumable session summary as JSON
   project-state  Print project state as JSON
   pending        Print pending change proposals as JSON
+  profiles       Print all available context profiles and modes as JSON
   templates      Generate canonical templates from vault schema
                  Use --dry-run to preview without writing
   app            Start local server and open browser UI
@@ -400,6 +401,25 @@ def main():
             error_output = {
                 "status": "error",
                 "error": {"code": "PENDING_FAILED", "message": str(exc)},
+            }
+            print(json.dumps(error_output, indent=2, ensure_ascii=False))
+            raise SystemExit(1)
+
+    if command == "profiles":
+        import json
+        sys.path.insert(0, str(repo_root))
+        try:
+            from mcp.core import context_profiles as _cp
+
+            result = _cp.list_context_profiles()
+            print(json.dumps(result, indent=2, ensure_ascii=True))
+            raise SystemExit(0)
+        except SystemExit:
+            raise
+        except Exception as exc:
+            error_output = {
+                "status": "error",
+                "error": {"code": "PROFILES_FAILED", "message": str(exc)},
             }
             print(json.dumps(error_output, indent=2, ensure_ascii=False))
             raise SystemExit(1)

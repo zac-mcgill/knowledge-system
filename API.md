@@ -94,6 +94,8 @@ See `DEPLOYMENT.md` for full deployment and VPS setup guidance.
 | `POST` | `/context/bundle` | Generate a deterministic context bundle |
 | `POST` | `/context/export` | Export a context bundle as a portable package |
 | `POST` | `/context/security` | Scan a context bundle for security issues |
+| `GET` | `/context/profiles` | List all built-in context profiles and modes |
+| `GET` | `/context/profiles/{profile_name}` | Get a single profile or mode definition |
 | `GET` | `/app` | Serve compiled local web UI (index.html) |
 | `GET` | `/app/{ui_path:path}` | Serve compiled local web UI static assets |
 | `POST` | `/vault/bootstrap` | Create a new vault (Phase 11A) |
@@ -861,6 +863,106 @@ All fields except `vault` are optional.
 - `SECURITY_SCAN_FAILED` — unexpected error (HTTP 500).
 
 **Important:** This is a rule-based static scanner. It may produce false positives on documentation that describes security concepts. Review findings manually.
+
+---
+
+### GET /context/profiles
+
+List all built-in context profiles and bundle modes.
+
+**No parameters required.**
+
+**Response:**
+```json
+{
+  "status": "ok",
+  "data": {
+    "profiles": {
+      "phone-local-llm": {
+        "name": "phone-local-llm",
+        "label": "Phone Local LLM",
+        "description": "Offline phone with 4-bit quantised model",
+        "max_notes": 2,
+        "max_chars": 2000,
+        "include_body": false,
+        "include_related": false,
+        "include_sections": ["Key Principles"],
+        "allow_partial": false,
+        "require_security_scan": false,
+        "prefer_complete": true
+      },
+      "desktop-agent": { "..." : "..." },
+      "full-review": { "..." : "..." }
+    },
+    "modes": {
+      "tiny":   { "max_notes": 2,  "max_chars": 2000   },
+      "small":  { "max_notes": 5,  "max_chars": 8000   },
+      "medium": { "max_notes": 10, "max_chars": 20000  },
+      "large":  { "max_notes": 25, "max_chars": 80000  },
+      "agent":  { "max_notes": 50, "max_chars": 200000 }
+    },
+    "defaults": { "mode": "medium", "profile": null }
+  }
+}
+```
+
+Available in private-cloud read-only mode. No authentication required beyond the normal token check.
+
+---
+
+### GET /context/profiles/{profile_name}
+
+Get a single profile or mode definition by name.
+
+**Path parameter:** `profile_name` — profile name (e.g. `phone-local-llm`) or mode name (e.g. `tiny`).
+
+**Response:**
+```json
+{
+  "status": "ok",
+  "data": {
+    "profile": { "name": "tiny", "max_notes": 2, "max_chars": 2000, "..." : "..." },
+    "source": "builtin"
+  }
+}
+```
+
+**Error codes:**
+- `INVALID_PROFILE` — name not found (HTTP 404).
+
+---
+
+### Profile / Mode fields in context endpoints (Phase 24)
+
+`POST /context/bundle`, `POST /context/export`, and `POST /context/security` all accept two new optional fields:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `profile` | string \| null | Apply a device profile by name (e.g. `phone-local-llm`). Profile takes precedence over `mode`. |
+| `mode` | string \| null | Apply a bundle mode by name: `tiny` / `small` / `medium` / `large` / `agent`. |
+
+**Resolution order:**
+1. If `profile` is set and valid, its settings are used as defaults.
+2. Else if `mode` is set and valid, its settings are used as defaults.
+3. Explicit request fields (e.g. `max_notes`, `max_chars`) always override profile/mode defaults.
+4. Hard caps are enforced regardless: `max_notes ≤ 100`, `max_chars ≤ 500,000`.
+
+**`profile_metadata` in responses:**
+
+When a profile or mode is used, the response includes a `profile_metadata` object:
+```json
+{
+  "profile_metadata": {
+    "profile_used": "phone-local-llm",
+    "mode_used": null,
+    "profile_source": "builtin",
+    "effective_budget": { "max_notes": 2, "max_chars": 2000 },
+    "require_security_scan": false
+  }
+}
+```
+
+For `/context/export`: if the resolved profile has `require_security_scan: true`, the export enforces `require_security_pass: true` (the export is aborted if the security scan fails). For `/context/bundle`: a warning is added to the response instead.
 
 ---
 

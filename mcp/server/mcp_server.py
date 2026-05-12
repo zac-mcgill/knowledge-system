@@ -80,6 +80,7 @@ from mcp.core.private_cloud import (
 )
 from mcp.core import session_state as _session_state
 from mcp.core import pending_changes as _pending_changes
+from mcp.core import context_profiles as _context_profiles
 
 
 # ---------- Structured Logging (Phase 7) ----------
@@ -586,6 +587,22 @@ class BundleRequest(BaseModel):
         default=False,
         description="Include notes with status=partial",
     )
+    profile: str | None = Field(
+        default=None,
+        description=(
+            "Named device profile (e.g. 'phone-local-llm', 'desktop-agent'). "
+            "Profile values are applied as defaults; explicit fields take precedence. "
+            "If both profile and mode are provided, profile takes precedence."
+        ),
+    )
+    mode: str | None = Field(
+        default=None,
+        description=(
+            "Named bundle mode (e.g. 'tiny', 'small', 'medium', 'large', 'agent'). "
+            "Mode values are applied as defaults; explicit fields take precedence. "
+            "Ignored when profile is also supplied."
+        ),
+    )
 
 
 class ExportRequest(BaseModel):
@@ -632,6 +649,21 @@ class ExportRequest(BaseModel):
         default=False,
         description="If True, abort export when security scan status is 'fail'",
     )
+    profile: str | None = Field(
+        default=None,
+        description=(
+            "Named device profile (e.g. 'phone-local-llm', 'desktop-agent'). "
+            "Profile values are applied as defaults; explicit fields take precedence. "
+            "If profile requires_security_scan, require_security_pass is enforced."
+        ),
+    )
+    mode: str | None = Field(
+        default=None,
+        description=(
+            "Named bundle mode (e.g. 'tiny', 'small', 'medium', 'large', 'agent'). "
+            "Ignored when profile is also supplied."
+        ),
+    )
 
 
 class SecurityRequest(BaseModel):
@@ -668,6 +700,20 @@ class SecurityRequest(BaseModel):
             "Include notes with status=partial. Defaults to True so that a "
             "vault-level security scan does not silently exclude partial notes, "
             "which can still contain secrets or injection phrases."
+        ),
+    )
+    profile: str | None = Field(
+        default=None,
+        description=(
+            "Named device profile — applies as defaults for max_notes, max_chars, "
+            "include_body, include_sections. Profile takes precedence over mode."
+        ),
+    )
+    mode: str | None = Field(
+        default=None,
+        description=(
+            "Named bundle mode (e.g. 'tiny', 'small', 'medium', 'large', 'agent'). "
+            "Ignored when profile is also supplied."
         ),
     )
 
@@ -1684,24 +1730,118 @@ def endpoint_context_bundle(req: BundleRequest):
                 f"Known fields: {sorted(known_fields)}",
             )
 
+    # Phase 24: resolve profile/mode and merge as defaults.
+    # Only pass fields that the user explicitly set (not model defaults) so that
+    # profile defaults can fill in unset fields.
+    _profile_mergeable = ("include_sections", "include_related", "include_body",
+                          "max_notes", "max_chars", "allow_partial")
+    _explicit: dict = {
+        f: getattr(req, f)
+        for f in _profile_mergeable
+        if f in req.model_fields_set
+    }
+
+    profile_result = _context_profiles.apply_context_profile_to_request(
+        _explicit,
+        profile_name=req.profile,
+        mode=req.mode,
+    )
+    if profile_result["error"]:
+        err_obj = profile_result["error"]
+        return _error(err_obj["code"], err_obj["message"], 400)
+
+    merged_req = profile_result["request"]
+    profile_meta = profile_result["profile_metadata"]
+    profile_warnings = profile_result["warnings"]
+
     try:
         result = _generate_bundle(
             vault_name=req.vault,
             filters=req.filters,
-            include_sections=req.include_sections,
-            include_related=req.include_related,
-            include_body=req.include_body,
-            max_notes=req.max_notes,
-            max_chars=req.max_chars,
-            allow_partial=req.allow_partial,
+            include_sections=merged_req.get("include_sections", req.include_sections),
+            include_related=merged_req.get("include_related", req.include_related),
+            include_body=merged_req.get("include_body", req.include_body),
+            max_notes=merged_req.get("max_notes", req.max_notes),
+            max_chars=merged_req.get("max_chars", req.max_chars),
+            allow_partial=merged_req.get("allow_partial", req.allow_partial),
         )
         if result.get("status") == "error":
             code = result.get("error", {}).get("code", "BUNDLE_FAILED")
             msg = result.get("error", {}).get("message", "Bundle generation failed")
             return _error(code, msg, 500)
+
+        # Inject profile metadata into response
+        result["profile_metadata"] = profile_meta
+        result.setdefault("warnings", [])
+        result["warnings"] = profile_warnings + result["warnings"]
+
+        # Warn if profile requires_security_scan but no scan was performed
+        if profile_meta.get("require_security_scan"):
+            result["warnings"].append(
+                "Profile requires security scan. Run POST /context/security "
+                "to verify content before use."
+            )
+        # Inject profile metadata into manifest
+        if "manifest" in result and isinstance(result["manifest"], dict):
+            result["manifest"]["profile_metadata"] = profile_meta
+
         return result
     except Exception as exc:
         return _error("BUNDLE_FAILED", f"Bundle generation failed: {exc}", 500)
+
+
+# ---------- Phase 24: Context Profiles ----------
+
+
+@app.get("/context/profiles")
+def endpoint_context_profiles():
+    """List all available context profiles and bundle modes.
+
+    Read-only. Works in private-cloud read-only mode with valid auth.
+
+    Response data:
+        profiles (dict): Named device profiles (phone-local-llm, desktop-agent, etc.).
+        modes (dict): Named bundle modes (tiny, small, medium, large, agent).
+        defaults (dict): Default mode/profile selection.
+
+    Error codes:
+        PROFILES_FAILED: Unexpected error.
+    """
+    try:
+        data = _context_profiles.list_context_profiles()
+        return {"status": "ok", "data": data}
+    except Exception as exc:
+        return _error("PROFILES_FAILED", f"Failed to list profiles: {exc}", 500)
+
+
+@app.get("/context/profiles/{profile_name}")
+def endpoint_context_profile_by_name(profile_name: str):
+    """Return a single context profile or mode by name.
+
+    Read-only. Works in private-cloud read-only mode with valid auth.
+    Checks device profiles first, then bundle modes.
+
+    Path parameter:
+        profile_name (str): Device profile or mode name (e.g. 'phone-local-llm', 'tiny').
+
+    Response data:
+        profile (dict): Full profile definition.
+        source (str): ``"builtin"`` for all built-in profiles.
+
+    Error codes:
+        INVALID_PROFILE: Profile name is not known (HTTP 404).
+    """
+    try:
+        result = _context_profiles.get_context_profile(profile_name)
+        if result.get("status") == "error":
+            return _error(
+                result["error"]["code"],
+                result["error"]["message"],
+                404,
+            )
+        return {"status": "ok", "data": {"profile": result["profile"], "source": result["source"]}}
+    except Exception as exc:
+        return _error("PROFILES_FAILED", f"Failed to get profile: {exc}", 500)
 
 
 # ---------- Phase 3: Feedback ----------
@@ -2041,31 +2181,62 @@ def endpoint_context_export(req: ExportRequest):
                 f"Known fields: {sorted(known_fields)}",
             )
 
+    # Phase 24: resolve profile/mode and merge as defaults
+    _profile_mergeable_exp = ("include_sections", "include_related", "include_body",
+                              "max_notes", "max_chars", "allow_partial")
+    _explicit_export: dict = {
+        f: getattr(req, f)
+        for f in _profile_mergeable_exp
+        if f in req.model_fields_set
+    }
+
+    profile_result_exp = _context_profiles.apply_context_profile_to_request(
+        _explicit_export,
+        profile_name=req.profile,
+        mode=req.mode,
+    )
+    if profile_result_exp["error"]:
+        err_obj = profile_result_exp["error"]
+        return _error(err_obj["code"], err_obj["message"], 400)
+
+    merged_exp = profile_result_exp["request"]
+    profile_meta_exp = profile_result_exp["profile_metadata"]
+
+    # If profile requires security scan, enforce require_security_pass
+    effective_require_security = req.require_security_pass
+    if profile_meta_exp.get("require_security_scan"):
+        effective_require_security = True
+
     try:
         bundle = _generate_bundle(
             vault_name=req.vault,
             filters=req.filters,
-            include_sections=req.include_sections,
-            include_related=req.include_related,
-            include_body=req.include_body,
-            max_notes=req.max_notes,
-            max_chars=req.max_chars,
-            allow_partial=req.allow_partial,
+            include_sections=merged_exp.get("include_sections", req.include_sections),
+            include_related=merged_exp.get("include_related", req.include_related),
+            include_body=merged_exp.get("include_body", req.include_body),
+            max_notes=merged_exp.get("max_notes", req.max_notes),
+            max_chars=merged_exp.get("max_chars", req.max_chars),
+            allow_partial=merged_exp.get("allow_partial", req.allow_partial),
         )
         if bundle.get("status") == "error":
             code = bundle.get("error", {}).get("code", "BUNDLE_FAILED")
             msg = bundle.get("error", {}).get("message", "Bundle generation failed")
             return _error(code, msg, 500)
 
-        # Optional security gate
-        if req.require_security_pass:
+        # Inject profile metadata into bundle manifest
+        if "manifest" in bundle and isinstance(bundle["manifest"], dict):
+            bundle["manifest"]["profile_metadata"] = profile_meta_exp
+
+        # Security gate (enforced when profile.require_security_scan=true OR
+        # caller explicitly set require_security_pass=true)
+        if effective_require_security:
             sec_result = _scan_context_bundle(bundle)
             if sec_result.get("status") == "fail":
                 finding_count = len(sec_result.get("findings", []))
                 return _error(
                     "SECURITY_SCAN_FAIL",
                     f"Security scan failed with {finding_count} finding(s); "
-                    "export blocked (require_security_pass=true)",
+                    "export blocked (require_security_pass=true or profile.require_security_scan=true)",
                     400,
                 )
 
@@ -2075,6 +2246,11 @@ def endpoint_context_export(req: ExportRequest):
             msg = result["error"]["message"]
             status_code = 409 if code == "PACKAGE_EXISTS" else 500
             return _error(code, msg, status_code)
+
+        # Inject profile metadata into export result
+        result["profile_metadata"] = profile_meta_exp
+        result.setdefault("warnings", [])
+        result["warnings"] = profile_result_exp["warnings"] + result["warnings"]
 
         return result
 
@@ -2146,21 +2322,47 @@ def endpoint_context_security(req: SecurityRequest):
                 f"Known fields: {sorted(known_fields)}",
             )
 
+    # Phase 24: resolve profile/mode and merge as defaults
+    _profile_mergeable_sec = ("include_sections", "include_body", "max_notes", "max_chars", "allow_partial")
+    _explicit_sec: dict = {
+        f: getattr(req, f)
+        for f in _profile_mergeable_sec
+        if f in req.model_fields_set
+    }
+
+    profile_result_sec = _context_profiles.apply_context_profile_to_request(
+        _explicit_sec,
+        profile_name=req.profile,
+        mode=req.mode,
+    )
+    if profile_result_sec["error"]:
+        err_obj = profile_result_sec["error"]
+        return _error(err_obj["code"], err_obj["message"], 400)
+
+    merged_sec = profile_result_sec["request"]
+    profile_meta_sec = profile_result_sec["profile_metadata"]
+
     try:
         result = _scan_vault_context(
             vault_name=req.vault,
             filters=req.filters,
-            include_sections=req.include_sections,
-            include_body=req.include_body,
-            max_notes=req.max_notes,
-            max_chars=req.max_chars,
-            allow_partial=req.allow_partial,
+            include_sections=merged_sec.get("include_sections", req.include_sections),
+            include_body=merged_sec.get("include_body", req.include_body),
+            max_notes=merged_sec.get("max_notes", req.max_notes),
+            max_chars=merged_sec.get("max_chars", req.max_chars),
+            allow_partial=merged_sec.get("allow_partial", req.allow_partial),
         )
         if result.get("status") == "error":
             code = result.get("error", {}).get("code", "SECURITY_SCAN_FAILED")
             msg = result.get("error", {}).get("message", "Security scan failed")
             return _error(code, msg, 500)
-        return {"status": "ok", "data": result}
+
+        response_data = dict(result)
+        response_data["profile_metadata"] = profile_meta_sec
+        response_data.setdefault("warnings", [])
+        response_data["warnings"] = profile_result_sec["warnings"] + response_data["warnings"]
+
+        return {"status": "ok", "data": response_data}
     except Exception as exc:
         return _error("SECURITY_SCAN_FAILED", f"Security scan failed: {exc}", 500)
 

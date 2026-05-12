@@ -1238,6 +1238,84 @@ A new `cve.review_pending_change` prompt guides a reviewer through examining a d
 
 ---
 
+## 6q. Context Profiles and Budget Modes (Phase 24)
+
+Context profiles let you target a specific client device or LLM context window without manually tuning every budget parameter.
+
+### Built-in modes
+
+| Mode | Max notes | Max chars | Notes |
+|------|-----------|-----------|-------|
+| `tiny` | 3 | 4,000 | Minimal: fits 4-bit phone LLMs |
+| `small` | 5 | 8,000 | Compact: fits 7B models |
+| `medium` | 10 | 20,000 | Default balanced mode |
+| `large` | 25 | 50,000 | Extended: fits 70B+ models |
+| `agent` | 15 | 100,000 | Full agent context window |
+
+### Built-in device profiles
+
+| Profile | Mode base | Description |
+|---------|-----------|-------------|
+| `phone-local-llm` | tiny | Offline phone with 4-bit quantised LLM |
+| `desktop-agent` | large | On-device agent with 128K context |
+| `full-review` | agent | Full human review session |
+
+### CLI usage
+
+```bash
+# List all profiles and modes
+py run.py profiles
+
+# Example output excerpt
+{
+  "modes": { "tiny": { "max_notes": 3, "max_chars": 4000, ... }, ... },
+  "profiles": { "phone-local-llm": { ... }, ... },
+  "defaults": { "mode": "medium", "profile": null }
+}
+```
+
+### HTTP API
+
+```bash
+# List all profiles and modes
+GET /context/profiles
+
+# Get a specific profile or mode
+GET /context/profiles/tiny
+GET /context/profiles/phone-local-llm
+
+# Generate a bundle using a profile
+POST /context/bundle
+{
+  "vault": "my-vault",
+  "profile": "phone-local-llm",
+  "include_sections": ["Key Principles"]
+}
+
+# Generate a bundle using a mode
+POST /context/bundle
+{
+  "vault": "my-vault",
+  "mode": "small",
+  "include_sections": ["Key Principles"]
+}
+```
+
+Profile precedence: when both `profile` and `mode` are supplied, `profile` wins. Explicit request fields (e.g., `max_notes: 5`) always override profile defaults. Hard caps (`max_notes ≤ 100`, `max_chars ≤ 500,000`) are always enforced.
+
+The response includes a `profile_metadata` object describing which profile/mode was applied and the effective budget used.
+
+### MCP tools
+
+- `cve.list_context_profiles` — list all profiles and modes (no vault required)
+- `cve.build_context_bundle` now accepts `profile` and `mode` parameters
+
+### Bundle Builder UI
+
+The Bundle Builder at `/app/bundles` now shows a **Context Profile / Mode** panel above the filters. Click a mode badge (tiny / small / medium / large / agent) or device profile badge to apply its defaults to the budget controls. Manual overrides are labelled with ⚠. The result panel shows profile metadata when a profile was used.
+
+---
+
 ## 8. Run Verification Tests (Optional)
 
 Core tests (requires only `requirements.txt`):

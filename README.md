@@ -145,6 +145,9 @@ py run.py project-state           # print project state as JSON
 # Safe Memory Write Queue (Phase 23)
 py run.py pending                 # list pending change proposals as JSON
 
+# Context Profiles and Budget Modes (Phase 24)
+py run.py profiles                # list all built-in profiles and modes as JSON
+
 # Private Cloud Mode (Phase 21) — opt-in, local mode unchanged
 # See DEPLOYMENT.md for full setup
 CVE_PRIVATE_CLOUD_ENABLED=true CVE_AUTH_TOKEN=<token> py run.py app
@@ -243,6 +246,8 @@ py mcp/server/mcp_server.py
 | ``POST`` | ``/context/bundle`` | Generate a context bundle |
 | ``POST`` | ``/context/export`` | Export a context bundle as a package |
 | ``POST`` | ``/context/security`` | Scan a context bundle for security issues |
+| ``GET`` | ``/context/profiles`` | List all built-in context profiles and modes |
+| ``GET`` | ``/context/profiles/{name}`` | Get a single profile or mode definition |
 
 See [API.md](API.md) for full route documentation with request/response shapes.
 

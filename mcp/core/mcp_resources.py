@@ -43,6 +43,12 @@ _STATIC_RESOURCES = [
         "description": "List all registered vaults.",
         "mimeType": _MIME_JSON,
     },
+    {
+        "uri": "cve://context/profiles",
+        "name": "Context Profiles",
+        "description": "List all built-in context profiles and bundle modes.",
+        "mimeType": _MIME_JSON,
+    },
 ]
 
 _VAULT_RESOURCE_TEMPLATES = [
@@ -59,6 +65,11 @@ _VAULT_RESOURCE_TEMPLATES = [
     ("cve://vault/{vault}/pending-changes", "Pending Changes", "Pending change proposals awaiting review."),
 ]
 
+# Static profile resource templates (not per-vault)
+_PROFILE_RESOURCE_TEMPLATES = [
+    ("cve://context/profile/{profile_name}", "Context Profile", "Individual context profile or mode definition."),
+]
+
 
 def list_resources() -> list[dict]:
     """Return a deterministic list of all available MCP resources.
@@ -72,6 +83,24 @@ def list_resources() -> list[dict]:
         vaults = []
 
     resources = list(_STATIC_RESOURCES)
+
+    # Profile resource templates (not per-vault — enumerate known profiles/modes)
+    try:
+        from mcp.core import context_profiles as _cp  # noqa: PLC0415
+        profile_data = _cp.list_context_profiles()
+        all_profile_names = (
+            list(profile_data["profiles"].keys()) + list(profile_data["modes"].keys())
+        )
+        for pname in sorted(all_profile_names):
+            uri = f"cve://context/profile/{urllib.parse.quote(pname, safe='')}"
+            resources.append({
+                "uri": uri,
+                "name": f"Context Profile — {pname}",
+                "description": f"Context profile or mode: {pname}",
+                "mimeType": _MIME_JSON,
+            })
+    except Exception:
+        pass
 
     for vault in sorted(vaults):
         for uri_template, name_template, description in _VAULT_RESOURCE_TEMPLATES:
@@ -163,6 +192,18 @@ def read_resource(uri: str) -> dict:
         if uri == "cve://vaults":
             return _read_vaults(uri)
 
+        if uri == "cve://context/profiles":
+            return _read_context_profiles(uri)
+
+        # cve://context/profile/{profile_name}
+        if uri.startswith("cve://context/profile/"):
+            encoded_name = uri[len("cve://context/profile/"):]
+            try:
+                profile_name = urllib.parse.unquote(encoded_name)
+            except Exception:
+                return _resource_error(uri, f"Invalid profile name encoding in URI: {uri!r}")
+            return _read_context_profile(uri, profile_name)
+
         vault_name, resource_path = _parse_vault_resource_uri(uri)
         if vault_name is None:
             return _resource_error(uri, f"Unknown resource URI: {uri!r}")
@@ -182,6 +223,23 @@ def _read_vaults(uri: str) -> dict:
     from mcp.core.vault_registry import list_vaults  # noqa: PLC0415
     vaults = list_vaults()
     return _resource_ok(uri, {"vaults": vaults, "count": len(vaults)})
+
+
+def _read_context_profiles(uri: str) -> dict:
+    """Read the full context profiles listing."""
+    from mcp.core import context_profiles as _cp  # noqa: PLC0415
+    data = _cp.list_context_profiles()
+    return _resource_ok(uri, data)
+
+
+def _read_context_profile(uri: str, profile_name: str) -> dict:
+    """Read a single context profile or mode by name."""
+    from mcp.core import context_profiles as _cp  # noqa: PLC0415
+    result = _cp.get_context_profile(profile_name)
+    if result.get("status") == "error":
+        err = result["error"]
+        return _resource_error(uri, f"{err['code']}: {err['message']}")
+    return _resource_ok(uri, {"profile": result["profile"], "source": result["source"]})
 
 
 def _read_vault_resource(uri: str, vault_name: str, resource_path: str) -> dict:
