@@ -1,4 +1,4 @@
-# Context Vault Engine — Private Cloud Mode Deployment Guide
+# Context Vault Engine - Private Cloud Mode Deployment Guide
 
 > **Security warning:** Never expose an unauthenticated Context Vault Engine API to the public internet. Always use one of the access models described below when running on a remote server.
 
@@ -8,10 +8,10 @@ Context Vault Engine supports an optional **Private Cloud Mode** that allows you
 
 Private Cloud Mode is:
 
-- **Opt-in** — disabled by default; local behaviour is unchanged.
-- **Read-only by default** — mutating routes are blocked unless explicitly enabled.
-- **Token-authenticated** — API requests require a bearer token you configure.
-- **Self-hosted** — no cloud accounts, no SaaS, no databases, no multi-tenancy.
+- **Opt-in** - disabled by default; local behaviour is unchanged.
+- **Read-only by default** - mutating routes are blocked unless explicitly enabled.
+- **Token-authenticated** - API requests require a bearer token you configure.
+- **Self-hosted** - no cloud accounts, no SaaS, no databases, no multi-tenancy.
 
 The MCP stdio server (`python run.py mcp`) remains a local stdin/stdout process and is not affected by private cloud mode.
 
@@ -22,10 +22,10 @@ The MCP stdio server (`python run.py mcp`) remains a local stdin/stdout process 
 | Concern | Approach |
 |---------|----------|
 | API authentication | Bearer token from environment variable |
-| Token storage | Environment only — never committed, never logged |
+| Token storage | Environment only - never committed, never logged |
 | Secret exposure | Token value never appears in responses or status output |
 | Mutating access | Blocked by default in remote mode (`CVE_REMOTE_READ_ONLY=true`) |
-| TLS/HTTPS | Handled by reverse proxy or tunnel — **not** by FastAPI directly |
+| TLS/HTTPS | Handled by reverse proxy or tunnel - **not** by FastAPI directly |
 | Public exposure | Must be behind one of the access models below |
 | Path traversal | Existing server-side protection unchanged |
 | Rate limiting | Existing 50 req/s global limiter unchanged |
@@ -110,7 +110,7 @@ vault.example.com {
 | Variable | Purpose | Default |
 |----------|---------|---------|
 | `CVE_PRIVATE_CLOUD_ENABLED` | Enable private cloud mode | `false` |
-| `CVE_AUTH_TOKEN` | Secret bearer token for API authentication | _(empty — auth disabled)_ |
+| `CVE_AUTH_TOKEN` | Secret bearer token for API authentication | _(empty - auth disabled)_ |
 | `CVE_REQUIRE_AUTH` | Require auth for all non-health API routes | `false` in local mode; `true` when private cloud enabled |
 | `CVE_REMOTE_READ_ONLY` | Block all mutating HTTP routes | `true` when private cloud enabled |
 | `CVE_PUBLIC_BASE_URL` | Public base URL (for status display only) | _(empty)_ |
@@ -157,10 +157,10 @@ curl -H "Authorization: Bearer $TOKEN" http://localhost:8000/vaults
 # Alternative token header
 curl -H "X-CVE-Token: $TOKEN" http://localhost:8000/vaults
 
-# Unauthenticated request — returns 401
+# Unauthenticated request - returns 401
 curl http://localhost:8000/vaults
 
-# Write request in read-only mode — returns 403
+# Write request in read-only mode - returns 403
 curl -X PUT -H "Authorization: Bearer $TOKEN" \
      -H "Content-Type: application/json" \
      -d '{}' \
@@ -343,7 +343,7 @@ curl -H "Authorization: Bearer $TOKEN" \
 
 Expected: `{"status": "ok", "data": {"vaults": ["demo-vault"]}}`
 
-### 4. Unauthenticated request — must return 401
+### 4. Unauthenticated request - must return 401
 
 ```bash
 curl https://vault.example.com/vaults
@@ -361,7 +361,7 @@ Expected:
 }
 ```
 
-### 5. Write attempt in read-only mode — must return 403
+### 5. Write attempt in read-only mode - must return 403
 
 ```bash
 curl -X POST \
@@ -389,7 +389,7 @@ Expected:
 
 The HTTP API described in this guide is private-cloud capable and can be used by trusted remote clients via HTTPS and bearer token authentication.
 
-The MCP stdio server (`python run.py mcp`) uses JSON-RPC 2.0 over stdin/stdout. It is designed for local use only and is not affected by private cloud mode settings. Do not attempt to expose the stdio server over a network socket — it has no authentication.
+The MCP stdio server (`python run.py mcp`) uses JSON-RPC 2.0 over stdin/stdout. It is designed for local use only and is not affected by private cloud mode settings. Do not attempt to expose the stdio server over a network socket - it has no authentication.
 
 ---
 

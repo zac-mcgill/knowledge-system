@@ -1,4 +1,4 @@
-# Context Vault Engine — Architecture
+# Context Vault Engine - Architecture
 
 ## Overview
 
@@ -26,13 +26,13 @@ Context Vault Engine is a local-first, deterministic-first system for managing t
                              ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │              Runtime Index / Cache (mcp/core/)                   │
-│  note_index.py — parses notes, builds per-vault index           │
-│  vault_registry.py — maps vault names → paths + schemas         │
-│  query_engine.py — filtered queries, pagination, aggregation     │
-│  graph_builder.py — deterministic relationship graph             │
-│  graph_query.py — graph traversal (neighbors, related, missing) │
-│  result_cache.py — in-memory cache with invalidation            │
-│  schema_loader.py — loads vault_schema.py dynamically           │
+│  note_index.py - parses notes, builds per-vault index           │
+│  vault_registry.py - maps vault names → paths + schemas         │
+│  query_engine.py - filtered queries, pagination, aggregation     │
+│  graph_builder.py - deterministic relationship graph             │
+│  graph_query.py - graph traversal (neighbors, related, missing) │
+│  result_cache.py - in-memory cache with invalidation            │
+│  schema_loader.py - loads vault_schema.py dynamically           │
 └──────────┬──────────────────────────┬───────────────────────────┘
            │                          │
            ▼                          ▼
@@ -54,26 +54,51 @@ Context Vault Engine is a local-first, deterministic-first system for managing t
 │  feedback.py         │   │  dist/context-bundles/<bundle-id>/   │
 └──────────────────────┘   │    context.json                      │
            │               │    context.md                        │
-           │               │    manifest.json                     │
-           ▼               │    validation.json                   │
-┌──────────────────────┐   │    graph.json                        │
-│   CLI Entry Point    │   │    feedback-summary.json             │
-│   run.py             │   └──────────────────────────────────────┘
+           │               │    context.html                      │
+           ▼               │    manifest.json                     │
+┌──────────────────────┐   │    validation.json                   │
+│   CLI Entry Point    │   │    graph.json                        │
+│   run.py             │   │    feedback-summary.json             │
+│                      │   └──────────────────────────────────────┘
 │                      │
 │  validate            │   ┌──────────────────────────────────────┐
 │  analyse             │   │   FastAPI / MCP Server               │
 │  improve             │   │   mcp/server/mcp_server.py           │
 │  report              │   │                                      │
-│  bundle              │   │  GET  /vaults, /health, /contract    │
-│  export              │   │  GET  /summary, /validation, /tasks  │
-│  feedback            │   │  GET  /notes, /quality, /missing     │
-│  security            │   │  GET  /gaps, /feedback               │
-│  templates           │   │  POST /query, /compare               │
-│  init / bootstrap    │   │  GET  /note, /stats                  │
-└──────────────────────┘   │  GET  /graph[/{vault}[/related]]     │
-                           │  POST /context/bundle                │
-                           │  POST /context/export                │
-                           │  POST /context/security              │
+│  bundle              │   │  Read   /vaults /health /contract    │
+│  export              │   │         /summary /validation /tasks  │
+│  feedback            │   │         /notes /quality /missing     │
+│  security            │   │         /gaps /feedback /note /stats │
+│  profiles            │   │         /graph[/{vault}[/related]]   │
+│  trust / stale       │   │         /private/status              │
+│  templates           │   │         /context/profiles            │
+│  init / bootstrap    │   │         /context/state               │
+│  start-ui            │   │         /trust /stale                │
+│  app                 │   │         /session/* /project/*        │
+│  serve (MCP stdio)   │   │         /memory/pending              │
+└──────────────────────┘   │         /app (web UI mount)          │
+                           │  Write  /context/bundle              │
+                           │         /context/export              │
+                           │         /context/security            │
+                           │         /context/plan                │
+                           │         /query /compare /evidence    │
+                           │         /vault/bootstrap             │
+                           │         /vault/{name} (DELETE)       │
+                           │         /note (POST/PUT)             │
+                           │         /feedback (POST/PUT/DELETE)  │
+                           │         /memory/create-note-draft    │
+                           │         /memory/suggest-note-update  │
+                           │         /memory/update-section-draft │
+                           │  See API.md for the full route list. │
+                           └──────────────────────────────────────┘
+
+                           ┌──────────────────────────────────────┐
+                           │   MCP stdio Server                   │
+                           │   mcp/server/mcp_stdio_server.py     │
+                           │                                      │
+                           │  Tools, resources, and prompts over  │
+                           │  the Model Context Protocol stdio    │
+                           │  transport. Same logic as HTTP.      │
                            └──────────────────────────────────────┘
 ```
 
@@ -97,34 +122,28 @@ The vault is a directory of plain Markdown files with YAML frontmatter. It is th
 - Required fields and their allowed values (enums).
 - Canonical section names (e.g. `Key Principles`, `How It Works`, `Trade-offs`).
 - Field derivation rules (e.g. `domain` derived from directory name).
-- `ALL_KNOWN_FIELDS` — the set of filterable field names.
-- `EXPECTED_CONCEPTS` (optional) — concepts expected to exist in each subdomain.
+- `ALL_KNOWN_FIELDS` - the set of filterable field names.
+- `EXPECTED_CONCEPTS` (optional) - concepts expected to exist in each subdomain.
 
 **Schema changes are high-risk.** Any change to the schema interface must be treated as a breaking change to all downstream validation, analysis, and bundle generation.
 
 ### 3. Runtime Index / Cache
 
-`mcp/core/note_index.py` parses all vault notes and maintains a per-vault in-memory index. The index is rebuilt when:
-
-- The server starts.
-- A note file is added, modified, or deleted (detected within a 2-second cooldown window on the next API call).
-- The schema hash changes.
-
-The index stores parsed frontmatter fields, section presence, and file modification times. The cache is invalidated deterministically — there is no hidden background refresh.
+`mcp/core/note_index.py` parses all vault notes and maintains a per-vault in-memory index. The index is checked on the next API call that needs it, subject to a 2-second cooldown window to suppress rebuild spam. Once the cooldown has elapsed, both the schema hash and a notes fingerprint (sorted set of `path:mtime_ns:size` for every Markdown file) are recomputed. If either has changed (added, modified, or deleted notes, or schema edits), the index is rebuilt. CLI commands always build a fresh index.
 
 ### 4. Core Engine Modules (`core/shared/`)
 
-These are stateless, side-effect-free functions:
+These are deterministic engine and service modules. Read-only modules (e.g. `validate_vault.py`, `analyse_vault.py`, `quality_audit.py`, `discover_missing.py`, `feedback.py`) only inspect the vault. Write-capable modules (e.g. `context_package.py` writes packages to `dist/`, `generate_report.py` and `generate_templates.py` write under `Vault Files/`, `inject_frontmatter.py` and `upgrade_vault.py` can update notes when invoked) perform clearly scoped, auditable file writes. None call external services.
 
-- `validate_vault.py` — validates notes against the schema.
-- `analyse_vault.py` — runs structured analyses on vault metadata.
-- `upgrade_vault.py` — scores and ranks improvement tasks.
-- `quality_audit.py` — audits section content quality.
-- `discover_missing.py` — detects missing expected concepts.
-- `context_bundle.py` — generates deterministic context bundles.
-- `context_package.py` — exports bundles as portable packages.
-- `context_security.py` — scans bundles for security issues.
-- `feedback.py` — parses and validates vault feedback entries.
+- `validate_vault.py` (read) validates notes against the schema.
+- `analyse_vault.py` (read) runs structured analyses on vault metadata.
+- `upgrade_vault.py` (read/write) scores improvement tasks; can rewrite frontmatter when explicitly invoked.
+- `quality_audit.py` (read) audits section content quality.
+- `discover_missing.py` (read) detects missing expected concepts.
+- `context_bundle.py` (read) generates deterministic context bundles.
+- `context_package.py` (write) exports bundles as portable packages under `dist/`.
+- `context_security.py` (read) scans bundles for security issues.
+- `feedback.py` (read) parses and validates vault feedback entries.
 
 These modules do not depend on the API layer or the runtime index directly. They accept vault paths and schema references as parameters.
 
@@ -134,7 +153,7 @@ Thin wrappers that bridge the runtime index and core engine modules to the API. 
 
 ### 6. CLI Entry Point (`run.py`)
 
-The CLI reads `config/config.yaml`, resolves the vault path and schema, and dispatches to the appropriate module. Commands: `validate`, `analyse`, `improve`, `report`, `bundle`, `export`, `feedback`, `security`, `templates`, `init`, `bootstrap`.
+The CLI reads `config/config.yaml`, resolves the vault path and schema, and dispatches to the appropriate module. Current commands include: `validate`, `analyse`, `improve`, `report`, `bundle`, `export`, `feedback`, `security`, `templates`, `init`, `bootstrap`, `app` (local app launcher), `mcp` (MCP stdio server), `profiles` (list context profiles and modes), `trust` (trust summary), `stale` (stale notes list), `session` (current session summary), `project-state` (project state JSON), and `pending` (pending change proposals). Run `py run.py` with no arguments to see the live list.
 
 ### 7. FastAPI / MCP Server (`mcp/server/mcp_server.py`)
 
@@ -149,7 +168,27 @@ Request middleware enforces a global rate limit (50 req/s) and structured JSON l
 
 ### 8. Generated Artefacts (`dist/`)
 
-Context packages exported by `run.py export` or `POST /context/export` are written to `dist/context-bundles/<bundle-id>/`. The `dist/` directory is gitignored. These are build artefacts — they are regenerated from the vault, not edited directly.
+Context packages exported by `run.py export` or `POST /context/export` are written to `dist/context-bundles/<bundle-id>/`. The `dist/` directory is gitignored. These are build artefacts - they are regenerated from the vault, not edited directly.
+
+### 9. Private Cloud Mode
+
+`mcp/core/private_cloud.py` implements an optional authenticated remote access layer for the FastAPI server. It is **disabled by default**. When `CVE_PRIVATE_CLOUD_ENABLED=1`, the server requires a bearer token (`CVE_AUTH_TOKEN`) on protected routes. Setting `CVE_REMOTE_READ_ONLY=1` additionally blocks all write routes (bundle, export, security, query, compare, bootstrap, note, feedback, memory). Status is reported by `GET /private/status`.
+
+### 10. Context Controller and Profiles
+
+`mcp/core/context_controller.py` and `mcp/core/context_profiles.py` provide named device profiles (`phone-local-llm`, `desktop-agent`, ...) and budget modes (`tiny`, `small`, `medium`, `large`, `agent`) for context bundles and exports. Profiles enforce hard caps on bundle size, note count, body inclusion, and related-note inclusion. They are exposed through `/context/profiles`, the `cve.list_context_profiles` MCP tool, and the `cve://context/profiles` resource.
+
+### 11. Session and Project State
+
+`mcp/core/session_state.py` persists session and project state as human-readable JSON files under `<vault>/Vault Files/State/`. Sessions are written atomically (temp file + replace), keyed by `session_id`, and survive server restarts. Project state is a single JSON file per vault. There is no database and no cloud sync. The `/session/start`, `/session/resume`, `/session/summary`, `/session/attach-note`, `/session/close`, `GET /project/state`, and `PUT /project/state` routes expose this layer.
+
+### 12. Safe Memory Write Queue
+
+`mcp/core/pending_changes.py` and `mcp/core/note_write.py` implement the write path. All proposed note creations, section updates, and update suggestions are written to `Vault Files/State/pending-changes/` as YAML proposals and require explicit user approval before being applied to vault Markdown. The `/memory/*` routes and pending changes UI surface these proposals. There is no autonomous write path.
+
+### 13. Trust, Staleness, and Evidence (Phase 25)
+
+`mcp/core/trust_metadata.py` extracts optional `trust_level`, `source_type`, `last_reviewed`, and `review_after` frontmatter fields per note. It computes a deterministic confidence score reflecting the freshness and reviewer assertion of each note (not factual correctness). `GET /trust` and `GET /stale` surface aggregate views; `POST /evidence` builds a citation-ready evidence pack. Trust annotations are injected into context bundles and query results automatically.
 
 ---
 

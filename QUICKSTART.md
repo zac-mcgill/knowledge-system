@@ -1,4 +1,4 @@
-# Context Vault Engine — Quickstart
+# Context Vault Engine - Quickstart
 
 This guide walks through an end-to-end session with Context Vault Engine: install, validate, analyse, generate a context bundle, export a package, run security scans, and use the API.
 
@@ -73,7 +73,7 @@ py run.py report
 
 ---
 
-## 5b. Generate a Context Bundle (Phase 2)
+## 6. Generate a Context Bundle (Phase 2)
 
 ```bash
 py run.py bundle
@@ -104,7 +104,7 @@ Prints a JSON context bundle to stdout. The bundle packages selected notes with 
 
 ---
 
-## 5c. Feedback Loop (Phase 3)
+## 7. Feedback Loop (Phase 3)
 
 **View vault feedback:**
 ```bash
@@ -154,7 +154,7 @@ POST /feedback
 
 The server generates `id` and `created_at`. Returns the new entry and updated feedback summary.
 
-**Update feedback:** `PUT /feedback/{id}` — provide same fields as POST plus vault. Preserves `created_at`.
+**Update feedback:** `PUT /feedback/{id}` - provide same fields as POST plus vault. Preserves `created_at`.
 
 **Delete feedback:** `DELETE /feedback/{id}?vault=demo-vault`
 
@@ -173,7 +173,7 @@ Each task gains a `feedback_weight` field showing the score delta and contributi
 
 ---
 
-## 4e. Update a Note via API (Phase 15B)
+## 8. Update a Note via API (Phase 15B)
 
 The backend provides a `PUT /note` endpoint for safe, atomic updates to existing notes. The endpoint validates all fields and body content against the vault schema before writing.
 
@@ -197,13 +197,13 @@ curl -X PUT http://127.0.0.1:8000/note \
   }'
 ```
 
-On success returns the updated note's `path`, `fields`, `body`, and `validation` (always `{"status": "pass", "errors": []}`). Validation failures return HTTP 400 with `VALIDATION_FAILED` and a `details` list — the file on disk is unchanged.
+On success returns the updated note's `path`, `fields`, `body`, and `validation` (always `{"status": "pass", "errors": []}`). Validation failures return HTTP 400 with `VALIDATION_FAILED` and a `details` list - the file on disk is unchanged.
 
-> **Note:** The note edit UI is not yet implemented. The backend API is complete.
+> **Note:** Phase 15B shipped the backend `PUT /note` API first. The safe note editing UI followed in Phase 15C and is described later in this guide.
 
 ---
 
-## 5d. Export Context Package (Phase 4 / Phase 17A)
+## 9. Export Context Package (Phase 4 / Phase 17A)
 
 **Export the default bundle to disk:**
 ```bash
@@ -252,7 +252,7 @@ py run.py export --overwrite
 - Contains no remote scripts, remote CSS, or external assets of any kind.
 - All note content is HTML-escaped; note Markdown is not parsed into raw HTML.
 - Output is deterministic: identical bundle input produces identical HTML.
-- `context.html` is a generated artefact — Markdown vault notes remain the source of truth.
+- `context.html` is a generated artefact - Markdown vault notes remain the source of truth.
 
 **Overwrite behaviour:**
 - Without `--overwrite`: exits 1 with `PACKAGE_EXISTS` error if the package directory already exists.
@@ -262,7 +262,7 @@ py run.py export --overwrite
 
 ---
 
-## 5e. Security Scan (Phase 5)
+## 10. Security Scan (Phase 5)
 
 Scan the default context bundle for security issues before delivering notes to an agent or LLM.
 
@@ -357,7 +357,7 @@ Returns HTTP 400 `SECURITY_SCAN_FAIL` if the scan status is `fail`. Default is `
 
 ---
 
-## 6. Start API Server (Optional)
+## 11. Start API Server (Optional)
 
 Requires the MCP dependencies (fastapi + uvicorn):
 
@@ -368,18 +368,18 @@ py mcp/server/mcp_server.py
 
 ---
 
-## 6b. Local Web UI (Phase 10)
+## 12. Local Web UI
 
 A browser dashboard is available for viewing vault status without the CLI.
 
 ### Development workflow
 
 ```bash
-# Terminal 1 — backend (must be running)
+# Terminal 1 - backend (must be running)
 pip install -r mcp/requirements.txt
 py mcp/server/mcp_server.py
 
-# Terminal 2 — Astro dev server
+# Terminal 2 - Astro dev server
 cd ui
 npm install
 npm run dev
@@ -401,7 +401,7 @@ py mcp/server/mcp_server.py
 # Open: http://127.0.0.1:8000/app
 ```
 
-`GET /app` serves the compiled Astro frontend from `ui/dist`. If `ui/dist` does not exist, it returns `503 UI_NOT_BUILT` with instructions — no other API routes are affected.
+`GET /app` serves the compiled Astro frontend from `ui/dist`. If `ui/dist` does not exist, it returns `503 UI_NOT_BUILT` with instructions - no other API routes are affected.
 
 **Stack:** Astro 5 · TypeScript · Tailwind CSS 4 · Svelte 5 islands
 
@@ -434,7 +434,7 @@ py run.py app
 
 **If the server is already running:**
 
-`py run.py app` detects it via the `/health` endpoint, reuses it, and opens the browser — no duplicate server is started.
+`py run.py app` detects it via the `/health` endpoint, reuses it, and opens the browser - no duplicate server is started.
 
 **If `ui/dist` has not been built:**
 
@@ -443,7 +443,7 @@ The launcher prints clear build instructions and starts the API server anyway (A
 **The direct server command remains unchanged:**
 
 ```bash
-py mcp/server/mcp_server.py   # same as before — start server directly
+py mcp/server/mcp_server.py   # same as before - start server directly
 ```
 
 ### Dashboard panels (Phase 12A)
@@ -468,7 +468,7 @@ An **Issue Review** section below the overview cards provides tabbed drill-down 
 | Tab | Shows |
 |---|---|
 | Validation | Status badge, invalid note paths, pass state, raw JSON |
-| Tasks | Expandable rows — instruction, missing sections, constraints, feedback weighting, raw task JSON |
+| Tasks | Expandable rows - instruction, missing sections, constraints, feedback weighting, raw task JSON |
 | Security | Status, severity counts, full findings table (path/severity/rule/field/detail), pass state, raw JSON |
 | Missing Concepts | Expected/present/missing/domains counts, full ranked list with scores, raw JSON |
 | Feedback | Entry count, all entries (path/source/signal/severity/comment/created\_at), warnings/errors, raw JSON |
@@ -479,7 +479,7 @@ Select a vault from the dropdown to load all panels simultaneously. Click **Refr
 
 ---
 
-## 6c. API-based Vault Bootstrap (Phase 11A)
+## 13. API-based Vault Bootstrap (Phase 11A)
 
 As an alternative to `py run.py bootstrap`, you can create a new vault via the API:
 
@@ -502,22 +502,22 @@ The API bootstrap creates the vault directory, writes `vault_schema.py`, updates
 
 The CLI flow `py run.py bootstrap` is unchanged and remains fully supported.
 
-**Note:** The guided UI form for vault creation is planned for Phase 11B.
+**Note:** For a browser-based guided form, use the Guided Vault Bootstrap UI described in the next section.
 
 ---
 
-## 6d. Guided Vault Bootstrap UI (Phase 11B)
+## 14. Guided Vault Bootstrap UI (Phase 11B)
 
 A browser-based guided setup form is available in the local web UI.
 
-1. Start the backend server and build the UI (see section 6b above).
+1. Start the backend server and build the UI (see Local Web UI above).
 2. Open [http://127.0.0.1:8000/app/vault-setup](http://127.0.0.1:8000/app/vault-setup).
 3. Fill in:
-   - **Vault Name** — slug-style directory name (letters, numbers, underscores, hyphens)
-   - **Domain** — human-readable domain label
-   - **Note Type** — slug for the primary note type (e.g. `breed-profile`)
-   - **Required Sections** — canonical section headings (minimum 2, defaults pre-filled)
-   - **Expected Concepts** — optional named concepts (accepted with a backend warning; not yet written to schema)
+   - **Vault Name** - slug-style directory name (letters, numbers, underscores, hyphens)
+   - **Domain** - human-readable domain label
+   - **Note Type** - slug for the primary note type (e.g. `breed-profile`)
+   - **Required Sections** - canonical section headings (minimum 2, defaults pre-filled)
+   - **Expected Concepts** (optional) named concepts that should exist in this domain. Each entry is normalised to a lowercase slug and written into `EXPECTED_CONCEPTS` in the generated `vault_schema.py`, so the Missing Concepts page can use them immediately after bootstrap.
 4. The live validation panel and preview update as you type.
 5. Click **Create Vault** to call `POST /vault/bootstrap`.
 6. On success the page shows created file paths, expected concepts written, and any backend warnings.
@@ -526,7 +526,7 @@ A browser-based guided setup form is available in the local web UI.
 The CLI flow `py run.py bootstrap` remains unchanged and is still the recommended path for automation.
 
 **Expected concepts:**  
-Enter concept names in the **Expected Concepts** field during vault setup — one per line or one at a time.
+Enter concept names in the **Expected Concepts** field during vault setup - one per line or one at a time.
 Each concept is normalised to a lowercase slug (e.g. `"Patent Licensing"` → `"patent-licensing"`)
 and written into `EXPECTED_CONCEPTS` in the generated `vault_schema.py`.
 The **Missing Concepts** page (`/app/missing`) can use them immediately after bootstrap,
@@ -555,7 +555,7 @@ EXPECTED_CONCEPTS: dict[str, frozenset[str]] = {
 
 ---
 
-## 6e-delete. Deleting a Vault (Phase 18C)
+## 15. Deleting a Vault (Phase 18C)
 
 Vaults can be permanently deleted through the API or the UI.
 
@@ -569,7 +569,7 @@ curl -X DELETE http://127.0.0.1:8000/vault/my-vault \
   -d '{"confirm": "DELETE my-vault"}'
 ```
 
-The `confirm` field must be the exact phrase `DELETE <vault-name>` — case-sensitive, no extra whitespace.
+The `confirm` field must be the exact phrase `DELETE <vault-name>` - case-sensitive, no extra whitespace.
 
 **Success response:**
 ```json
@@ -599,52 +599,52 @@ The `confirm` field must be the exact phrase `DELETE <vault-name>` — case-sens
 
 ---
 
-## 6e. Bundle Builder UI (Phase 13A)
+## 16. Bundle Builder UI (Phase 13A)
 
 A browser-based Bundle Builder is available for interactively generating and previewing context bundles.
 
-1. Start the backend server and build the UI (see section 6b above).
+1. Start the backend server and build the UI (see Local Web UI above).
 2. Open [http://127.0.0.1:8000/app/bundles](http://127.0.0.1:8000/app/bundles).
 3. Configure the bundle:
-   - **Vault** — select from registered vaults
-   - **Filters** — status (complete / partial / all), domain, type, difficulty
-   - **Sections** — default: Key Principles, How It Works, Trade-offs. Add or remove custom sections.
-   - **Content Options** — include body, include related, allow partial
-   - **Budget** — max notes (1–100), max chars (100–500,000)
+   - **Vault** - select from registered vaults
+   - **Filters** - status (complete / partial / all), domain, type, difficulty
+   - **Sections** - default: Key Principles, How It Works, Trade-offs. Add or remove custom sections.
+   - **Content Options** - include body, include related, allow partial
+   - **Budget** - max notes (1–100), max chars (100–500,000)
 4. Click **Generate Preview** to call `POST /context/bundle`.
 5. The result panel shows:
-   - **Bundle Overview** — bundle ID, vault, validation status, schema version, created_at, note count, warning count, feedback count, source path count
-   - **Character Budget** — used/max bar, truncation badge, warnings
-   - **Notes** — expandable list per note: fields, included sections (collapsible), body preview (collapsible), related IDs
-   - **Feedback** — feedback entries linked to selected notes
-   - **Graph Relationships** — related node counts (visible only when include_related=true)
-   - **Raw JSON** — full bundle JSON, hidden by default
+   - **Bundle Overview** - bundle ID, vault, validation status, schema version, created_at, note count, warning count, feedback count, source path count
+   - **Character Budget** - used/max bar, truncation badge, warnings
+   - **Notes** - expandable list per note: fields, included sections (collapsible), body preview (collapsible), related IDs
+   - **Feedback** - feedback entries linked to selected notes
+   - **Graph Relationships** - related node counts (visible only when include_related=true)
+   - **Raw JSON** - full bundle JSON, hidden by default
 
 The Bundle Builder does not write packages to disk. To export a bundle as a portable package, use `py run.py export`, `POST /context/export`, or the Export Package UI at `/app/exports` (Phase 13B).
 
 ---
 
-## 6f. Export Package UI (Phase 13B)
+## 17. Export Package UI (Phase 13B)
 
 The Export Package UI at `/app/exports` lets you configure and export a context bundle as a portable package written to disk with a SHA-256 manifest.
 
 **To export a package:**
 1. Navigate to **Exports** in the sidebar.
 2. Select a **Vault** from the dropdown.
-3. Configure **Filters** — status (complete / partial / all), optional domain / type / difficulty.
-4. Configure **Sections to Extract** — defaults are Key Principles, How It Works, Trade-offs. Add or remove as needed.
-5. Configure **Content Options** — include body, include related notes, allow partial notes.
-6. Set **Budget** — max notes (1–100), max chars (100–500,000).
+3. Configure **Filters** - status (complete / partial / all), optional domain / type / difficulty.
+4. Configure **Sections to Extract** - defaults are Key Principles, How It Works, Trade-offs. Add or remove as needed.
+5. Configure **Content Options** - include body, include related notes, allow partial notes.
+6. Set **Budget** - max notes (1–100), max chars (100–500,000).
 7. Set **Export Options**:
-   - **Overwrite existing package** — if the same deterministic bundle ID already exists on disk, enable this to replace it. If off and the package exists, the export will return a conflict error.
-   - **Require security pass** — abort export if the security scan detects a blocking finding. Nothing is written to disk on failure.
+   - **Overwrite existing package** - if the same deterministic bundle ID already exists on disk, enable this to replace it. If off and the package exists, the export will return a conflict error.
+   - **Require security pass** - abort export if the security scan detects a blocking finding. Nothing is written to disk on failure.
 8. Review the **Request Preview** panel to confirm settings and expected output path.
 9. Click **Export Package** to call `POST /context/export`.
 10. The result panel shows:
-    - **Export Overview** — bundle ID, package directory, file count, total bytes, warnings, overwrite used, security gate status badges
-    - **Files** — table of all written files with filename, size, and SHA-256 hash (expandable to full hash)
-    - **Warnings** — any warnings returned by the backend
-    - **Raw Export JSON** — full response, hidden by default
+    - **Export Overview** - bundle ID, package directory, file count, total bytes, warnings, overwrite used, security gate status badges
+    - **Files** - table of all written files with filename, size, and SHA-256 hash (expandable to full hash)
+    - **Warnings** - any warnings returned by the backend
+    - **Raw Export JSON** - full response, hidden by default
 
 **Conflict handling:** If the export returns `PACKAGE_EXISTS`, a conflict panel explains that the package already exists and prompts you to enable the overwrite option.
 
@@ -654,25 +654,25 @@ Packages are written to `dist/context-bundles/<bundle-id>/` under the repo root.
 
 ---
 
-## 6g. Security Scan UI (Phase 13C)
+## 18. Security Scan UI (Phase 13C)
 
 The Security Scan UI at `/app/security` lets you run a fully configurable `POST /context/security` scan and inspect results interactively.
 
 **To run a security scan:**
 1. Navigate to **Security** in the sidebar.
 2. Select a **Vault** from the dropdown.
-3. Configure **Filters** — status (complete / partial / all), optional domain / type / difficulty.
-4. Configure **Sections to Scan** — defaults are Key Principles, How It Works, Trade-offs. Add or remove as needed.
-5. Configure **Content Options** — include body, allow partial notes.
-6. Set **Budget** — max notes (1–100), max chars (100–500,000).
+3. Configure **Filters** - status (complete / partial / all), optional domain / type / difficulty.
+4. Configure **Sections to Scan** - defaults are Key Principles, How It Works, Trade-offs. Add or remove as needed.
+5. Configure **Content Options** - include body, allow partial notes.
+6. Set **Budget** - max notes (1–100), max chars (100–500,000).
 7. Review the **Request Preview** panel to confirm your request before submitting.
 8. Click **Run security scan** to call `POST /context/security`.
 9. The result panel shows:
-    - **Scan Overview** — overall status badge (pass / warning / fail), total findings, fail / warning / info counts, notes scanned, source path count
-    - **Findings** — expandable finding cards filterable by severity (fail / warning / info) and text search over path / rule / detail; each card shows severity, path, rule, field, and detail
-    - **Scanned Notes** — all source paths with per-path finding counts and severity breakdown (F / W / I)
-    - **Rule Summary** — client-side rule breakdown showing rule name, count, and highest severity
-    - **Raw JSON** — full security response, hidden by default
+    - **Scan Overview** - overall status badge (pass / warning / fail), total findings, fail / warning / info counts, notes scanned, source path count
+    - **Findings** - expandable finding cards filterable by severity (fail / warning / info) and text search over path / rule / detail; each card shows severity, path, rule, field, and detail
+    - **Scanned Notes** - all source paths with per-path finding counts and severity breakdown (F / W / I)
+    - **Rule Summary** - client-side rule breakdown showing rule name, count, and highest severity
+    - **Raw JSON** - full security response, hidden by default
 
 **Pass state:** When the vault is clean, a strong pass indicator is shown with no empty broken panels.
 
@@ -680,7 +680,7 @@ The Security Scan UI at `/app/security` lets you run a fully configurable `POST 
 
 ---
 
-## 6h. Feedback Workflow UI (Phase 14B)
+## 19. Feedback Workflow UI (Phase 14B)
 
 The Feedback Workflow UI at `/app/feedback` lets you view, add, edit, delete, and normalise feedback entries, and see how feedback affects task priority.
 
@@ -711,7 +711,7 @@ The Feedback Workflow UI at `/app/feedback` lets you view, add, edit, delete, an
 
 **Delete feedback**
 1. Click **Delete** on any entry that has an id.
-2. A confirmation panel appears — click **Confirm Delete** to proceed with `DELETE /feedback/{id}?vault=<vault>`.
+2. A confirmation panel appears - click **Confirm Delete** to proceed with `DELETE /feedback/{id}?vault=<vault>`.
 3. Deletion cannot be undone. The list and task panel refresh on success.
 
 **Normalise feedback IDs**
@@ -732,7 +732,7 @@ The Feedback Workflow UI at `/app/feedback` lets you view, add, edit, delete, an
 
 ---
 
-## 6i. Note Browser UI (Phase 15A)
+## 20. Note Browser UI (Phase 15A)
 
 The Note Browser at `/app/notes` lets you browse, filter, search, and inspect vault notes in read-only mode.
 
@@ -748,13 +748,13 @@ The Note Browser at `/app/notes` lets you browse, filter, search, and inspect va
 4. Click any note in the list to load its full detail on the right.
 
 **Note detail panel** (read-only):
-- **Header** — note title (from frontmatter), vault-relative path, and status / difficulty / domain / type badges.
-- **Frontmatter Fields** — all YAML frontmatter key/value pairs in a table.
-- **Section Outline** — headings extracted client-side from the Markdown body with heading level and line number.
-- **Markdown Body** — raw Markdown text in a scrollable read-only panel.
-- **Validation** — shows a warning if the note appears in the invalid notes list (`GET /validation`), or a pass badge if valid.
-- **Improvement Task** — shows the highest-priority improvement task for the note from `GET /tasks?include_feedback=true`, including priority, missing sections, constraints, and optional feedback weight. Shows "No active improvement task" if none exists.
-- **Raw JSON** — note detail and query responses hidden behind `<details>` expanders.
+- **Header** - note title (from frontmatter), vault-relative path, and status / difficulty / domain / type badges.
+- **Frontmatter Fields** - all YAML frontmatter key/value pairs in a table.
+- **Section Outline** - headings extracted client-side from the Markdown body with heading level and line number.
+- **Markdown Body** - raw Markdown text in a scrollable read-only panel.
+- **Validation** - shows a warning if the note appears in the invalid notes list (`GET /validation`), or a pass badge if valid.
+- **Improvement Task** - shows the highest-priority improvement task for the note from `GET /tasks?include_feedback=true`, including priority, missing sections, constraints, and optional feedback weight. Shows "No active improvement task" if none exists.
+- **Raw JSON** - note detail and query responses hidden behind `<details>` expanders.
 
 **Query Search panel (POST /query):**
 1. Click **Query Search** in the left column to expand the panel.
@@ -762,7 +762,7 @@ The Note Browser at `/app/notes` lets you browse, filter, search, and inspect va
 3. Select which fields to search: body, path, frontmatter.
 4. Optionally add filters: status, difficulty, domain, type.
 5. Set the result limit (1–500, default 50).
-6. Click **Search** — results replace the note list and show relevance scores.
+6. Click **Search** - results replace the note list and show relevance scores.
 7. Click a result to load its note detail.
 8. Click **Clear search** to return to the base note list.
 
@@ -770,7 +770,7 @@ The Note Browser at `/app/notes` lets you browse, filter, search, and inspect va
 
 ---
 
-## 6j. Safe Note Editing UI (Phase 15C)
+## 21. Safe Note Editing UI (Phase 15C)
 
 The Note Browser at `/app/notes` includes a safe in-place editor for existing notes. Edit mode is backed by the `PUT /note` backend API (Phase 15B) which validates all changes before writing.
 
@@ -778,19 +778,19 @@ The Note Browser at `/app/notes` includes a safe in-place editor for existing no
 1. Navigate to **Notes** in the sidebar.
 2. Select a vault and then click any note in the list to load its detail.
 3. Click **Edit note** in the note header action bar.
-4. The page switches to edit mode — the header border turns blue and an **EDIT MODE** badge appears.
+4. The page switches to edit mode - the header border turns blue and an **EDIT MODE** badge appears.
 
 **Editing frontmatter fields:**
 - All existing frontmatter fields are displayed in an editable form.
 - Boolean fields use a checkbox. String and numeric fields use a text input.
-- Complex values (arrays, nested objects) are shown as read-only JSON — backend validation remains authoritative for these.
+- Complex values (arrays, nested objects) are shown as read-only JSON - backend validation remains authoritative for these.
 - No new arbitrary fields can be added; the backend will reject unknown fields with `VALIDATION_FAILED`.
 
 **Editing the Markdown body:**
 - A resizable textarea replaces the read-only body view.
 - Character count is shown in the panel header.
 - The **Section Outline** panel updates live to reflect the edited body.
-- Advisory warnings appear if the expected sections (Key Principles, How It Works, Trade-offs) are absent from the edited body. These are client-side hints only — backend validation is authoritative.
+- Advisory warnings appear if the expected sections (Key Principles, How It Works, Trade-offs) are absent from the edited body. These are client-side hints only - backend validation is authoritative.
 
 **Saving changes:**
 1. Click **Save changes** to call `PUT /note` with the current edits.
@@ -799,7 +799,7 @@ The Note Browser at `/app/notes` includes a safe in-place editor for existing no
 
 **Handling validation failures:**
 - If the server returns `VALIDATION_FAILED` (HTTP 400), the page stays in edit mode and shows a structured error panel listing each validation detail.
-- Local edits are not discarded — you can fix the issue and retry.
+- Local edits are not discarded - you can fix the issue and retry.
 - Click **Cancel** at any time to discard all local edits and return to inspect mode.
 
 **Unsaved changes badge:**
@@ -812,12 +812,12 @@ The Note Browser at `/app/notes` includes a safe in-place editor for existing no
 - Click **Cancel** to discard all local edits and return to inspect mode.
 
 **Raw JSON expanders** (all hidden by default):
-- **Note detail response (GET /note)** — the current loaded note response.
-- **Last update response (PUT /note)** — the most recent save response (success or error), available after a save attempt.
-- **Current edit payload preview** — the exact JSON that will be submitted to `PUT /note` when you click Save (visible only in edit mode).
+- **Note detail response (GET /note)** - the current loaded note response.
+- **Last update response (PUT /note)** - the most recent save response (success or error), available after a save attempt.
+- **Current edit payload preview** - the exact JSON that will be submitted to `PUT /note` when you click Save (visible only in edit mode).
 
 **Safety guarantees:**
-- `PUT /note` only updates existing notes — it cannot create new notes or delete notes.
+- `PUT /note` only updates existing notes - it cannot create new notes or delete notes.
 - Path traversal is blocked server-side.
 - `Vault Files/` is protected from writes.
 - The original file is unchanged if validation or write fails.
@@ -825,7 +825,7 @@ The Note Browser at `/app/notes` includes a safe in-place editor for existing no
 
 ---
 
-## 6k. Graph Explorer UI (Phase 16)
+## 22. Graph Explorer UI (Phase 16)
 
 The **Graph** page (`/app/graph`) provides a browser-based view of the vault's
 schema-derived relationship graph and missing expected concepts.
@@ -848,7 +848,7 @@ schema-derived relationship graph and missing expected concepts.
 - Per-type node counts (note, domain, subdomain, topic, expected_concept).
 - Per-type edge counts (parent, member_of, expected_coverage).
 - A grouped, searchable node list for every node in the graph.
-- Node type filter toggles and edge type filter toggles — click to hide/show groups.
+- Node type filter toggles and edge type filter toggles - click to hide/show groups.
 - A text search box to find nodes by label or id.
 
 **Node types:**
@@ -874,31 +874,31 @@ schema-derived relationship graph and missing expected concepts.
 - Shows node id, type, and label.
 - Shows all direct neighbours (filtered by the active node/edge type filters).
 - For `note` nodes only:
-  - **Related notes** — notes that share a domain, subdomain, or topic hub with this note (strength shown as `topic > subdomain > domain`).
-  - **Missing expected concepts near this note** — expected concepts the schema declares near this note's group hubs that are not yet in the vault.
+  - **Related notes** - notes that share a domain, subdomain, or topic hub with this note (strength shown as `topic > subdomain > domain`).
+  - **Missing expected concepts near this note** - expected concepts the schema declares near this note's group hubs that are not yet in the vault.
 - Click **inspect →** on any neighbour to navigate to that node.
 - Raw JSON (neighbours, related, missing) is hidden by default behind a `<details>` expander.
 
 **Missing Concepts tab:**
 - Shows summary cards: expected, present, missing, and domains assessed.
 - Lists all missing expected concepts in a ranked table (rank, concept name, subdomain, score).
-- Score is derived from schema-defined priority weighting — higher score = higher priority gap.
+- Score is derived from schema-defined priority weighting - higher score = higher priority gap.
 - Click **Draft action** on any row to generate a non-destructive action card.
 
 **Non-destructive action card:**
 - Click **Draft action** next to any missing concept.
-- The action card generates a copyable instruction block — it **does not create any files** and **does not call any write API**.
+- The action card generates a copyable instruction block - it **does not create any files** and **does not call any write API**.
 - The card shows: proposed title, proposed path, domain, subdomain, suggested sections, and a full copyable instruction.
 - Click **Copy** to copy the instruction to the clipboard.
 - Use the copied instruction with your editor, CLI, or Copilot to create the note manually.
-- The card is labelled: **Draft action only — no file has been created**.
+- The card is labelled: **Draft action only - no file has been created**.
 
 **Raw JSON panels:**
 - All raw JSON panels (graph, inspector, missing concepts, action card) are hidden behind collapsed `<details>` elements by default.
 
 ---
 
-## 6l. Context Controller UI (Phase 19)
+## 23. Context Controller UI (Phase 19)
 
 The **Controller** page (`/app/controller`) provides a real-time deterministic snapshot of your vault's state and a prioritised action plan.
 
@@ -913,11 +913,11 @@ The **Controller** page (`/app/controller`) provides a real-time deterministic s
 **Vault and intent selection:**
 - Use the **Vault** dropdown to choose a registered vault.
 - Use the **Planning Intent** dropdown to select one of five intents:
-  - `Review` — general vault health and completeness.
-  - `Export` — readiness for context bundle export.
-  - `Agent Context` — readiness for LLM agent use.
-  - `Quality` — content quality and coverage gaps.
-  - `Security` — security findings and risks.
+  - `Review` - general vault health and completeness.
+  - `Export` - readiness for context bundle export.
+  - `Agent Context` - readiness for LLM agent use.
+  - `Quality` - content quality and coverage gaps.
+  - `Security` - security findings and risks.
 - Click **Refresh** to reload both the state snapshot and the plan.
 
 **Readiness cards:**
@@ -949,7 +949,7 @@ curl -X POST http://127.0.0.1:8000/context/plan \
 * http://127.0.0.1:8000/summary
 * http://127.0.0.1:8000/vaults
 
-**Validation, tasks, notes, quality, missing** — all accept an optional `?vault=<name>` query parameter:
+**Validation, tasks, notes, quality, missing** - all accept an optional `?vault=<name>` query parameter:
 * http://127.0.0.1:8000/validation
 * http://127.0.0.1:8000/validation?vault=demo-vault
 * http://127.0.0.1:8000/tasks
@@ -978,9 +978,9 @@ POST /context/bundle
   "allow_partial": false
 }
 ```
-All fields except `vault` are optional — the defaults above apply.
+All fields except `vault` are optional - the defaults above apply.
 
-**Context export** (POST with JSON body — same fields as bundle, plus `overwrite`):
+**Context export** (POST with JSON body - same fields as bundle, plus `overwrite`):
 ```json
 POST /context/export
 {
@@ -997,7 +997,7 @@ POST /compare
 {"before": "Vault Files/Vault Report.md"}
 ```
 
-**Relationship graph** — two forms, both accept a vault name:
+**Relationship graph** - two forms, both accept a vault name:
 * http://127.0.0.1:8000/graph?vault=demo-vault  *(query-param form)*
 * http://127.0.0.1:8000/graph/demo-vault  *(path-param form)*
 * http://127.0.0.1:8000/graph/neighbors?node=note::Fundamentals/Algorithms.md&vault=demo-vault
@@ -1011,10 +1011,10 @@ POST /compare
 **Task output format**
 
 Each task from `/tasks` includes:
-- `path` — full vault-relative POSIX path (e.g. `Fundamentals/Algorithms.md`)
-- `constraints` — writing constraints from the task engine
-- `missing` — list of missing section names
-- `instruction` — human-readable action
+- `path` - full vault-relative POSIX path (e.g. `Fundamentals/Algorithms.md`)
+- `constraints` - writing constraints from the task engine
+- `missing` - list of missing section names
+- `instruction` - human-readable action
 
 **Missing concepts note**
 
@@ -1025,11 +1025,11 @@ After editing, adding, or deleting a note file, the next API call automatically 
 
 ---
 
-## 6m. MCP Stdio Server (Phase 20)
+## 24. MCP Stdio Server (Phase 20)
 
 Context Vault Engine exposes its vault capabilities as a **read-only MCP stdio server** for use with MCP-compatible local clients (e.g. Claude Desktop, Cursor, custom agent loops).
 
-> The MCP server communicates entirely over **stdin/stdout** using newline-delimited JSON-RPC 2.0. All tool calls are deterministic and read-only — no notes are created, edited, or deleted.
+> The MCP server communicates entirely over **stdin/stdout** using newline-delimited JSON-RPC 2.0. All tool calls are deterministic and read-only - no notes are created, edited, or deleted.
 
 ### Start the MCP server
 
@@ -1087,7 +1087,7 @@ echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":
 
 ---
 
-## 6n. Private Cloud Mode (Phase 21)
+## 25. Private Cloud Mode (Phase 21)
 
 Run Context Vault Engine on a personal VPS or private server and access it from trusted clients with token-based authentication. All local behaviour is unchanged by default.
 
@@ -1132,12 +1132,12 @@ For full VPS deployment instructions, systemd service example, reverse proxy con
 
 ---
 
-## 6o. Session and Project State (Phase 22)
+## 26. Session and Project State (Phase 22)
 
 Context Vault Engine tracks where you are in a project via two complementary stores:
 
-- **Session state** — a per-session JSON file recording the current topic, goal, and recently worked-on notes.
-- **Project state** — a single JSON file recording the current phase, completed work, next actions, blockers, decisions, and risks.
+- **Session state** - a per-session JSON file recording the current topic, goal, and recently worked-on notes.
+- **Project state** - a single JSON file recording the current phase, completed work, next actions, blockers, decisions, and risks.
 
 All state is stored as human-readable JSON inside `<vault>/Vault Files/State/`. Writes are atomic (temp-file + replace). No database, no cloud sync.
 
@@ -1180,7 +1180,7 @@ A new `cve.resume_work` prompt guides an LLM through reading the current session
 
 ---
 
-## 6p. Safe Memory Write Queue (Phase 23)
+## 27. Safe Memory Write Queue (Phase 23)
 
 LLM-proposed note changes are stored as **pending change proposals** for human review. Nothing is written to vault notes without explicit acceptance.
 
@@ -1238,7 +1238,7 @@ A new `cve.review_pending_change` prompt guides a reviewer through examining a d
 
 ---
 
-## 6q. Context Profiles and Budget Modes (Phase 24)
+## 28. Context Profiles and Budget Modes (Phase 24)
 
 Context profiles let you target a specific client device or LLM context window without manually tuning every budget parameter.
 
@@ -1307,7 +1307,7 @@ The response includes a `profile_metadata` object describing which profile/mode 
 
 ### MCP tools
 
-- `cve.list_context_profiles` — list all profiles and modes (no vault required)
+- `cve.list_context_profiles` - list all profiles and modes (no vault required)
 - `cve.build_context_bundle` now accepts `profile` and `mode` parameters
 
 ### Bundle Builder UI
@@ -1316,7 +1316,7 @@ The Bundle Builder at `/app/bundles` now shows a **Context Profile / Mode** pane
 
 ---
 
-## 6r. Trust, Staleness, and Evidence Metadata (Phase 25)
+## 29. Trust, Staleness, and Evidence Metadata (Phase 25)
 
 Notes can carry optional trust and freshness metadata as frontmatter fields.
 
@@ -1338,15 +1338,15 @@ All fields are optional and backward-compatible. Existing notes without them con
 
 ### Confidence scoring
 
-Confidence is computed from `trust_level` and `source_type`. It indicates how thoroughly a note has been reviewed and maintained — **not factual correctness**.
+Confidence is computed from `trust_level` and `source_type`. It indicates how thoroughly a note has been reviewed and maintained - **not factual correctness**.
 
 | trust_level | source_type | confidence |
 |---|---|---|
 | verified | authored | high |
 | working | authored | medium |
-| draft / external / generated | — | low |
-| deprecated | — | deprecated |
-| (none) | — | unknown |
+| draft / external / generated | - | low |
+| deprecated | - | deprecated |
+| (none) | - | unknown |
 
 ### CLI commands
 
@@ -1387,22 +1387,22 @@ Visit `/app/trust` in the browser UI to:
 
 ### MCP tools
 
-- `cve.get_trust_summary` — vault-level trust/confidence summary
-- `cve.get_stale_notes` — stale and freshness-unknown notes
-- `cve.build_evidence` — trust-ranked evidence with source paths and section excerpts
+- `cve.get_trust_summary` - vault-level trust/confidence summary
+- `cve.get_stale_notes` - stale and freshness-unknown notes
+- `cve.build_evidence` - trust-ranked evidence with source paths and section excerpts
 
 ### MCP resources
 
-- `cve://vault/{vault}/trust` — trust summary as a resource
-- `cve://vault/{vault}/stale` — staleness summary as a resource
+- `cve://vault/{vault}/trust` - trust summary as a resource
+- `cve://vault/{vault}/stale` - staleness summary as a resource
 
 ### MCP prompt
 
-- `cve.evidence_review` — guides an agent to cite source paths, state confidence levels, include a factual accuracy disclaimer, and not auto-edit notes
+- `cve.evidence_review` - guides an agent to cite source paths, state confidence levels, include a factual accuracy disclaimer, and not auto-edit notes
 
 ---
 
-## 8. Run Verification Tests (Optional)
+## 30. Run Verification Tests (Optional)
 
 Core tests (requires only `requirements.txt`):
 
@@ -1427,7 +1427,7 @@ ALL VERIFICATION TESTS PASSED
 
 ---
 
-## 9. Troubleshooting
+## 31. Troubleshooting
 
 **Package already exists error**
 
@@ -1451,11 +1451,11 @@ pip install -r mcp/requirements.txt
 
 **/missing returns MISSING_CONCEPTS_EMPTY (HTTP 422)**
 
-The endpoint returns this error only when `EXPECTED_CONCEPTS` is not defined or is empty in `vault_schema.py`. The demo vault defines `EXPECTED_CONCEPTS` with example gap data for the Fundamentals domain, so `/missing` returns real results. When bootstrapping a new vault, supply `expected_concepts` in the bootstrap request so that `EXPECTED_CONCEPTS` is written into the generated schema automatically — no manual editing required.
+The endpoint returns this error only when `EXPECTED_CONCEPTS` is not defined or is empty in `vault_schema.py`. The demo vault defines `EXPECTED_CONCEPTS` with example gap data for the Fundamentals domain, so `/missing` returns real results. When bootstrapping a new vault, supply `expected_concepts` in the bootstrap request so that `EXPECTED_CONCEPTS` is written into the generated schema automatically - no manual editing required.
 
 **Security scan warns on URLs or code blocks**
 
-The security scanner uses deterministic regex rules. Content that describes security concepts (e.g. example API key formats in documentation) may produce `warning`-severity findings. Review findings manually — only `fail`-severity findings block export when `require_security_pass: true` is set.
+The security scanner uses deterministic regex rules. Content that describes security concepts (e.g. example API key formats in documentation) may produce `warning`-severity findings. Review findings manually - only `fail`-severity findings block export when `require_security_pass: true` is set.
 
 **`/missing` or `/tasks` return wrong vault**
 

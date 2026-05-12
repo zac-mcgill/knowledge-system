@@ -66,7 +66,7 @@ Bundles are **JSON responses** returned by `POST /context/bundle` or `py run.py 
 | `bundle_id` | string | 16-character hex ID. Deterministic (SHA-256 of request params, excluding timestamp). |
 | `vault` | string | Vault name used. |
 | `filters` | object | Filters applied to select notes. |
-| `created_at` | string | ISO-8601 UTC timestamp. **Non-deterministic** — changes on each request. |
+| `created_at` | string | ISO-8601 UTC timestamp. **Non-deterministic** - changes on each request. |
 | `validation_status` | string | `"pass"` if no selected note appears in the invalid list; `"fail"` otherwise. |
 | `schema_version` | string \| null | Value of `SCHEMA_VERSION` in `vault_schema.py` if defined; `null` if the schema does not expose this constant. The demo vault exposes `"3.0.0"`. |
 | `notes` | array | Selected note objects (see below). |

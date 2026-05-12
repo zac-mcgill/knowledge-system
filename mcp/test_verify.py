@@ -11325,6 +11325,26 @@ def main():
     test_p25_40()
     test_p25_41()
 
+    # Documentation drift guardrails (added in the Phase 25 production-docs pass)
+    test_doc_drift_readme_test_count()
+    test_doc_drift_testing_test_count()
+    test_doc_drift_release_checklist_test_count()
+    test_doc_drift_roadmap_active_phase()
+    test_doc_drift_quickstart_concepts_text()
+
+    # Final production QA pass guardrails
+    test_doc_drift_readme_current_status()
+    test_doc_drift_readme_no_navigation_shell()
+    test_doc_drift_readme_single_feedback_summary()
+    test_doc_drift_quickstart_no_note_edit_limitation()
+    test_doc_drift_quickstart_no_bad_numbering()
+    test_doc_drift_api_route_index_complete()
+    test_doc_drift_architecture_remote_read_only_env()
+    test_doc_drift_architecture_mentions_context_html()
+    test_doc_drift_architecture_session_state_is_file_backed()
+    test_doc_drift_testing_no_current_six_files()
+    test_doc_drift_release_checklist_no_phase17_example()
+
     print()
     print("=" * 60)
     print("ALL VERIFICATION TESTS PASSED")
@@ -15707,6 +15727,204 @@ def test_p22_existing_tests_unaffected():
 
     print(f"  All original tools and prompts still present ✓")
     print(f"  session_state module has expected public API ✓")
+
+
+# ============================================================
+# Documentation Drift Guardrails
+# ============================================================
+
+
+def _repo_root():
+    from pathlib import Path
+    return Path(__file__).resolve().parent.parent
+
+
+def test_doc_drift_readme_test_count():
+    """DOC-DRIFT-1: README quotes the current 564-test total, no stale counts."""
+    readme = (_repo_root() / "README.md").read_text(encoding="utf-8")
+    assert "564" in readme, "README.md must mention the current test count 564"
+    stale_phrases = [
+        "553 deterministic tests",
+        "548 deterministic tests",
+        "507 deterministic tests",
+        "382 tests",
+        "272 tests",
+    ]
+    for phrase in stale_phrases:
+        assert phrase not in readme, f"README.md still mentions stale phrase {phrase!r}"
+    print(f"  README mentions 564 tests, no stale counts present ✓")
+
+
+def test_doc_drift_testing_test_count():
+    """DOC-DRIFT-2: TESTING.md current total is 564 and historical markers retained."""
+    text = (_repo_root() / "TESTING.md").read_text(encoding="utf-8")
+    assert "564 test functions" in text, "TESTING.md must state 564 test functions"
+    for marker in ("429", "467", "507", "548"):
+        assert marker in text, f"TESTING.md must retain historical test-count marker {marker}"
+    print(f"  TESTING.md states 564 functions and keeps 429/467/507/548 markers ✓")
+
+
+def test_doc_drift_release_checklist_test_count():
+    """DOC-DRIFT-3: RELEASE_CHECKLIST references 564 tests and required commands."""
+    text = (_repo_root() / "RELEASE_CHECKLIST.md").read_text(encoding="utf-8")
+    assert "564" in text, "RELEASE_CHECKLIST.md must reference the 564-test target"
+    for req in ("test_verify.py", "run.py validate", "run.py security",
+                "run.py export", "GitHub Release"):
+        assert req in text, f"RELEASE_CHECKLIST.md must contain {req!r}"
+    print(f"  RELEASE_CHECKLIST mentions 564 tests and required commands ✓")
+
+
+def test_doc_drift_roadmap_active_phase():
+    """DOC-DRIFT-4: ROADMAP executive direction names Phase 26 as the active phase."""
+    text = (_repo_root() / "ROADMAP.md").read_text(encoding="utf-8")
+    assert "Phase 26" in text, "ROADMAP.md must mention Phase 26"
+    assert "active work around Phase 17" not in text, \
+        "ROADMAP.md still claims active work is Phase 17"
+    print(f"  ROADMAP names Phase 26 as active, stale Phase 17 claim removed ✓")
+
+
+def test_doc_drift_quickstart_concepts_text():
+    """DOC-DRIFT-5: QUICKSTART no longer claims Expected Concepts are not written to schema."""
+    text = (_repo_root() / "QUICKSTART.md").read_text(encoding="utf-8")
+    assert "not yet written to schema" not in text, \
+        "QUICKSTART.md still claims Expected Concepts not yet written to schema"
+    assert "accepted with a backend warning" not in text, \
+        "QUICKSTART.md still claims backend warning for concepts"
+    assert "EXPECTED_CONCEPTS" in text, \
+        "QUICKSTART.md should describe EXPECTED_CONCEPTS handling"
+    print(f"  QUICKSTART correctly describes Expected Concepts writing to schema ✓")
+
+
+# ---- Final production QA pass guardrails -------------------------------
+
+
+def test_doc_drift_readme_current_status():
+    """DOC-DRIFT-6: README has a Current Status section naming Phase 26 as active."""
+    text = (_repo_root() / "README.md").read_text(encoding="utf-8")
+    assert "## Current Status" in text, "README.md must contain a '## Current Status' section"
+    assert "Phases 0 to 25" in text or "Phases 0-25" in text, \
+        "README.md Current Status must say Phases 0 to 25 are complete"
+    assert "Phase 26" in text, "README.md Current Status must mention Phase 26 as active"
+    print(f"  README Current Status section names Phase 26 active ✓")
+
+
+def test_doc_drift_readme_no_navigation_shell():
+    """DOC-DRIFT-7: README does not describe the UI as a 'navigation shell for future pages'."""
+    text = (_repo_root() / "README.md").read_text(encoding="utf-8")
+    assert "navigation shell for future pages" not in text, \
+        "README.md still says UI is a 'navigation shell for future pages'"
+    print(f"  README no longer calls UI a navigation shell ✓")
+
+
+def test_doc_drift_readme_single_feedback_summary():
+    """DOC-DRIFT-8: Package Artefact table contains exactly one feedback-summary.json row."""
+    text = (_repo_root() / "README.md").read_text(encoding="utf-8")
+    # Count rows that look like a table row mentioning feedback-summary.json
+    rows = [line for line in text.splitlines()
+            if line.strip().startswith("|") and "feedback-summary.json" in line]
+    assert len(rows) == 1, \
+        f"README.md must have exactly one feedback-summary.json table row, found {len(rows)}"
+    print(f"  README has exactly one feedback-summary.json row ✓")
+
+
+def test_doc_drift_quickstart_no_note_edit_limitation():
+    """DOC-DRIFT-9: QUICKSTART does not claim either note-edit or guided UI is unimplemented."""
+    text = (_repo_root() / "QUICKSTART.md").read_text(encoding="utf-8")
+    assert "note edit UI is not yet implemented" not in text, \
+        "QUICKSTART.md still claims the note edit UI is not yet implemented"
+    assert "guided UI form for vault creation is planned" not in text, \
+        "QUICKSTART.md still claims the guided UI form is planned"
+    print(f"  QUICKSTART no longer claims note-edit or guided-form UI unimplemented ✓")
+
+
+def test_doc_drift_quickstart_no_bad_numbering():
+    """DOC-DRIFT-10: QUICKSTART uses linear numbering and no stale section back-references."""
+    text = (_repo_root() / "QUICKSTART.md").read_text(encoding="utf-8")
+    bad_headers = ["## 5b.", "## 5c.", "## 5d.", "## 5e.", "## 4e.", "## 6e-delete.",
+                   "## 6b.", "## 6c.", "## 6d.", "## 6e.", "## 6f.", "## 6g.",
+                   "## 6h.", "## 6i.", "## 6j.", "## 6k.", "## 6l.", "## 6m.",
+                   "## 6n.", "## 6o.", "## 6p.", "## 6q.", "## 6r."]
+    for h in bad_headers:
+        assert h not in text, f"QUICKSTART.md still contains stale heading {h!r}"
+    # Stale cross-references such as 'section 6b'..'section 6r' must also be gone.
+    for letter in "bcdefghijklmnopqr":
+        token = f"section 6{letter}"
+        assert token not in text, f"QUICKSTART.md still contains stale reference {token!r}"
+    print(f"  QUICKSTART uses clean linear section numbering and refs ✓")
+
+
+def test_doc_drift_api_route_index_complete():
+    """DOC-DRIFT-11: API.md Route Index lists every key route group for current phases."""
+    text = (_repo_root() / "API.md").read_text(encoding="utf-8")
+    required_paths = [
+        "/context/state", "/context/plan",
+        "/session/start", "/session/resume", "/session/summary",
+        "/session/attach-note", "/session/close",
+        "/project/state",
+        "/memory/pending", "/memory/create-note-draft",
+        "/memory/suggest-note-update", "/memory/update-section-draft",
+    ]
+    for p in required_paths:
+        assert p in text, f"API.md must document route {p}"
+    print(f"  API.md Route Index covers session, project, memory, and controller routes ✓")
+
+
+def test_doc_drift_architecture_remote_read_only_env():
+    """DOC-DRIFT-12: ARCHITECTURE uses CVE_REMOTE_READ_ONLY, not CVE_PRIVATE_CLOUD_READ_ONLY."""
+    text = (_repo_root() / "ARCHITECTURE.md").read_text(encoding="utf-8")
+    assert "CVE_PRIVATE_CLOUD_READ_ONLY" not in text, \
+        "ARCHITECTURE.md still references the non-existent CVE_PRIVATE_CLOUD_READ_ONLY variable"
+    assert "CVE_REMOTE_READ_ONLY" in text, \
+        "ARCHITECTURE.md must reference the actual CVE_REMOTE_READ_ONLY variable"
+    print(f"  ARCHITECTURE uses CVE_REMOTE_READ_ONLY ✓")
+
+
+def test_doc_drift_architecture_mentions_context_html():
+    """DOC-DRIFT-13: ARCHITECTURE generated artefact section includes context.html."""
+    text = (_repo_root() / "ARCHITECTURE.md").read_text(encoding="utf-8")
+    assert "context.html" in text, "ARCHITECTURE.md must list context.html in the artefact set"
+    print(f"  ARCHITECTURE mentions context.html in the package set ✓")
+
+
+def test_doc_drift_architecture_session_state_is_file_backed():
+    """DOC-DRIFT-14: ARCHITECTURE describes session/project state as file-backed JSON."""
+    text = (_repo_root() / "ARCHITECTURE.md").read_text(encoding="utf-8")
+    assert "Vault Files/State" in text, \
+        "ARCHITECTURE.md must mention 'Vault Files/State' as session/project state location"
+    # The session/project state section must not call this layer purely ephemeral or in-memory.
+    # The note_index discussion legitimately uses 'in-memory'; we only forbid the false claim
+    # for session state, which is the sentence we replaced.
+    assert "ephemeral session and project state" not in text, \
+        "ARCHITECTURE.md must not describe session/project state as ephemeral"
+    print(f"  ARCHITECTURE describes session/project state as file-backed ✓")
+
+
+def test_doc_drift_testing_no_current_six_files():
+    """DOC-DRIFT-15: TESTING.md has no current-facing 'all six required package files' claim."""
+    text = (_repo_root() / "TESTING.md").read_text(encoding="utf-8")
+    assert "Export writes all six required package files" not in text, \
+        "TESTING.md still claims 'Export writes all six required package files' as current"
+    assert "lists all six files with hashes" not in text, \
+        "TESTING.md still claims manifest 'lists all six files with hashes' as current"
+    print(f"  TESTING current-facing six-files claims removed ✓")
+
+
+def test_doc_drift_release_checklist_no_phase17_example():
+    """DOC-DRIFT-16: RELEASE_CHECKLIST has no stale Phase 17 example; project docs have no em dashes."""
+    text = (_repo_root() / "RELEASE_CHECKLIST.md").read_text(encoding="utf-8")
+    assert "active work around Phase 17" not in text, \
+        "RELEASE_CHECKLIST.md still uses 'active work around Phase 17' as example"
+    # Em dash sweep across project-authored docs (LICENCE.md excluded).
+    project_docs = [
+        "README.md", "QUICKSTART.md", "API.md", "ARCHITECTURE.md",
+        "TESTING.md", "ROADMAP.md", "DEPLOYMENT.md",
+        "RELEASE_CHECKLIST.md", "CONTEXT_BUNDLE_SPEC.md",
+    ]
+    offenders = [n for n in project_docs
+                 if "\u2014" in (_repo_root() / n).read_text(encoding="utf-8")]
+    assert not offenders, \
+        f"Project-authored docs must not contain em dashes; offenders: {offenders}"
+    print(f"  RELEASE_CHECKLIST clean; no em dashes in project docs ✓")
 
 
 if __name__ == "__main__":

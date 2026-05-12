@@ -1,10 +1,10 @@
-﻿# Context Vault Engine - Updated Master Roadmap
+# Context Vault Engine - Updated Master Roadmap
 
 ## Executive Direction
 
 Context Vault Engine is moving from a usable local vault application into a private context operating layer for humans, local LLMs, and agent clients.
 
-The current foundation is strong: deterministic Markdown validation, schema enforcement, analysis, improvement tasks, feedback, lexical search, context bundles, export packages, security scanning, FastAPI routes, and a local UI are already implemented. The current roadmap places the active work around Phase 17 - Distribution and Local App Launcher.
+The current foundation is strong: deterministic Markdown validation, schema enforcement, analysis, improvement tasks, feedback, lexical search, context bundles, export packages, security scanning, FastAPI routes, the local web UI, MCP stdio compatibility, private cloud mode, session and project state, safe memory write queue, device profiles, and trust/staleness/evidence metadata are all implemented. Phases 0 to 25 are complete; the active work is Phase 26 - Import Pipelines. Phases 27 (Registry and Reuse Layer) and 28 (Optional Semantic Retrieval) remain deferred.
 
 The next strategic direction should preserve the existing local-first, deterministic-first model while adding a new post-completion target:
 
@@ -170,18 +170,18 @@ This completes the first major usability pass.
 
 ## Remaining Roadmap
 
-### Phase 16 - Visual Graph and Missing Concepts UI — Complete
+### Phase 16 - Visual Graph and Missing Concepts UI - Complete
 
-**Status:** Complete (Phase 16 — 2026-05-11)
+**Status:** Complete (Phase 16 - 2026-05-11)
 
 **UI build:** PASS (GraphExplorer.svelte 31.75 kB / 9.00 kB gzip)
 **Backend tests:** 242 (all pass, no changes to backend)
 
 **Delivered:**
-- `ui/src/components/GraphExplorer.svelte` — vault selector, graph summary metrics, node type/edge type filters, grouped searchable node browser, node inspector (neighbours + related notes + missing neighbours), missing concepts tab with ranked table and non-destructive action card generator.
-- `ui/src/pages/graph.astro` — new Astro page at `/app/graph`.
-- `ui/src/lib/api.ts` — `fetchGraph`, `fetchGraphNeighbors`, `fetchGraphRelated`, `fetchGraphMissing` helper functions and all associated types.
-- `ui/src/layouts/AppLayout.astro` — **Graph** added to sidebar navigation.
+- `ui/src/components/GraphExplorer.svelte` - vault selector, graph summary metrics, node type/edge type filters, grouped searchable node browser, node inspector (neighbours + related notes + missing neighbours), missing concepts tab with ranked table and non-destructive action card generator.
+- `ui/src/pages/graph.astro` - new Astro page at `/app/graph`.
+- `ui/src/lib/api.ts` - `fetchGraph`, `fetchGraphNeighbors`, `fetchGraphRelated`, `fetchGraphMissing` helper functions and all associated types.
+- `ui/src/layouts/AppLayout.astro` - **Graph** added to sidebar navigation.
 - QUICKSTART.md, TESTING.md, ROADMAP.md updated.
 
 **Safety:** No backend changes. Action card is non-destructive (no file writes, no API writes). Raw JSON panels collapsed by default. UI clearly labels all relationships as schema-derived and deterministic.
@@ -195,16 +195,16 @@ feat(ui): add graph and missing concept visualisation
 
 ### Phase 17A - HTML Bundle Renderer
 
-**Status:** Complete (Phase 17A — 2026-05-11)
+**Status:** Complete (Phase 17A - 2026-05-11)
 
 **Backend tests:** 254 (12 new Phase 17A tests + 6 existing P4 tests updated; all pass)
 **UI build:** PASS (no frontend changes)
 
 **Delivered:**
-- `core/shared/context_html.py` — NEW: `render_context_html()` and `_render_*` helpers. Python standard library only (`html`, `json`). All user content is HTML-escaped. No remote assets. Deterministic output.
-- `core/shared/context_package.py` — imports `render_context_html`; generates `context.html` before manifest; adds `context.html` to `files_info` and `manifest["files"]`; writes `context.html` to package temp dir.
-- `mcp/test_verify.py` — 12 new Phase 17A tests (security, determinism, content, manifest hash); 6 existing P4 export tests updated for 7-file expectation.
-- `README.md`, `QUICKSTART.md`, `TESTING.md`, `API.md` — package file list and export docs updated.
+- `core/shared/context_html.py` - NEW: `render_context_html()` and `_render_*` helpers. Python standard library only (`html`, `json`). All user content is HTML-escaped. No remote assets. Deterministic output.
+- `core/shared/context_package.py` - imports `render_context_html`; generates `context.html` before manifest; adds `context.html` to `files_info` and `manifest["files"]`; writes `context.html` to package temp dir.
+- `mcp/test_verify.py` - 12 new Phase 17A tests (security, determinism, content, manifest hash); 6 existing P4 export tests updated for 7-file expectation.
+- `README.md`, `QUICKSTART.md`, `TESTING.md`, `API.md` - package file list and export docs updated.
 
 **Safety:** All note body/section/frontmatter content is HTML-escaped via `html.escape`. No `<script>` tags, no `javascript:` URLs, no remote assets, no external stylesheets. CSS is inline in a `<style>` block. Output is deterministic for identical bundle input (no render timestamps, no random IDs).
 
@@ -218,20 +218,20 @@ feat(export): add deterministic HTML bundle renderer
 
 ### Phase 17 - Distribution and Local App Launcher
 
-**Status:** Complete (Phase 17 — 2026-05-11)
+**Status:** Complete (Phase 17 - 2026-05-11)
 
 **Backend tests:** 264 (10 new Phase 17 launcher tests; all pass)
 **UI build:** PASS (no frontend changes)
 
 **Delivered:**
-- `core/app_launcher.py` — NEW: `check_ui_built()`, `probe_server()`, `is_context_vault_health_response()`, `wait_for_server()`, `open_browser()`, `launch_server()`, `main()`. Standard library only (`subprocess`, `urllib.request`, `webbrowser`, `json`, `time`, `pathlib`).
-- `run.py` — `app` command added to `USAGE` string; dispatches to `core.app_launcher.main(repo_root)`.
-- `mcp/test_verify.py` — 10 new Phase 17 tests (constants, health validator, connection refused, UI build detection, command dispatch).
-- `README.md`, `QUICKSTART.md`, `TESTING.md` — local app launcher documented.
+- `core/app_launcher.py` - NEW: `check_ui_built()`, `probe_server()`, `is_context_vault_health_response()`, `wait_for_server()`, `open_browser()`, `launch_server()`, `main()`. Standard library only (`subprocess`, `urllib.request`, `webbrowser`, `json`, `time`, `pathlib`).
+- `run.py` - `app` command added to `USAGE` string; dispatches to `core.app_launcher.main(repo_root)`.
+- `mcp/test_verify.py` - 10 new Phase 17 tests (constants, health validator, connection refused, UI build detection, command dispatch).
+- `README.md`, `QUICKSTART.md`, `TESTING.md` - local app launcher documented.
 
 **Behaviour:**
 - `py run.py app` starts the FastAPI server if not already running, waits for `/health`, opens `http://127.0.0.1:8000/app` in the browser, stays attached to terminal.
-- If a compatible server is already running (detected via `/health` response shape), reuses it and opens the browser — no duplicate server started.
+- If a compatible server is already running (detected via `/health` response shape), reuses it and opens the browser - no duplicate server started.
 - If port 8000 is occupied by an unrecognised process, prints a clear error and exits 1.
 - If `ui/dist` is missing, prints build instructions and starts the API server anyway.
 - No new external dependencies.
@@ -278,7 +278,7 @@ ci: add verification workflow
 
 ---
 
-### Phase 18B-U - Schema Builder UX Hardening — **Complete**
+### Phase 18B-U - Schema Builder UX Hardening - **Complete**
 
 #### Purpose
 
@@ -289,8 +289,8 @@ Close the usability gap where users had to manually edit `vault_schema.py` to ad
 - `generate_schema_content()` accepts `expected_concepts` list; renders it as `EXPECTED_CONCEPTS` using `repr()` (injection-safe, deterministic).
 - `bootstrap_vault_noninteractive()` passes cleaned concepts to schema generator; removed stale warning; returns `expected_concepts: {requested, written}` count in result.
 - `POST /vault/bootstrap` API response includes `expected_concepts` counts.
-- `VaultSetup.svelte` — removed "Backend limitation" amber warning; updated helper text; success panel shows concept count.
-- `api.ts` — `VaultBootstrapResponse` includes optional `expected_concepts` field.
+- `VaultSetup.svelte` - removed "Backend limitation" amber warning; updated helper text; success panel shows concept count.
+- `api.ts` - `VaultBootstrapResponse` includes optional `expected_concepts` field.
 - 10 new P18BU tests covering generation, deduplication, injection safety, importability, API response, and `GET /missing`.
 - Docs updated: QUICKSTART.md, API.md, TESTING.md, ROADMAP.md.
 
@@ -302,7 +302,7 @@ feat(bootstrap): write expected concepts into generated schemas
 
 ---
 
-### Phase 18C - Vault Lifecycle Management — **Complete**
+### Phase 18C - Vault Lifecycle Management - **Complete**
 
 #### Purpose
 
@@ -310,12 +310,12 @@ Allow users to safely delete non-demo vaults through the API and UI without manu
 
 #### Delivered
 
-- `mcp/core/vault_delete.py` (NEW) — service layer with `validate_delete_request()`, `assert_safe_vault_path()`, `update_config_after_delete()`, and `delete_vault()`.
-- `mcp/core/note_index.py` — `clear_vault_index(vault_name)` evicts a vault's in-process note index.
-- `mcp/core/result_cache.py` — `clear_vault_cache(vault_name)` clears all cached results for a vault.
-- `DELETE /vault/{vault_name}` endpoint — requires exact `"DELETE {vault_name}"` confirmation; protects `demo-vault` and the last remaining vault; updates config atomically; clears registry, index, and cache.
-- `ui/src/lib/api.ts` — `deleteVault()`, `VaultDeleteRequest`, `VaultDeleteResponse`.
-- `ui/src/components/VaultSetup.svelte` — Danger Zone section with vault selector, confirmation phrase input, and delete button; post-delete localStorage fallback.
+- `mcp/core/vault_delete.py` (NEW) - service layer with `validate_delete_request()`, `assert_safe_vault_path()`, `update_config_after_delete()`, and `delete_vault()`.
+- `mcp/core/note_index.py` - `clear_vault_index(vault_name)` evicts a vault's in-process note index.
+- `mcp/core/result_cache.py` - `clear_vault_cache(vault_name)` clears all cached results for a vault.
+- `DELETE /vault/{vault_name}` endpoint - requires exact `"DELETE {vault_name}"` confirmation; protects `demo-vault` and the last remaining vault; updates config atomically; clears registry, index, and cache.
+- `ui/src/lib/api.ts` - `deleteVault()`, `VaultDeleteRequest`, `VaultDeleteResponse`.
+- `ui/src/components/VaultSetup.svelte` - Danger Zone section with vault selector, confirmation phrase input, and delete button; post-delete localStorage fallback.
 - 18 new P18C tests covering all error paths, happy path, config updates, cache clearing, and UI/API contract assertions.
 - Docs updated: QUICKSTART.md, API.md, TESTING.md, ROADMAP.md.
 
@@ -335,7 +335,7 @@ feat(vault): safe vault deletion with typed confirmation
 
 ---
 
-### Phase 19 - Context Controller Layer — **Complete**
+### Phase 19 - Context Controller Layer - **Complete**
 
 #### Purpose
 
@@ -345,15 +345,15 @@ A weak local LLM should not decide low-level retrieval strategy. It should ask f
 
 #### Delivered
 
-- `mcp/core/context_controller.py` — deterministic controller service; exports `get_context_state(vault_name)` and `build_context_plan(vault_name, intent)`.
-- `GET /context/state` — returns a full snapshot: per-service summaries, 7 boolean readiness flags, blockers, and warnings.
-- `POST /context/plan` — accepts one of five intents (`review`, `export`, `agent-context`, `quality`, `security`) and returns a ranked recommendation list with `next_best_action`.
-- UI page at `/app/controller` backed by `ContextController.svelte` — vault/intent selectors, readiness grid, service summary table, recommendation list.
+- `mcp/core/context_controller.py` - deterministic controller service; exports `get_context_state(vault_name)` and `build_context_plan(vault_name, intent)`.
+- `GET /context/state` - returns a full snapshot: per-service summaries, 7 boolean readiness flags, blockers, and warnings.
+- `POST /context/plan` - accepts one of five intents (`review`, `export`, `agent-context`, `quality`, `security`) and returns a ranked recommendation list with `next_best_action`.
+- UI page at `/app/controller` backed by `ContextController.svelte` - vault/intent selectors, readiness grid, service summary table, recommendation list.
 - "Controller" nav item added to `AppLayout.astro`.
 - 19 Phase 19 test cases added to `mcp/test_verify.py`.
 - `API.md` updated with full endpoint documentation.
 
-#### Acceptance Criteria — Met
+#### Acceptance Criteria - Met
 
 - Controller is deterministic: same vault + intent always returns the same output.
 - Controller is read-only: no vault files are mutated.
@@ -368,7 +368,7 @@ feat(context): add context controller layer (Phase 19)
 
 ---
 
-### Phase 20 - MCP Compatibility Layer — **Complete**
+### Phase 20 - MCP Compatibility Layer - **Complete**
 
 #### Purpose
 
@@ -386,17 +386,17 @@ MCP stdio server (`py run.py mcp`) using JSON-RPC 2.0 over stdin/stdout:
 
 #### Files Created
 
-- `mcp/core/mcp_protocol.py` — JSON-RPC 2.0 protocol handler
-- `mcp/core/mcp_tools.py` — tool catalogue and dispatch
-- `mcp/core/mcp_resources.py` — resource catalogue and read
-- `mcp/core/mcp_prompts.py` — prompt definitions with safety footer
-- `mcp/server/mcp_stdio_server.py` — main stdio server loop
+- `mcp/core/mcp_protocol.py` - JSON-RPC 2.0 protocol handler
+- `mcp/core/mcp_tools.py` - tool catalogue and dispatch
+- `mcp/core/mcp_resources.py` - resource catalogue and read
+- `mcp/core/mcp_prompts.py` - prompt definitions with safety footer
+- `mcp/server/mcp_stdio_server.py` - main stdio server loop
 
 #### Files Modified
 
-- `run.py` — added `mcp` command
-- `mcp/test_verify.py` — 41 Phase 20 tests
-- `README.md`, `QUICKSTART.md`, `API.md`, `TESTING.md`, `ROADMAP.md` — updated docs
+- `run.py` - added `mcp` command
+- `mcp/test_verify.py` - 41 Phase 20 tests
+- `README.md`, `QUICKSTART.md`, `API.md`, `TESTING.md`, `ROADMAP.md` - updated docs
 
 #### Rules Met
 
@@ -474,7 +474,7 @@ Give weak local LLMs durable continuity without relying on chat history. Determi
 
 #### Delivered
 
-- `mcp/core/session_state.py` (NEW) — session and project state service. Functions: `start_session`, `resume_session`, `summarise_session`, `attach_note_to_session`, `close_session`, `list_sessions`, `get_project_state`, `update_project_state`, `_atomic_write_json`. Pure stdlib. All writes atomic via temp-file + replace. All functions accept `_vault_path` for test isolation.
+- `mcp/core/session_state.py` (NEW) - session and project state service. Functions: `start_session`, `resume_session`, `summarise_session`, `attach_note_to_session`, `close_session`, `list_sessions`, `get_project_state`, `update_project_state`, `_atomic_write_json`. Pure stdlib. All writes atomic via temp-file + replace. All functions accept `_vault_path` for test isolation.
 - Session records: `session_id`, `status`, `active_vault`, `current_project`, `current_topic`, `recent_notes`, `user_goal`, `created_at`, `last_activity`, `closed_at`, `summary`.
 - Project state: `vault`, `current_phase`, `completed_work`, `next_actions`, `blockers`, `decisions`, `risks`, `updated_at`.
 - 7 new HTTP endpoints: `POST /session/start`, `GET /session/resume`, `GET /session/summary`, `POST /session/attach-note`, `POST /session/close`, `GET /project/state`, `PUT /project/state`.
@@ -491,9 +491,9 @@ Give weak local LLMs durable continuity without relying on chat history. Determi
 <vault>/Vault Files/State/project-state.json
 ```
 
-#### Acceptance Criteria — Met
+#### Acceptance Criteria - Met
 
-- User can ask "where was I up to?" — answered from stored state.
+- User can ask "where was I up to?" - answered from stored state.
 - Local LLM can resume with explicit state via `cve.resume_work` prompt.
 - Project state is stored outside model memory.
 - State files are human-readable and versionable.
@@ -523,15 +523,15 @@ Allow local LLMs to propose context changes without directly mutating the vault.
 
 #### Delivered
 
-- `mcp/core/pending_changes.py` (NEW) — full pending-change service: `create_note_draft`, `suggest_note_update`, `update_note_section_draft`, `list_pending_changes`, `review_pending_change`, `accept_pending_change`, `reject_pending_change`, `validate_pending_change`. Pure stdlib. All writes atomic. All functions accept `_vault_path` for test isolation.
+- `mcp/core/pending_changes.py` (NEW) - full pending-change service: `create_note_draft`, `suggest_note_update`, `update_note_section_draft`, `list_pending_changes`, `review_pending_change`, `accept_pending_change`, `reject_pending_change`, `validate_pending_change`. Pure stdlib. All writes atomic. All functions accept `_vault_path` for test isolation.
 - Pending change records: `id`, `type`, `vault`, `path`, `section`, `proposed_content`, `reason`, `source`, `created_at`, `updated_at`, `status`, `validation_status`, `validation_errors`, `diff`, `original_content_hash`, `proposed_content_hash`, `session_id`, `project`, `applied_at`, `rejected_at`, `reviewer`, `audit_note`.
 - 7 new HTTP endpoints: `GET /memory/pending`, `POST /memory/create-note-draft`, `POST /memory/suggest-note-update`, `POST /memory/update-section-draft`, `GET /memory/pending/{id}`, `POST /memory/pending/{id}/accept`, `POST /memory/pending/{id}/reject`.
 - 7 new MCP tools: `cve.create_note_draft`, `cve.suggest_note_update`, `cve.update_note_section_draft`, `cve.list_pending_changes`, `cve.review_pending_change`, `cve.accept_pending_change`, `cve.reject_pending_change`.
 - 1 new MCP resource template: `cve://vault/{vault}/pending-changes`.
 - `cve.review_pending_change` MCP prompt for guided review workflow.
 - 1 new CLI command: `py run.py pending`.
-- `ui/src/components/PendingChanges.svelte` — vault selector, change list, detail panel, diff display, accept/reject with confirmation.
-- `ui/src/pages/pending.astro` — Pending Changes page.
+- `ui/src/components/PendingChanges.svelte` - vault selector, change list, detail panel, diff display, accept/reject with confirmation.
+- `ui/src/pages/pending.astro` - Pending Changes page.
 - Write routes blocked when `CVE_REMOTE_READ_ONLY=true`.
 
 #### Storage layout
@@ -541,7 +541,7 @@ Allow local LLMs to propose context changes without directly mutating the vault.
 <vault>/Vault Files/State/pending-changes/archive/<YYYYMMDDTHHMMSS-xxxxxxxx>.json (accepted/rejected)
 ```
 
-#### Acceptance Criteria — Met
+#### Acceptance Criteria - Met
 
 - LLM can propose note changes; proposals are stored, not applied.
 - Human reviews full diff before accepting.
@@ -571,7 +571,7 @@ Make context output usable by different clients, especially small local LLMs on 
 
 #### Delivered
 
-- `mcp/core/context_profiles.py` (NEW) — profile service: `get_builtin_modes`, `get_builtin_profiles`, `list_context_profiles`, `get_context_profile`, `resolve_context_profile`, `validate_context_profile`, `apply_context_profile_to_request`, `profile_status_summary`. Pure stdlib.
+- `mcp/core/context_profiles.py` (NEW) - profile service: `get_builtin_modes`, `get_builtin_profiles`, `list_context_profiles`, `get_context_profile`, `resolve_context_profile`, `validate_context_profile`, `apply_context_profile_to_request`, `profile_status_summary`. Pure stdlib.
 - Built-in modes: `tiny` (2 notes / 2k chars), `small` (5 / 8k), `medium` (10 / 20k), `large` (25 / 80k), `agent` (50 / 200k).
 - Built-in device profiles: `phone-local-llm`, `desktop-agent`, `full-review`.
 - New endpoints: `GET /context/profiles`, `GET /context/profiles/{name}`.
@@ -580,10 +580,10 @@ Make context output usable by different clients, especially small local LLMs on 
 - Updated MCP tools: `cve.build_context_bundle` and `cve.security_scan` accept `profile`/`mode`.
 - New MCP resource: `cve://context/profiles`; per-profile resources `cve://context/profile/{name}`.
 - 1 new CLI command: `py run.py profiles`.
-- `ui/src/components/BundleBuilder.svelte` — profile/mode selector panel; mode badges; device profile badges; effective budget summary; override labels (⚠); `profile_metadata` in result panel.
-- `ui/src/lib/api.ts` — `ProfileMetadata`, `ContextProfileDefinition`, `ContextProfilesData` types; `fetchContextProfiles`, `fetchContextProfile` functions.
+- `ui/src/components/BundleBuilder.svelte` - profile/mode selector panel; mode badges; device profile badges; effective budget summary; override labels (⚠); `profile_metadata` in result panel.
+- `ui/src/lib/api.ts` - `ProfileMetadata`, `ContextProfileDefinition`, `ContextProfilesData` types; `fetchContextProfiles`, `fetchContextProfile` functions.
 
-#### Acceptance Criteria — Met
+#### Acceptance Criteria - Met
 
 - User can select a profile/mode in Bundle Builder; defaults applied to manual controls.
 - Local LLM receives bounded context; profile enforces max_notes/max_chars.
@@ -597,99 +597,6 @@ Make context output usable by different clients, especially small local LLMs on 
 
 ```
 feat(context): add device profiles and context budgets (Phase 24)
-```
-
----
-
-- `create_note_draft`
-- `suggest_note_update`
-- `update_note_section_draft`
-- `review_pending_change`
-- `accept_pending_change`
-- `reject_pending_change`
-
-Each pending change should include:
-
-- `type`
-- `path`
-- `section`
-- `proposed_content`
-- `reason`
-- `source`
-- `created_at`
-- `validation_status`
-- `diff`
-
-#### Rules
-
-- LLMs do not directly rewrite notes by default.
-- Proposed changes are validated before acceptance.
-- UI shows diff before write.
-- Accepted changes use existing safe note edit path.
-- Rejected changes are retained or archived for audit.
-
-#### Acceptance Criteria
-
-- Agent/client can propose changes.
-- User can accept/reject/edit from UI.
-- Accepted changes validate before disk write.
-- Full diff is visible.
-
-#### Suggested Commit
-
-```
-feat(memory): add pending change review queue
-```
-
----
-
-### Phase 24 - Device Profiles and Context Budgets
-
-#### Purpose
-
-Make context output usable by different clients, especially small local LLMs on phones.
-
-#### Deliver
-
-Device/context profiles:
-
-```yaml
-profiles:
-  s25-local-llm:
-    max_chars: 8000
-    include_body: false
-    include_sections:
-      - Key Principles
-      - How It Works
-    require_security_scan: true
-    prefer_complete: true
-
-  desktop-agent:
-    max_chars: 30000
-    include_body: true
-    include_related: true
-    require_security_scan: true
-```
-
-Bundle modes:
-
-- `tiny`
-- `small`
-- `medium`
-- `large`
-- `agent`
-
-#### Acceptance Criteria
-
-- User can select a profile.
-- Local LLM receives bounded context.
-- Bundle builder supports profiles.
-- MCP tools can request context by profile.
-
-#### Suggested Commit
-
-```
-feat(context): add device profiles and context budgets
 ```
 
 ---
@@ -838,9 +745,9 @@ Recommended sequence:
 
 The project should now be understood in three layers:
 
-1. **Vault Application** — Human-facing local UI for creating, validating, editing, improving, and packaging vaults.
-2. **Context Service** — API/controller layer that assembles bounded, validated, security-scanned context.
-3. **Local AI Context Backend** — MCP-compatible private service that lets weak local LLMs retrieve durable project memory.
+1. **Vault Application** - Human-facing local UI for creating, validating, editing, improving, and packaging vaults.
+2. **Context Service** - API/controller layer that assembles bounded, validated, security-scanned context.
+3. **Local AI Context Backend** - MCP-compatible private service that lets weak local LLMs retrieve durable project memory.
 
 The strongest future positioning is:
 

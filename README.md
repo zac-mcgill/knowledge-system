@@ -4,13 +4,24 @@
 
 Context Vault Engine is a local-first Python pipeline for validating, scanning, and securely packaging structured Markdown content. It enforces a schema contract on every note, scans content for credential leaks, prompt-injection patterns, and suspicious executable/script blocks, then exports integrity-verified packages with SHA-256 manifests. All security rules are deterministic and regex-based, so every finding is explainable, reproducible, and auditable without an LLM or cloud dependency.
 
-**Local-first Python pipeline: credential leak scanning, prompt-injection detection, schema enforcement, rate-limited API, path-traversal blocking, SHA-256 artefact integrity, MCP stdio compatibility layer, private cloud mode, session and project state, safe memory write queue, trust/staleness/evidence metadata. 548 tests.**
+**Local-first Python pipeline: credential leak scanning, prompt-injection detection, schema enforcement, rate-limited API, path-traversal blocking, SHA-256 artefact integrity, MCP stdio compatibility layer, private cloud mode, session and project state, safe memory write queue, trust/staleness/evidence metadata. 564 tests.**
+
+---
+
+## Current Status
+
+- Phases 0 to 25 are complete.
+- Phase 26 (Import Pipelines) is the active development phase.
+- Phase 27 (Registry and Reuse Layer) is deferred.
+- Phase 28 (Optional Semantic Retrieval) is deferred.
+- The local app, CLI, HTTP API, and MCP stdio surface are all production-quality for local use.
+- 564 deterministic tests cover phases 0 to 25 plus documentation drift guardrails.
 
 ---
 
 ## Capabilities
 
-- Schema validation on every note — required fields, section presence, derived-field consistency
+- Schema validation on every note - required fields, section presence, derived-field consistency
 - Credential leak detection: private keys, AWS/GitHub/Slack token patterns, bearer tokens, password assignments
 - Prompt-injection pattern detection
 - Suspicious HTML, script-tag, and executable-code-block detection
@@ -20,33 +31,32 @@ Context Vault Engine is a local-first Python pipeline for validating, scanning, 
 - Optional export security gate: `require_security_pass: true` aborts export on `fail`-severity findings
 - Relationship graph, quality audit, missing-concept detection
 - MCP stdio compatibility for read-only vault inspection and deterministic context planning
-- Private Cloud Mode: token-authenticated, read-only remote API access — self-hosted, no cloud accounts required
-- Session and Project State: file-backed session tracking and project state so local LLMs can answer "where was I?" — local-first, no DB, no cloud sync
-- Safe Memory Write Queue: LLM-proposed note changes are stored as pending proposals for human review — nothing is written to vault notes without explicit accept
+- Private Cloud Mode: token-authenticated, read-only remote API access - self-hosted, no cloud accounts required
+- Session and Project State: file-backed session tracking and project state so local LLMs can answer "where was I?" - local-first, no DB, no cloud sync
+- Safe Memory Write Queue: LLM-proposed note changes are stored as pending proposals for human review - nothing is written to vault notes without explicit accept
 - Trust, Staleness, and Evidence Metadata: optional `trust_level`, `source_type`, `last_reviewed`, `review_after` frontmatter fields; `/trust`, `/stale`, `/evidence` endpoints; confidence scoring (verified/working/draft/external/deprecated); stale detection; evidence builder returns trust-ranked source notes with cite-able paths
-- 548 deterministic tests
 
 ---
 
 ## Why this matters
 
-Most content pipelines either trust their input or delegate scanning to an external service. Context Vault Engine validates, scans, and gates export at the pipeline level — deterministically, without network calls, and with structured JSON output that can be reviewed or piped into other tools. Every finding references the specific note and field that triggered it, and every exported package carries a SHA-256 hash for integrity verification.
+Most content pipelines either trust their input or delegate scanning to an external service. Context Vault Engine validates, scans, and gates export at the pipeline level, deterministically, without network calls, and with structured JSON output that can be reviewed or piped into other tools. Every finding references the specific note and field that triggered it, and every exported package carries a SHA-256 hash for integrity verification.
 
 ---
 
 ## Review in 5 minutes
 
 ```bash
-# Schema compliance — validates all notes against the schema contract
+# Schema compliance - validates all notes against the schema contract
 python run.py validate
 
-# Security scan — checks for credential leaks, injection patterns, suspicious code
+# Security scan - checks for credential leaks, injection patterns, suspicious code
 python run.py security
 
-# Export — writes integrity-verified package to dist/ with SHA-256 manifest
+# Export - writes integrity-verified package to dist/ with SHA-256 manifest
 python run.py export --overwrite
 
-# Full test suite — 382 tests covering all pipeline stages
+# Full test suite (564 deterministic tests covering all phases 0 to 25)
 python mcp/test_verify.py
 ```
 
@@ -78,7 +88,7 @@ Each command exits `0` on success, `1` on failure, and writes structured JSON ou
 | **Validate** | Checks every note against the vault schema (frontmatter, required fields, section presence, derived-field consistency). |
 | **Analyse** | Runs structured analyses: completeness by domain, difficulty/completeness distribution, section deficiency heatmap, scored action list. |
 | **Improve** | Scores partial notes by difficulty weight, missing section penalties, and domain priority. Outputs ranked upgrade tasks with per-note writing constraints. |
-| **Bundle** | Generates a deterministic context bundle — a JSON package of selected notes with metadata, section extracts, validation state, graph relationships, and budget information. |
+| **Bundle** | Generates a deterministic context bundle - a JSON package of selected notes with metadata, section extracts, validation state, graph relationships, and budget information. |
 | **Export** | Writes a portable context package to ``dist/context-bundles/<bundle-id>/`` with SHA-256 hashes, a manifest, a Markdown rendering, and a static HTML rendering. |
 | **Security** | Scans a context bundle for secrets, prompt injection patterns, suspicious code blocks, and external links using deterministic regex rules. |
 | **Feedback** | Parses vault feedback entries and adjusts task priorities when requested. Does not rewrite notes. |
@@ -150,7 +160,7 @@ py run.py pending                 # list pending change proposals as JSON
 # Context Profiles and Budget Modes (Phase 24)
 py run.py profiles                # list all built-in profiles and modes as JSON
 
-# Private Cloud Mode (Phase 21) — opt-in, local mode unchanged
+# Private Cloud Mode (Phase 21) - opt-in, local mode unchanged
 # See DEPLOYMENT.md for full setup
 CVE_PRIVATE_CLOUD_ENABLED=true CVE_AUTH_TOKEN=<token> py run.py app
 
@@ -162,9 +172,11 @@ On Windows, use ``py run.py ...``. On macOS/Linux, use ``python3 run.py ...``.
 
 ---
 
-## Local Web UI (Phase 10)
+## Local Web UI
 
 A local browser UI is available alongside the CLI and API. The UI is built with **Astro + TypeScript + Tailwind CSS + Svelte** and served by the same FastAPI backend.
+
+The UI currently includes: dashboard, vault setup and bootstrap, validation and issue review, content quality, missing concepts, tasks, security scan, bundle builder, export packager, feedback workflow, notes browser, safe note editing, graph and missing concepts explorer, context controller, pending changes review, trust and evidence, and private cloud status. CLI and API remain fully supported and are the canonical interfaces.
 
 ### Development
 
@@ -172,7 +184,7 @@ A local browser UI is available alongside the CLI and API. The UI is built with 
 # 1. Start the backend (required)
 py mcp/server/mcp_server.py
 
-# 2. In a separate terminal — start the UI dev server
+# 2. In a separate terminal - start the UI dev server
 cd ui
 npm install
 npm run dev
@@ -207,8 +219,7 @@ py run.py app
 `py run.py app` starts the FastAPI server if it is not already running, waits until it is reachable, then opens the browser. If a compatible server is already running, it reuses it. Press Ctrl+C to stop the server.
 
 **Stack:** Astro 5, TypeScript, Tailwind CSS 4, Svelte 5 islands.  
-**UI scope (Phase 10):** server health, vault list, vault selector, completion summary, validation status, security scan status, navigation shell for future pages.  
-**CLI and API:** remain fully supported and unchanged.
+**CLI and API:** remain fully supported and are the canonical interfaces.
 
 ---
 
@@ -220,6 +231,8 @@ Start the server:
 pip install -r mcp/requirements.txt
 py mcp/server/mcp_server.py
 ```
+
+The table below lists the major HTTP routes. It is a curated subset for quick orientation, not the full route list. See [API.md](API.md) for the complete, authoritative route catalogue covering session, project state, memory write queue, trust/evidence, private cloud, and vault lifecycle endpoints.
 
 | Method | Path | Purpose |
 |--------|------|---------|
@@ -251,7 +264,7 @@ py mcp/server/mcp_server.py
 | ``GET`` | ``/context/profiles`` | List all built-in context profiles and modes |
 | ``GET`` | ``/context/profiles/{name}`` | Get a single profile or mode definition |
 
-See [API.md](API.md) for full route documentation with request/response shapes.
+This table is a subset. The full route list (including `/session/*`, `/project/state`, `/memory/*`, `/trust`, `/stale`, `/evidence`, `/private/status`, `/vault/bootstrap`, `/vault/{name}` DELETE, `/note` POST/PUT, `/feedback` POST/PUT/DELETE) is in [API.md](API.md).
 
 ---
 
@@ -271,7 +284,7 @@ See [API.md](API.md) for full route documentation with request/response shapes.
 
 ``context.html`` is a deterministic static rendering for human review; Markdown vault notes remain the source of truth.
 
-The ``dist/`` directory is gitignored. Packages are build artefacts — regenerate them from the vault.
+The `dist/` directory is gitignored. Packages are build artefacts, regenerate them from the vault.
 
 ---
 
@@ -283,7 +296,7 @@ The security scanner (``run.py security``, ``POST /context/security``) uses dete
 - Prompt injection: instruction-override phrases, tool misuse patterns
 - Suspicious content: external links, executable code blocks, HTML/script blocks
 
-**This is a rule-based static scanner, not a DLP system or malware analyser.** It will produce false positives on documentation that describes security concepts. Use findings as review signals, not blocking verdicts (unless ``fail``-severity findings are present).
+**This is a rule-based static scanner, not a DLP system or malware analyser.** It will produce false positives on documentation that describes security concepts. Use findings as review signals, not blocking verdicts (unless `fail`-severity findings are present).
 
 Export gate: pass ``require_security_pass: true`` to ``POST /context/export`` to abort export when the bundle has a ``fail``-severity finding.
 
@@ -302,15 +315,15 @@ Use ``GET /tasks?include_feedback=true`` or review the ``feedback_weight`` field
 
 ## Further Reading
 
-- [QUICKSTART.md](QUICKSTART.md) — end-to-end setup and workflow
-- [ARCHITECTURE.md](ARCHITECTURE.md) — system layers and data flow
-- [ROADMAP.md](ROADMAP.md) — completed and planned phases
-- [CONTEXT_BUNDLE_SPEC.md](CONTEXT_BUNDLE_SPEC.md) — context bundle specification
-- [API.md](API.md) — all API routes with examples
-- [TESTING.md](TESTING.md) — how to run and interpret tests
+- [QUICKSTART.md](QUICKSTART.md) - end-to-end setup and workflow
+- [ARCHITECTURE.md](ARCHITECTURE.md) - system layers and data flow
+- [ROADMAP.md](ROADMAP.md) - completed and planned phases
+- [CONTEXT_BUNDLE_SPEC.md](CONTEXT_BUNDLE_SPEC.md) - context bundle specification
+- [API.md](API.md) - all API routes with examples
+- [TESTING.md](TESTING.md) - how to run and interpret tests
 
 ---
 
 ## Forensic Reports
 
-The ``demo-vault/Vault Files/`` directory may contain historical diagnostic reports generated during development (e.g. ``Vault Report.md``, ``Vault Delta Report.md``). These are **dated diagnostic snapshots**, not permanent truth. As the project evolves, they become less accurate. When they conflict with live code, live code wins.
+The `demo-vault/Vault Files/` directory may contain historical diagnostic reports generated during development (e.g. `Vault Report.md`, `Vault Delta Report.md`). These are **dated diagnostic snapshots**, not permanent truth. As the project evolves, they become less accurate. When they conflict with live code, live code wins.

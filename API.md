@@ -1,4 +1,4 @@
-# Context Vault Engine — API Reference
+# Context Vault Engine - API Reference
 
 The Context Vault Engine API is a read-mostly HTTP API served by `mcp/server/mcp_server.py`. It exposes validation status, improvement tasks, quality audits, context bundles, export operations, security scans, and graph relationships.
 
@@ -53,7 +53,7 @@ X-CVE-Token: <token>
 | `CVE_PUBLIC_BASE_URL` | Public base URL for status display only | _(empty)_ |
 | `CVE_DEPLOYMENT_MODE` | Deployment mode tag: `local`, `vps`, `tunnel` | `local` |
 
-**Local mode is unchanged.** When `CVE_PRIVATE_CLOUD_ENABLED` is not set (or set to `false`), all existing behaviour is identical — no auth is required and no routes are blocked.
+**Local mode is unchanged.** When `CVE_PRIVATE_CLOUD_ENABLED` is not set (or set to `false`), all existing behaviour is identical - no auth is required and no routes are blocked.
 
 See `DEPLOYMENT.md` for full deployment and VPS setup guidance.
 
@@ -97,12 +97,40 @@ See `DEPLOYMENT.md` for full deployment and VPS setup guidance.
 | `GET` | `/context/profiles` | List all built-in context profiles and modes |
 | `GET` | `/context/profiles/{profile_name}` | Get a single profile or mode definition |
 | `GET` | `/trust` | Vault-level trust/confidence/staleness summary (Phase 25) |
-| `GET` | `/stale` | Vault staleness breakdown — stale, freshness_unknown, deprecated notes (Phase 25) |
+| `GET` | `/stale` | Vault staleness breakdown - stale, freshness_unknown, deprecated notes (Phase 25) |
 | `POST` | `/evidence` | Build trust-ranked evidence with source paths and section excerpts (Phase 25) |
 | `GET` | `/app` | Serve compiled local web UI (index.html) |
 | `GET` | `/app/{ui_path:path}` | Serve compiled local web UI static assets |
 | `POST` | `/vault/bootstrap` | Create a new vault (Phase 11A) |
 | `DELETE` | `/vault/{vault_name}` | Permanently delete a non-demo vault (Phase 18C) |
+| `GET` | `/context/state` | Current context controller state (Phase 19) |
+| `POST` | `/context/plan` | Plan a deterministic context fetch (Phase 19) |
+| `POST` | `/session/start` | Start a new session (Phase 22) |
+| `GET` | `/session/resume` | Resume an existing session by id (Phase 22) |
+| `GET` | `/session/summary` | Summary of the current/active session (Phase 22) |
+| `POST` | `/session/attach-note` | Attach a note path to the active session (Phase 22) |
+| `POST` | `/session/close` | Close a session (Phase 22) |
+| `GET` | `/project/state` | Project state for the active vault (Phase 22) |
+| `PUT` | `/project/state` | Update project state for the active vault (Phase 22) |
+| `GET` | `/memory/pending` | List pending change proposals (Phase 23) |
+| `GET` | `/memory/pending/{change_id}` | Get a single pending change proposal (Phase 23) |
+| `POST` | `/memory/create-note-draft` | Propose a new note as a pending change (Phase 23) |
+| `POST` | `/memory/suggest-note-update` | Propose an update to a whole note (Phase 23) |
+| `POST` | `/memory/update-section-draft` | Propose an update to a single section (Phase 23) |
+| `POST` | `/memory/pending/{change_id}/accept` | Accept a pending change and write it (Phase 23) |
+| `POST` | `/memory/pending/{change_id}/reject` | Reject a pending change (Phase 23) |
+
+Route groups, for orientation:
+
+- **Core:** `/vaults`, `/health`, `/private/status`, `/contract`
+- **Notes and query:** `/note` (GET/PUT), `/notes`, `/query`, `/stats`, `/compare`
+- **Validation, tasks, quality, feedback:** `/validation`, `/tasks`, `/quality`, `/missing`, `/gaps`, `/feedback` (GET/POST), `/feedback/{id}` (PUT/DELETE), `/feedback/normalise`, `/summary`
+- **Graph:** `/graph`, `/graph/neighbors`, `/graph/related`, `/graph/missing`, `/graph/{vault}` and its `/related` and `/missing` forms
+- **Context, profiles, controller:** `/context/bundle`, `/context/export`, `/context/security`, `/context/profiles`, `/context/profiles/{name}`, `/context/state`, `/context/plan`
+- **Trust and evidence:** `/trust`, `/stale`, `/evidence`
+- **App and vault lifecycle:** `/app`, `/app/{ui_path:path}`, `/vault/bootstrap`, `/vault/{vault_name}` (DELETE)
+- **Session and project state:** `/session/start`, `/session/resume`, `/session/summary`, `/session/attach-note`, `/session/close`, `/project/state` (GET/PUT)
+- **Safe memory write queue:** `/memory/pending`, `/memory/pending/{change_id}`, `/memory/create-note-draft`, `/memory/suggest-note-update`, `/memory/update-section-draft`, `/memory/pending/{change_id}/accept`, `/memory/pending/{change_id}/reject`
 
 ---
 
@@ -124,11 +152,11 @@ List all registered vault names.
 Server health, vault metrics, and request statistics.
 
 **Response data:**
-- `vaults` — per-vault index stats (notes, schema_hash, last_index_time).
-- `uptime_seconds` — seconds since server started.
-- `requests_served` — total requests handled.
-- `rate_limit_status` — current rate-limiter counters.
-- `metrics` — per-endpoint request counts and average response time.
+- `vaults` - per-vault index stats (notes, schema_hash, last_index_time).
+- `uptime_seconds` - seconds since server started.
+- `requests_served` - total requests handled.
+- `rate_limit_status` - current rate-limiter counters.
+- `metrics` - per-endpoint request counts and average response time.
 
 **Example response:**
 ```json
@@ -150,17 +178,17 @@ Server health, vault metrics, and request statistics.
 
 ### GET /private/status
 
-Return private cloud mode configuration status. Always accessible without authentication — even when `CVE_REQUIRE_AUTH=true`.
+Return private cloud mode configuration status. Always accessible without authentication - even when `CVE_REQUIRE_AUTH=true`.
 
 **Response data:**
-- `enabled` (bool) — True if `CVE_PRIVATE_CLOUD_ENABLED=true`.
-- `deployment_mode` (str) — Value of `CVE_DEPLOYMENT_MODE` (`local`, `vps`, `tunnel`).
-- `require_auth` (bool) — True if authentication is currently required.
-- `token_configured` (bool) — True if `CVE_AUTH_TOKEN` is set. Never exposes the token value.
-- `remote_read_only` (bool) — True if mutating routes are blocked.
-- `public_base_url` (str | null) — Value of `CVE_PUBLIC_BASE_URL` if set.
-- `warnings` (list[str]) — Configuration warnings (no secrets).
-- `protected_methods` (list[str]) — HTTP methods blocked in read-only mode.
+- `enabled` (bool) - True if `CVE_PRIVATE_CLOUD_ENABLED=true`.
+- `deployment_mode` (str) - Value of `CVE_DEPLOYMENT_MODE` (`local`, `vps`, `tunnel`).
+- `require_auth` (bool) - True if authentication is currently required.
+- `token_configured` (bool) - True if `CVE_AUTH_TOKEN` is set. Never exposes the token value.
+- `remote_read_only` (bool) - True if mutating routes are blocked.
+- `public_base_url` (str | null) - Value of `CVE_PUBLIC_BASE_URL` if set.
+- `warnings` (list[str]) - Configuration warnings (no secrets).
+- `protected_methods` (list[str]) - HTTP methods blocked in read-only mode.
 
 **Example response (private cloud enabled):**
 ```json
@@ -203,13 +231,13 @@ Return private cloud mode configuration status. Always accessible without authen
 Run system contract checks.
 
 **Query parameters:**
-- `full` (bool, default `false`) — if `true`, includes vault script checks.
+- `full` (bool, default `false`) - if `true`, includes vault script checks.
 
 **Response data:**
-- `status` — `"pass"` or `"fail"`.
-- `duration_ms` — time taken.
-- `total_violations` — total violation count.
-- `violations` — list of violation descriptions.
+- `status` - `"pass"` or `"fail"`.
+- `duration_ms` - time taken.
+- `total_violations` - total violation count.
+- `violations` - list of violation descriptions.
 
 ---
 
@@ -266,8 +294,8 @@ Query vault notes with optional filters and optional free-text lexical search.
 **Response data:** `count`, `returned`, `offset`, `limit`, `results` (list of `{path, fields}`, or `{path, fields, score}` when `q` is present).
 
 **Error codes:**
-- `INVALID_FILTER` — unknown field or invalid operator (HTTP 400).
-- `INVALID_QUERY` — `q` exceeds 1000 characters, `q_fields` contains an unsupported field name, or `q_fields` is an empty list (HTTP 400).
+- `INVALID_FILTER` - unknown field or invalid operator (HTTP 400).
+- `INVALID_QUERY` - `q` exceeds 1000 characters, `q_fields` contains an unsupported field name, or `q_fields` is an empty list (HTTP 400).
 
 ---
 
@@ -276,14 +304,14 @@ Query vault notes with optional filters and optional free-text lexical search.
 Retrieve a single note by vault and path.
 
 **Query parameters:**
-- `vault` (required) — vault name.
-- `path` (required) — vault-relative path.
+- `vault` (required) - vault name.
+- `path` (required) - vault-relative path.
 
 **Response data:** `path`, `fields` (all frontmatter fields).
 
 **Error codes:**
-- `NOT_FOUND` — no note at that path (HTTP 404).
-- `PATH_TRAVERSAL` — path attempts to escape vault root (HTTP 400).
+- `NOT_FOUND` - no note at that path (HTTP 404).
+- `PATH_TRAVERSAL` - path attempts to escape vault root (HTTP 400).
 
 ---
 
@@ -340,13 +368,13 @@ Safely update an existing Markdown note in a vault. The note must already exist;
 ```
 
 **Error codes:**
-- `INVALID_INPUT` — unknown field, null byte, non-string body, or missing required request field (HTTP 400).
-- `PATH_TRAVERSAL` — path escapes vault root or is absolute (HTTP 400).
-- `INVALID_NOTE_PATH` — path is not `.md` or is inside `Vault Files/` (HTTP 400).
-- `NOT_FOUND` — note does not exist (HTTP 404).
-- `INVALID_VAULT` — vault not registered (HTTP 404).
-- `VALIDATION_FAILED` — note content fails schema validation (HTTP 400). Includes `details` list.
-- `WRITE_FAILED` — disk write or atomic rename failed (HTTP 500).
+- `INVALID_INPUT` - unknown field, null byte, non-string body, or missing required request field (HTTP 400).
+- `PATH_TRAVERSAL` - path escapes vault root or is absolute (HTTP 400).
+- `INVALID_NOTE_PATH` - path is not `.md` or is inside `Vault Files/` (HTTP 400).
+- `NOT_FOUND` - note does not exist (HTTP 404).
+- `INVALID_VAULT` - vault not registered (HTTP 404).
+- `VALIDATION_FAILED` - note content fails schema validation (HTTP 400). Includes `details` list.
+- `WRITE_FAILED` - disk write or atomic rename failed (HTTP 500).
 
 ---
 
@@ -355,13 +383,13 @@ Safely update an existing Markdown note in a vault. The note must already exist;
 Aggregate distinct values for a field across a vault.
 
 **Query parameters:**
-- `vault` (required) — vault name.
-- `field` (required) — field to aggregate.
+- `vault` (required) - vault name.
+- `field` (required) - field to aggregate.
 
 **Response data:** `field`, `stats` (mapping of value → count, ordered by frequency).
 
 **Error codes:**
-- `INVALID_FIELD` — field not known to vault schema (HTTP 400).
+- `INVALID_FIELD` - field not known to vault schema (HTTP 400).
 
 ---
 
@@ -375,9 +403,9 @@ Run vault validation and return structured results.
 - `vault` (optional)
 
 **Response data:**
-- `status` — `"pass"` or `"fail"`.
-- `invalid_count` — number of notes that failed.
-- `invalid_notes` — sorted list of vault-relative paths of invalid notes.
+- `status` - `"pass"` or `"fail"`.
+- `invalid_count` - number of notes that failed.
+- `invalid_notes` - sorted list of vault-relative paths of invalid notes.
 
 ---
 
@@ -387,28 +415,28 @@ Return prioritised upgrade tasks.
 
 **Query parameters:**
 - `vault` (optional)
-- `limit` (int, default `10`) — max tasks to return.
-- `min_priority` (float, optional) — minimum priority threshold.
-- `include_feedback` (bool, default `false`) — adjust scores by feedback signals.
+- `limit` (int, default `10`) - max tasks to return.
+- `min_priority` (float, optional) - minimum priority threshold.
+- `include_feedback` (bool, default `false`) - adjust scores by feedback signals.
 
 **Response data:**
-- `total` — total tasks available.
-- `tasks` — normalised task objects.
+- `total` - total tasks available.
+- `tasks` - normalised task objects.
 
 **Each task:**
-- `note` — note stem name.
-- `path` — vault-relative POSIX path.
-- `priority` — computed priority score.
-- `type` — always `"missing_section"`.
-- `target` — primary missing section.
-- `missing` — all missing sections.
-- `instruction` — human-readable action.
-- `constraints` — writing constraints for the primary issue.
-- `feedback_weight` — score delta and entry summary (only when `include_feedback=true`).
+- `note` - note stem name.
+- `path` - vault-relative POSIX path.
+- `priority` - computed priority score.
+- `type` - always `"missing_section"`.
+- `target` - primary missing section.
+- `missing` - all missing sections.
+- `instruction` - human-readable action.
+- `constraints` - writing constraints for the primary issue.
+- `feedback_weight` - score delta and entry summary (only when `include_feedback=true`).
 
 When `include_feedback=true`, response also includes:
-- `feedback_status` — `"ok"` or `"error"`.
-- `feedback_errors` — structured errors from feedback parser.
+- `feedback_status` - `"ok"` or `"error"`.
+- `feedback_errors` - structured errors from feedback parser.
 
 ---
 
@@ -434,7 +462,7 @@ Run content quality audit.
 
 **Response data:**
 - `total`, `flagged`, `highest_score`, `average_score`.
-- `notes` — per-note audit results sorted descending by score.
+- `notes` - per-note audit results sorted descending by score.
 
 **Each note entry:** `file`, `score`, `severity`, `issues` (list of `{rule, weight, explanation}`).
 
@@ -449,8 +477,8 @@ Detect missing concepts across expected subdomains.
 
 **Response data:**
 - `total_expected`, `total_actual`, `total_missing`, `domains_assessed`, `subdomains`.
-- `gaps` — mapping of subdomain → list of missing concept objects.
-- `ranked` — all missing concepts ranked by score.
+- `gaps` - mapping of subdomain → list of missing concept objects.
+- `ranked` - all missing concepts ranked by score.
 
 **Note:** Returns `MISSING_CONCEPTS_EMPTY` (HTTP 422) if `EXPECTED_CONCEPTS` is not defined or empty in `vault_schema.py`. The demo vault defines `EXPECTED_CONCEPTS` with example gap data for the Fundamentals domain.
 
@@ -460,7 +488,7 @@ Detect missing concepts across expected subdomains.
 
 Return high-priority incomplete notes (priority >= 2).
 
-**Response data:** `gaps` — list of `{note, priority, missing}`, sorted descending by priority.
+**Response data:** `gaps` - list of `{note, priority, missing}`, sorted descending by priority.
 
 ---
 
@@ -472,16 +500,16 @@ Return vault feedback entries from `Vault Files/feedback.md`.
 - `vault` (optional)
 
 **Response data:**
-- `status` — `"ok"` or `"error"`.
-- `vault` — resolved vault name.
-- `entries` — validated feedback entries.
-- `warnings` — non-fatal issues (e.g. feedback for a missing note path).
-- `errors` — structured validation errors (empty when `status="ok"`).
+- `status` - `"ok"` or `"error"`.
+- `vault` - resolved vault name.
+- `entries` - validated feedback entries.
+- `warnings` - non-fatal issues (e.g. feedback for a missing note path).
+- `errors` - structured validation errors (empty when `status="ok"`).
 
 **Each feedback entry:** `path`, `source`, `signal`, `severity`, `comment`, `created_at`. After Phase 14A normalisation, entries also include `id`.
 
 **Error codes:**
-- `FEEDBACK_ERROR` — feedback file is malformed (HTTP 500).
+- `FEEDBACK_ERROR` - feedback file is malformed (HTTP 500).
 
 ---
 
@@ -524,11 +552,11 @@ Server generates `id` (12–16 lowercase hex) and `created_at` (UTC ISO-8601).
 ```
 
 **Error codes:**
-- `INVALID_VAULT` — vault not registered (HTTP 404).
-- `INVALID_INPUT` — field validation failed (HTTP 400).
-- `PATH_TRAVERSAL` — path escapes vault root (HTTP 400).
-- `NOTE_NOT_FOUND` — note does not exist in vault (HTTP 404).
-- `FEEDBACK_WRITE_FAILED` — file write error (HTTP 500).
+- `INVALID_VAULT` - vault not registered (HTTP 404).
+- `INVALID_INPUT` - field validation failed (HTTP 400).
+- `PATH_TRAVERSAL` - path escapes vault root (HTTP 400).
+- `NOTE_NOT_FOUND` - note does not exist in vault (HTTP 404).
+- `FEEDBACK_WRITE_FAILED` - file write error (HTTP 500).
 
 ---
 
@@ -536,19 +564,19 @@ Server generates `id` (12–16 lowercase hex) and `created_at` (UTC ISO-8601).
 
 Update an existing feedback entry by id. Preserves `created_at`. Does not change `id`.
 
-**Path parameter:** `feedback_id` — 12–16 lowercase hex characters.
+**Path parameter:** `feedback_id` - 12–16 lowercase hex characters.
 
 **Request body:** Same fields as `POST /feedback` (all required, `vault` included).
 
 **Success response (HTTP 200):** Same shape as `POST /feedback` response.
 
 **Error codes:**
-- `INVALID_INPUT` — `feedback_id` format invalid or field validation failed (HTTP 400).
-- `INVALID_VAULT` — vault not registered (HTTP 404).
-- `PATH_TRAVERSAL` — path escapes vault root (HTTP 400).
-- `NOTE_NOT_FOUND` — note does not exist in vault (HTTP 404).
-- `FEEDBACK_NOT_FOUND` — id not found in feedback file (HTTP 404).
-- `FEEDBACK_WRITE_FAILED` — file write error (HTTP 500).
+- `INVALID_INPUT` - `feedback_id` format invalid or field validation failed (HTTP 400).
+- `INVALID_VAULT` - vault not registered (HTTP 404).
+- `PATH_TRAVERSAL` - path escapes vault root (HTTP 400).
+- `NOTE_NOT_FOUND` - note does not exist in vault (HTTP 404).
+- `FEEDBACK_NOT_FOUND` - id not found in feedback file (HTTP 404).
+- `FEEDBACK_WRITE_FAILED` - file write error (HTTP 500).
 
 ---
 
@@ -556,9 +584,9 @@ Update an existing feedback entry by id. Preserves `created_at`. Does not change
 
 Delete a feedback entry by id.
 
-**Path parameter:** `feedback_id` — 12–16 lowercase hex characters.
+**Path parameter:** `feedback_id` - 12–16 lowercase hex characters.
 
-**Query parameter:** `vault` (required) — vault name.
+**Query parameter:** `vault` (required) - vault name.
 
 **Success response (HTTP 200):**
 ```json
@@ -572,10 +600,10 @@ Delete a feedback entry by id.
 ```
 
 **Error codes:**
-- `INVALID_INPUT` — `feedback_id` format invalid (HTTP 400).
-- `INVALID_VAULT` — vault not registered (HTTP 404).
-- `FEEDBACK_NOT_FOUND` — id not found in feedback file (HTTP 404).
-- `FEEDBACK_WRITE_FAILED` — file write error (HTTP 500).
+- `INVALID_INPUT` - `feedback_id` format invalid (HTTP 400).
+- `INVALID_VAULT` - vault not registered (HTTP 404).
+- `FEEDBACK_NOT_FOUND` - id not found in feedback file (HTTP 404).
+- `FEEDBACK_WRITE_FAILED` - file write error (HTTP 500).
 
 ---
 
@@ -583,7 +611,7 @@ Delete a feedback entry by id.
 
 Assign stable IDs to any feedback entries that lack them, and rewrite `feedback.md` atomically. Entries that already carry valid IDs are unchanged.
 
-**Query parameter:** `vault` (required) — vault name.
+**Query parameter:** `vault` (required) - vault name.
 
 **Success response (HTTP 200):**
 ```json
@@ -596,11 +624,11 @@ Assign stable IDs to any feedback entries that lack them, and rewrite `feedback.
 }
 ```
 
-**`normalised`** — count of entries that were assigned a new ID in this call.
+**`normalised`** - count of entries that were assigned a new ID in this call.
 
 **Error codes:**
-- `INVALID_VAULT` — vault not registered (HTTP 404).
-- `FEEDBACK_WRITE_FAILED` — file write error (HTTP 500).
+- `INVALID_VAULT` - vault not registered (HTTP 404).
+- `FEEDBACK_WRITE_FAILED` - file write error (HTTP 500).
 
 ---
 
@@ -626,8 +654,8 @@ Compare two vault states and return a structured delta report.
 **Response data:** `before`, `after`, `delta`, `report` (full Markdown delta).
 
 **Error codes:**
-- `INVALID_INPUT` — `before` is blank (HTTP 400).
-- `COMPARE_FAILED` — report file not found or comparison error (HTTP 500).
+- `INVALID_INPUT` - `before` is blank (HTTP 400).
+- `COMPARE_FAILED` - report file not found or comparison error (HTTP 500).
 
 ---
 
@@ -643,8 +671,8 @@ Return full vault relationship graph.
 - `vault` (optional)
 
 **Response data:**
-- `nodes` — all graph nodes, sorted ascending by id. Each: `id`, `type`, `label`.
-- `edges` — all graph edges, sorted ascending by (from, to, type). Each: `from`, `to`, `type`.
+- `nodes` - all graph nodes, sorted ascending by id. Each: `id`, `type`, `label`.
+- `edges` - all graph edges, sorted ascending by (from, to, type). Each: `from`, `to`, `type`.
 
 Node types: `note`, `domain`, `subdomain`, `topic`, `expected_concept`.
 Edge types: `parent`, `same_domain`, `same_subdomain`, `same_topic`, `expected_coverage`.
@@ -656,7 +684,7 @@ Edge types: `parent`, `same_domain`, `same_subdomain`, `same_topic`, `expected_c
 Return all nodes directly connected to a given node (both edge directions).
 
 **Query parameters:**
-- `node` (required) — node id to query (e.g. `note::Fundamentals/Algorithms.md`).
+- `node` (required) - node id to query (e.g. `note::Fundamentals/Algorithms.md`).
 - `vault` (optional)
 
 **Response data:** `node_id`, `found`, `neighbors` (list sorted ascending by id).
@@ -670,9 +698,9 @@ Each neighbor: `id`, `type`, `label`, `edge_type` (the type of the connecting ed
 Return notes related to a node via shared group hubs.
 
 **Query parameters:**
-- `node` (required) — node id to query.
+- `node` (required) - node id to query.
 - `vault` (optional)
-- `min_strength` (string, default `"domain"`) — minimum relationship strength: `topic` | `subdomain` | `domain`.
+- `min_strength` (string, default `"domain"`) - minimum relationship strength: `topic` | `subdomain` | `domain`.
 
 **Response data:** `node_id`, `found`, `related` (list sorted by strength desc, then id asc).
 
@@ -685,7 +713,7 @@ Each related entry: `id`, `type`, `label`, `via` (strongest shared group node), 
 Return expected concepts missing near a node's group hubs.
 
 **Query parameters:**
-- `node` (required) — node id to query.
+- `node` (required) - node id to query.
 - `vault` (optional)
 
 **Response data:** `node_id`, `found`, `missing` (list sorted ascending by id).
@@ -705,7 +733,7 @@ Same as `GET /graph?vault={vault}`. Vault name in path.
 Same as `GET /graph/related?node={node_id}&vault={vault}`.
 
 **Query parameters:**
-- `node_id` (required) — node id to query.
+- `node_id` (required) - node id to query.
 - `min_strength` (optional, default `"domain"`)
 
 ---
@@ -715,7 +743,7 @@ Same as `GET /graph/related?node={node_id}&vault={vault}`.
 Same as `GET /graph/missing?node={node_id}&vault={vault}`.
 
 **Query parameters:**
-- `node_id` (required) — node id to query.
+- `node_id` (required) - node id to query.
 
 ---
 
@@ -744,10 +772,10 @@ All fields except `vault` are optional. See [CONTEXT_BUNDLE_SPEC.md](CONTEXT_BUN
 **Response:** Full bundle JSON (see [CONTEXT_BUNDLE_SPEC.md](CONTEXT_BUNDLE_SPEC.md) for response shape).
 
 **Error codes:**
-- `INVALID_VAULT` — vault not registered (HTTP 404).
-- `INVALID_FILTER` — unknown filter field (HTTP 400).
-- `VALIDATION_ERROR` — `max_notes` or `max_chars` out of range (HTTP 422).
-- `BUNDLE_FAILED` — unexpected error (HTTP 500).
+- `INVALID_VAULT` - vault not registered (HTTP 404).
+- `INVALID_FILTER` - unknown filter field (HTTP 400).
+- `VALIDATION_ERROR` - `max_notes` or `max_chars` out of range (HTTP 422).
+- `BUNDLE_FAILED` - unexpected error (HTTP 500).
 
 ---
 
@@ -782,11 +810,11 @@ Generate a context bundle and write it to disk as a portable package.
 ```
 
 **Error codes:**
-- `INVALID_VAULT` — vault not registered (HTTP 404).
-- `INVALID_FILTER` — unknown filter field (HTTP 400).
-- `PACKAGE_EXISTS` — package exists and `overwrite=false` (HTTP 409).
-- `SECURITY_SCAN_FAIL` — scan status is `fail` and `require_security_pass=true` (HTTP 400).
-- `BUNDLE_FAILED` / `EXPORT_FAILED` — unexpected error (HTTP 500).
+- `INVALID_VAULT` - vault not registered (HTTP 404).
+- `INVALID_FILTER` - unknown filter field (HTTP 400).
+- `PACKAGE_EXISTS` - package exists and `overwrite=false` (HTTP 409).
+- `SECURITY_SCAN_FAIL` - scan status is `fail` and `require_security_pass=true` (HTTP 400).
+- `BUNDLE_FAILED` / `EXPORT_FAILED` - unexpected error (HTTP 500).
 
 **Notes:**
 - Packages are written to `dist/context-bundles/<bundle_id>/` under the repo root.
@@ -861,9 +889,9 @@ All fields except `vault` are optional.
 **Each finding:** `path`, `severity` (`low`/`medium`/`high`/`critical`), `rule`, `field`, `detail`.
 
 **Error codes:**
-- `INVALID_VAULT` — vault not registered (HTTP 404).
-- `INVALID_FILTER` — unknown filter field (HTTP 400).
-- `SECURITY_SCAN_FAILED` — unexpected error (HTTP 500).
+- `INVALID_VAULT` - vault not registered (HTTP 404).
+- `INVALID_FILTER` - unknown filter field (HTTP 400).
+- `SECURITY_SCAN_FAILED` - unexpected error (HTTP 500).
 
 **Important:** This is a rule-based static scanner. It may produce false positives on documentation that describes security concepts. Review findings manually.
 
@@ -917,7 +945,7 @@ Available in private-cloud read-only mode. No authentication required beyond the
 
 Get a single profile or mode definition by name.
 
-**Path parameter:** `profile_name` — profile name (e.g. `phone-local-llm`) or mode name (e.g. `tiny`).
+**Path parameter:** `profile_name` - profile name (e.g. `phone-local-llm`) or mode name (e.g. `tiny`).
 
 **Response:**
 ```json
@@ -931,7 +959,7 @@ Get a single profile or mode definition by name.
 ```
 
 **Error codes:**
-- `INVALID_PROFILE` — name not found (HTTP 404).
+- `INVALID_PROFILE` - name not found (HTTP 404).
 
 ---
 
@@ -973,7 +1001,7 @@ For `/context/export`: if the resolved profile has `require_security_scan: true`
 
 ### GET /trust
 
-Return a vault-level trust/confidence/staleness summary. All fields reflect user-provided frontmatter metadata — they do **not** verify factual correctness.
+Return a vault-level trust/confidence/staleness summary. All fields reflect user-provided frontmatter metadata - they do **not** verify factual correctness.
 
 **Query parameters:**
 
@@ -1115,17 +1143,17 @@ Return a deterministic snapshot of the current vault state, aggregated from all 
 | `has_tasks` | There is at least one pending/in-progress task |
 | `has_missing_concepts` | At least one expected concept is missing a note |
 | `has_feedback_warnings` | Feedback file has at least one entry |
-| `ready_to_export` | `valid` and `security_passed` — safe to call `/context/export` |
-| `ready_for_agent_context` | `valid` and `security_passed` — safe to use as LLM context |
+| `ready_to_export` | `valid` and `security_passed` - safe to call `/context/export` |
+| `ready_for_agent_context` | `valid` and `security_passed` - safe to use as LLM context |
 
 **Error codes:**
-- `INVALID_VAULT` — vault not registered (HTTP 404).
+- `INVALID_VAULT` - vault not registered (HTTP 404).
 
 ---
 
 ### POST /context/plan
 
-Build a prioritised recommendation plan for a specific intent. All recommendations are derived deterministically from the current vault state — no LLM is involved.
+Build a prioritised recommendation plan for a specific intent. All recommendations are derived deterministically from the current vault state - no LLM is involved.
 
 **Request body:**
 ```json
@@ -1137,7 +1165,7 @@ Build a prioritised recommendation plan for a specific intent. All recommendatio
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `vault` | string | — | Registered vault name |
+| `vault` | string | - | Registered vault name |
 | `intent` | string | `"review"` | Planning intent (see table below) |
 
 **Valid intent values:**
@@ -1185,8 +1213,8 @@ Build a prioritised recommendation plan for a specific intent. All recommendatio
 `next_best_action` is the first (rank-1) recommendation, or `null` if there are no recommendations.
 
 **Error codes:**
-- `INVALID_VAULT` — vault not registered (HTTP 404).
-- `INVALID_INTENT` — `intent` is not one of the five valid values (HTTP 400).
+- `INVALID_VAULT` - vault not registered (HTTP 404).
+- `INVALID_INTENT` - `intent` is not one of the five valid values (HTTP 400).
 
 ---
 
@@ -1198,8 +1226,8 @@ Build a prioritised recommendation plan for a specific intent. All recommendatio
 
 Serve the compiled local web UI static files from `ui/dist/`.
 
-- **`GET /app`** — serves `ui/dist/index.html`.
-- **`GET /app/{ui_path:path}`** — serves the requested static asset from `ui/dist/`. If the exact path is not found, serves `index.html` (SPA fallback).
+- **`GET /app`** - serves `ui/dist/index.html`.
+- **`GET /app/{ui_path:path}`** - serves the requested static asset from `ui/dist/`. If the exact path is not found, serves `index.html` (SPA fallback).
 - **Path traversal protection:** any path containing `..` returns HTTP 400 `PATH_TRAVERSAL`.
 - **UI not built:** if `ui/dist/` does not exist, returns HTTP 503 with `UI_NOT_BUILT` error and build instructions.
 
@@ -1216,7 +1244,7 @@ Serve the compiled local web UI static files from `ui/dist/`.
 cd ui
 npm install
 npm run build
-# ui/dist/ is now ready — served at GET /app
+# ui/dist/ is now ready - served at GET /app
 ```
 
 All existing API routes (`/health`, `/vaults`, `/summary`, etc.) remain fully functional whether or not `ui/dist/` is present.
@@ -1246,7 +1274,7 @@ remains supported and is unaffected.
 - Each entry: trimmed, non-empty, no control characters.
 - Duplicate entries (case-insensitive) are rejected by validation.
 - After slug normalisation, duplicate slugs are silently deduplicated.
-- Each slug is rendered with `repr()` in the generated file — no Python code injection is possible.
+- Each slug is rendered with `repr()` in the generated file - no Python code injection is possible.
 
 **Example request:**
 ```json
@@ -1289,7 +1317,7 @@ remains supported and is unaffected.
 | `CONFIG_UPDATE_FAILED` | 500 | Config write failed (vault rolled back where safe) |
 
 **Security rules:**
-- `vault_name` must match `^[A-Za-z0-9_-]+$` — no path separators, no `..`
+- `vault_name` must match `^[A-Za-z0-9_-]+$` - no path separators, no `..`
 - Resolved vault path must remain within the repository root
 - No overwrite of existing directories
 - `config/config.yaml` is updated atomically (temp-file + replace)
@@ -1304,13 +1332,13 @@ The in-process vault registry is refreshed automatically after a successful boot
 Permanently delete a non-demo vault. Requires explicit typed confirmation. Removes all vault files from disk, updates `config/config.yaml`, and clears in-process caches.
 
 **Path parameter:**
-- `vault_name` — registered vault name to delete.
+- `vault_name` - registered vault name to delete.
 
 **Request body:**
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `confirm` | string | yes | Exact phrase `"DELETE {vault_name}"` — case-sensitive, no extra whitespace. |
+| `confirm` | string | yes | Exact phrase `"DELETE {vault_name}"` - case-sensitive, no extra whitespace. |
 
 **Example request:**
 ```json
@@ -1343,7 +1371,7 @@ Permanently delete a non-demo vault. Requires explicit typed confirmation. Remov
 | `CONFIG_UPDATE_FAILED` | 500 | Config write failed after directory was already deleted |
 
 **Safety design:**
-- Vault path is resolved only from the registry — never from user-supplied paths.
+- Vault path is resolved only from the registry - never from user-supplied paths.
 - `demo-vault` is permanently protected and cannot be deleted via the API.
 - The last remaining vault cannot be deleted.
 - Directory is deleted first; config is updated only after successful deletion. If config write fails after deletion, the error code `CONFIG_UPDATE_FAILED` is returned with the fallback vault in `active_vault`.
@@ -1558,7 +1586,7 @@ Update one or more project state fields. Only the following fields may be update
 
 ## Safe Memory Write Queue (Phase 23)
 
-File-backed pending change queue for LLM-proposed note modifications. All proposals are stored as JSON objects for human review — **nothing is written to vault notes until explicitly accepted**. Writes are atomic (temp-file + replace). Accepted/rejected changes are archived for audit.
+File-backed pending change queue for LLM-proposed note modifications. All proposals are stored as JSON objects for human review - **nothing is written to vault notes until explicitly accepted**. Writes are atomic (temp-file + replace). Accepted/rejected changes are archived for audit.
 
 Write endpoints are blocked when `CVE_REMOTE_READ_ONLY=true`.
 
@@ -1766,14 +1794,14 @@ Reject a pending change and archive it. Never deletes; always preserves for audi
 | `PACKAGE_EXISTS` | 409 | Package directory already exists, `overwrite=false` |
 | `SECURITY_SCAN_FAIL` | 400 | Security scan failed and `require_security_pass=true` |
 | `RATE_LIMIT` | 429 | Too many requests (>50/sec) |
-| `UI_NOT_BUILT` | 503 | `ui/dist/` not present — run `npm run build` in `ui/` |
+| `UI_NOT_BUILT` | 503 | `ui/dist/` not present - run `npm run build` in `ui/` |
 | `VAULT_EXISTS` | 409 | Vault directory already exists (bootstrap) |
 | `BOOTSTRAP_FAILED` | 500 | Vault creation or template generation error (bootstrap) |
 | `CONFIG_UPDATE_FAILED` | 500 | Config write failed during bootstrap or vault deletion |
 | `FEEDBACK_NOT_FOUND` | 404 | Feedback entry ID not found in feedback file |
 | `FEEDBACK_WRITE_FAILED` | 500 | Feedback file write error (atomic write failed) |
 | `PROTECTED_VAULT` | 403 | Deletion of demo-vault refused |
-| `LAST_VAULT` | 409 | Deletion refused — would leave zero vaults |
+| `LAST_VAULT` | 409 | Deletion refused - would leave zero vaults |
 | `CONFIRMATION_REQUIRED` | 400 | Delete confirm field is blank |
 | `CONFIRMATION_MISMATCH` | 400 | Delete confirm phrase does not match exactly |
 | `DELETE_FAILED` | 500 | Vault directory deletion failed (filesystem error) |
@@ -1812,9 +1840,9 @@ py run.py mcp
 
 | Method | Description |
 |--------|-------------|
-| `initialize` | Handshake — returns `protocolVersion`, `serverInfo`, `capabilities` |
-| `notifications/initialized` | Client notification — no response |
-| `ping` | Liveness check — returns `{}` |
+| `initialize` | Handshake - returns `protocolVersion`, `serverInfo`, `capabilities` |
+| `notifications/initialized` | Client notification - no response |
+| `ping` | Liveness check - returns `{}` |
 | `tools/list` | List all 10 CVE tools |
 | `tools/call` | Call a named CVE tool |
 | `resources/list` | List all resource URIs |
@@ -1834,4 +1862,4 @@ py run.py mcp
 
 ### Safety
 
-All MCP tools and prompts are **read-only**. No tool can create, edit, or delete notes, feedback entries, or export packages. Vault names in resource URIs are validated against the registry — path traversal attempts return `INVALID_VAULT` errors.
+All MCP tools and prompts are **read-only**. No tool can create, edit, or delete notes, feedback entries, or export packages. Vault names in resource URIs are validated against the registry - path traversal attempts return `INVALID_VAULT` errors.
