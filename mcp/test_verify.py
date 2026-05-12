@@ -12875,7 +12875,7 @@ def test_p26a_18():
     src = _p26a_make_source_dir({"CliDry.md": _VALID_NOTE_BODY})
     try:
         proc = subprocess.run(
-            ["py", "run.py", "import-markdown", str(src),
+            [sys.executable, "run.py", "import-markdown", str(src),
              "--destination", "Fundamentals"],
             capture_output=True, text=True, cwd=str(_repo_root()),
         )
@@ -12902,7 +12902,7 @@ def test_p26a_19():
     written_rel: list[str] = []
     try:
         proc = subprocess.run(
-            ["py", "run.py", "import-markdown", str(src),
+            [sys.executable, "run.py", "import-markdown", str(src),
              "--destination", "Fundamentals", "--write"],
             capture_output=True, text=True, cwd=str(_repo_root()),
         )
