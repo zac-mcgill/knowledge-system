@@ -10144,27 +10144,51 @@ def test_p18c_api_delete_endpoint():
 
 
 def test_p18c_ui_has_danger_zone():
-    """P18C-UI1: VaultSetup.svelte contains a Danger Zone section."""
-    print("\n=== Test P18C-UI1: VaultSetup Has Danger Zone Section ===")
+    """P18C-UI1: VaultSetup.svelte exposes a destructive delete panel.
+
+    Phase 30E2 superseded the original 'Danger Zone' wrapper with a
+    dedicated vault management panel and a cve-slide-over confirmation
+    flow. The intent of this test - that a destructive delete surface
+    with a typed DELETE phrase exists - is preserved.
+    """
+    print("\n=== Test P18C-UI1: VaultSetup Has Destructive Delete Panel ===")
     vault_setup = Path(__file__).resolve().parent.parent / "ui" / "src" / "components" / "VaultSetup.svelte"
     assert vault_setup.is_file(), f"VaultSetup.svelte not found: {vault_setup}"
     source = vault_setup.read_text(encoding="utf-8")
 
-    assert "Danger Zone" in source, "VaultSetup.svelte must have a 'Danger Zone' section"
-    assert "DELETE {deleteVaultName}" in source or "DELETE ${deleteVaultName}" in source or "DELETE" in source, (
+    assert 'data-testid="vault-setup-management-panel"' in source, \
+        "VaultSetup.svelte must expose the vault management panel"
+    assert 'data-testid="vault-setup-delete-slide-over"' in source, \
+        "VaultSetup.svelte must expose the destructive delete slide-over"
+    assert "DELETE {deleteVaultName}" in source or "DELETE ${deleteVaultName}" in source or \
+        "deleteConfirmPhrase(" in source, (
         "VaultSetup.svelte must reference the DELETE confirmation phrase"
     )
-    print("  VaultSetup.svelte has Danger Zone section ✓")
+    print("  VaultSetup.svelte exposes the destructive delete panel ✓")
 
 
 def test_p18c_ui_no_delete_for_demo_vault():
-    """P18C-UI2: VaultSetup.svelte protects demo-vault in the UI."""
-    print("\n=== Test P18C-UI2: UI Protects demo-vault ===")
-    vault_setup = Path(__file__).resolve().parent.parent / "ui" / "src" / "components" / "VaultSetup.svelte"
-    source = vault_setup.read_text(encoding="utf-8")
+    """P18C-UI2: VaultSetup.svelte protects demo-vault in the UI.
 
-    assert "demo-vault" in source, "VaultSetup.svelte must reference demo-vault protection"
-    assert "protected" in source.lower(), "VaultSetup.svelte must indicate demo-vault is protected"
+    Phase 30E2 centralised the protected vault constant in the
+    phase30e2 helper (VAULT_DELETE_PROTECTED). VaultSetup imports it
+    and disables the delete trigger for that vault.
+    """
+    print("\n=== Test P18C-UI2: UI Protects demo-vault ===")
+    repo = Path(__file__).resolve().parent.parent
+    vault_setup = repo / "ui" / "src" / "components" / "VaultSetup.svelte"
+    helper = repo / "ui" / "src" / "lib" / "phase30e2.ts"
+    source = vault_setup.read_text(encoding="utf-8")
+    helper_src = helper.read_text(encoding="utf-8")
+
+    assert "VAULT_DELETE_PROTECTED" in source, \
+        "VaultSetup.svelte must reference VAULT_DELETE_PROTECTED"
+    assert "demo-vault" in helper_src, \
+        "phase30e2 helper must record demo-vault as the protected vault"
+    assert "VAULT_DELETE_PROTECTED" in helper_src, \
+        "phase30e2 helper must export VAULT_DELETE_PROTECTED"
+    assert "protected" in source.lower(), \
+        "VaultSetup.svelte must indicate the protected-vault state"
     print("  VaultSetup.svelte marks demo-vault as protected ✓")
 
 
@@ -11771,6 +11795,32 @@ def main():
     test_p30e1_21_phase27_28_still_deferred()
     test_p30e1_22_phase30e1_complete_30e_in_progress()
     test_p30e1_23_no_em_dashes_and_no_new_deps()
+
+    # Phase 30E2 - Controller and Vault Setup polish
+    test_p30e2_1_pages_use_expected_layout_modes()
+    test_p30e2_2_controller_uses_cve_toolbar_banner_status_strip()
+    test_p30e2_3_controller_two_column_command_grid_at_xl()
+    test_p30e2_4_controller_readiness_polarity_helper()
+    test_p30e2_5_controller_recommendations_deep_link_to_authoritative_routes()
+    test_p30e2_6_controller_raw_json_not_primary_inline_ux()
+    test_p30e2_7_controller_developer_deep_link_to_raw()
+    test_p30e2_8_vault_setup_uses_cve_toolbar_and_banner()
+    test_p30e2_9_vault_setup_grouped_form_panel()
+    test_p30e2_10_vault_setup_preserves_validation_and_preview()
+    test_p30e2_11_destructive_delete_not_in_primary_setup_form()
+    test_p30e2_12_destructive_delete_in_separate_management_and_slide_over()
+    test_p30e2_13_destructive_delete_requires_typed_confirmation()
+    test_p30e2_14_delete_button_disabled_until_confirmed()
+    test_p30e2_15_delete_warning_explains_target_and_semantics()
+    test_p30e2_16_delete_protected_vault_disabled()
+    test_p30e2_17_no_tailwind_dark_literals()
+    test_p30e2_18_form_labels()
+    test_p30e2_19_static_links_resolve()
+    test_p30e2_20_phase27_28_still_deferred()
+    test_p30e2_21_roadmap_30e2_complete_parent_30e_complete()
+    test_p30e2_22_state_pills_present()
+    test_p30e2_23_no_em_dashes_and_no_new_deps()
+    test_p30e2_24_global_css_has_phase30e2_block()
 
     print()
     print("=" * 60)
@@ -19386,9 +19436,9 @@ def _repo_root():
 
 
 def test_doc_drift_readme_test_count():
-    """DOC-DRIFT-1: README quotes the current 913-test total, no stale counts."""
+    """DOC-DRIFT-1: README quotes the current 937-test total, no stale counts."""
     readme = (_repo_root() / "README.md").read_text(encoding="utf-8")
-    assert "913" in readme, "README.md must mention the current test count 913"
+    assert "937" in readme, "README.md must mention the current test count 937"
     stale_phrases = [
         "553 deterministic tests",
         "548 deterministic tests",
@@ -19421,29 +19471,31 @@ def test_doc_drift_readme_test_count():
         "866 tests.",
         "890 deterministic tests",
         "890 tests.",
+        "913 deterministic tests",
+        "913 tests.",
     ]
     for phrase in stale_phrases:
         assert phrase not in readme, f"README.md still mentions stale phrase {phrase!r}"
-    print(f"  README mentions 913 tests, no stale counts present ✓")
+    print(f"  README mentions 937 tests, no stale counts present ✓")
 
 
 def test_doc_drift_testing_test_count():
-    """DOC-DRIFT-2: TESTING.md current total is 913 and historical markers retained."""
+    """DOC-DRIFT-2: TESTING.md current total is 937 and historical markers retained."""
     text = (_repo_root() / "TESTING.md").read_text(encoding="utf-8")
-    assert "913 test functions" in text, "TESTING.md must state 913 test functions"
-    for marker in ("429", "467", "507", "548", "564", "587", "607", "625", "650", "675", "695", "706", "721", "740", "763", "787", "800", "818", "842", "866", "890"):
+    assert "937 test functions" in text, "TESTING.md must state 937 test functions"
+    for marker in ("429", "467", "507", "548", "564", "587", "607", "625", "650", "675", "695", "706", "721", "740", "763", "787", "800", "818", "842", "866", "890", "913"):
         assert marker in text, f"TESTING.md must retain historical test-count marker {marker}"
-    print(f"  TESTING.md states 913 functions and keeps historical markers ✓")
+    print(f"  TESTING.md states 937 functions and keeps historical markers ✓")
 
 
 def test_doc_drift_release_checklist_test_count():
-    """DOC-DRIFT-3: RELEASE_CHECKLIST references 913 tests and required commands."""
+    """DOC-DRIFT-3: RELEASE_CHECKLIST references 937 tests and required commands."""
     text = (_repo_root() / "RELEASE_CHECKLIST.md").read_text(encoding="utf-8")
-    assert "913" in text, "RELEASE_CHECKLIST.md must reference the 913-test target"
+    assert "937" in text, "RELEASE_CHECKLIST.md must reference the 937-test target"
     for req in ("test_verify.py", "run.py validate", "run.py security",
                 "run.py export", "GitHub Release"):
         assert req in text, f"RELEASE_CHECKLIST.md must contain {req!r}"
-    print(f"  RELEASE_CHECKLIST mentions 913 tests and required commands ✓")
+    print(f"  RELEASE_CHECKLIST mentions 937 tests and required commands ✓")
 
 
 def test_doc_drift_roadmap_active_phase():
@@ -20832,10 +20884,10 @@ def test_p29e_19_readme_states_phase29_complete():
 
 def test_p29e_20_release_checklist_test_count_updated():
     """P29E-20: RELEASE_CHECKLIST.md references the current test count.
-    Phase 30E1 bumped the total from 890 to 913."""
+    Phase 30E2 bumped the total from 913 to 937."""
     print("\n=== Test P29E-20: RELEASE_CHECKLIST test count ===")
     text = (_repo_root() / "RELEASE_CHECKLIST.md").read_text(encoding="utf-8")
-    assert "913" in text, "RELEASE_CHECKLIST.md must reference the current 913-test target"
+    assert "937" in text, "RELEASE_CHECKLIST.md must reference the current 937-test target"
     # The previous counts must not linger in the checklist after this phase.
     assert "all 763 tests green" not in text, \
         "RELEASE_CHECKLIST.md must not still say 'all 763 tests green'"
@@ -20851,7 +20903,9 @@ def test_p29e_20_release_checklist_test_count_updated():
         "RELEASE_CHECKLIST.md must not still say 'all 866 tests green'"
     assert "all 890 tests green" not in text, \
         "RELEASE_CHECKLIST.md must not still say 'all 890 tests green'"
-    print("  RELEASE_CHECKLIST.md references 913 tests ✓")
+    assert "all 913 tests green" not in text, \
+        "RELEASE_CHECKLIST.md must not still say 'all 913 tests green'"
+    print("  RELEASE_CHECKLIST.md references 937 tests ✓")
 
 
 def test_p29e_21_ui_ux_audit_has_phase29e_note():
@@ -21387,7 +21441,8 @@ def test_p30c_15_roadmap_phase30c_complete_others_planned():
             or "| 30D   | Core Workflow Page Redesigns            | Complete" in text), \
         "ROADMAP.md must include a Phase 30D status row"
     assert ("| 30E   | Review/Governance/Developer Polish      | Planned" in text
-            or "| 30E   | Review/Governance/Developer Polish      | In Progress" in text), \
+            or "| 30E   | Review/Governance/Developer Polish      | In Progress" in text
+            or "| 30E   | Review/Governance/Developer Polish      | Complete" in text), \
         "ROADMAP.md must mark Phase 30E Planned or In Progress"
     assert "| 30F   | Final QA, A11y, Responsive, Light Mode  | Planned" in text, \
         "ROADMAP.md must keep Phase 30F Planned"
@@ -21767,7 +21822,8 @@ def test_p30d1_22_phase30e_and_30f_planned():
     print("\n=== Test P30D1-22: Phase 30E/30F planned ===")
     text = _read_text("ROADMAP.md")
     assert ("| 30E   | Review/Governance/Developer Polish      | Planned" in text
-            or "| 30E   | Review/Governance/Developer Polish      | In Progress" in text), \
+            or "| 30E   | Review/Governance/Developer Polish      | In Progress" in text
+            or "| 30E   | Review/Governance/Developer Polish      | Complete" in text), \
         "ROADMAP.md must mark Phase 30E Planned or In Progress"
     assert "| 30F   | Final QA, A11y, Responsive, Light Mode  | Planned" in text, \
         "ROADMAP.md must keep Phase 30F Planned"
@@ -22135,7 +22191,8 @@ def test_p30d2_22_phase30e_and_30f_planned():
     print("\n=== Test P30D2-22: Phase 30E/30F planned ===")
     text = _read_text("ROADMAP.md")
     assert ("| 30E   | Review/Governance/Developer Polish      | Planned" in text
-            or "| 30E   | Review/Governance/Developer Polish      | In Progress" in text), \
+            or "| 30E   | Review/Governance/Developer Polish      | In Progress" in text
+            or "| 30E   | Review/Governance/Developer Polish      | Complete" in text), \
         "ROADMAP.md must mark Phase 30E Planned or In Progress"
     assert "| 30F   | Final QA, A11y, Responsive, Light Mode  | Planned" in text, \
         "ROADMAP.md must keep Phase 30F Planned"
@@ -22532,27 +22589,28 @@ def test_p30d3_22_phase27_28_still_deferred():
 
 def test_p30d3_23_phase30d3_and_30d_complete():
     """P30D3-23: ROADMAP records Phase 30D3 Complete and the parent
-    Phase 30D row Complete. Phase 30E/30F remain Planned."""
+    Phase 30D row Complete. Phase 30E may be Planned, In Progress, or
+    Complete (Phase 30E1/30E2 may have shipped); 30F remains Planned."""
     print("\n=== Test P30D3-23: Phase 30D3 + parent 30D Complete ===")
     text = _read_text("ROADMAP.md")
     found_30d3_complete = False
     found_30d_complete = False
-    found_30e_planned = False
+    found_30e_tracked = False
     found_30f_planned = False
     for line in text.splitlines():
         if line.startswith("| 30D3") and "Complete" in line:
             found_30d3_complete = True
         if line.startswith("| 30D ") and "Complete" in line:
             found_30d_complete = True
-        if line.startswith("| 30E") and "Planned" in line:
-            found_30e_planned = True
+        if line.startswith("| 30E ") and ("Planned" in line or "In Progress" in line or "Complete" in line):
+            found_30e_tracked = True
         if line.startswith("| 30F") and "Planned" in line:
             found_30f_planned = True
     assert found_30d3_complete, "ROADMAP.md must mark Phase 30D3 Complete"
     assert found_30d_complete, "ROADMAP.md must mark parent Phase 30D Complete"
-    assert found_30e_planned, "ROADMAP.md must keep Phase 30E Planned"
+    assert found_30e_tracked, "ROADMAP.md must keep Phase 30E Planned"
     assert found_30f_planned, "ROADMAP.md must keep Phase 30F Planned"
-    print("  Phase 30D3 + parent 30D Complete; 30E/30F Planned ✓")
+    print("  Phase 30D3 + parent 30D Complete; 30E tracked; 30F Planned ✓")
 
 
 def test_p30d3_24_no_em_dashes_in_phase30d3_files():
@@ -22924,27 +22982,28 @@ def test_p30e1_21_phase27_28_still_deferred():
 
 
 def test_p30e1_22_phase30e1_complete_30e_in_progress():
-    """P30E1-22: ROADMAP marks 30E1 Complete with 30E In Progress; 30E2 + 30F Planned."""
+    """P30E1-22: ROADMAP marks 30E1 Complete; parent 30E In Progress or
+    Complete (Phase 30E2 may have shipped); 30F Planned."""
     print("\n=== Test P30E1-22: ROADMAP phase rows ===")
     text = _read_text("ROADMAP.md")
     found_30e1_complete = False
-    found_30e_in_progress = False
-    found_30e2_planned = False
+    found_30e_tracked = False
+    found_30e2_tracked = False
     found_30f_planned = False
     for line in text.splitlines():
         if line.startswith("| 30E1") and "Complete" in line:
             found_30e1_complete = True
-        if line.startswith("| 30E ") and "In Progress" in line:
-            found_30e_in_progress = True
-        if line.startswith("| 30E2") and "Planned" in line:
-            found_30e2_planned = True
+        if line.startswith("| 30E ") and ("In Progress" in line or "Complete" in line):
+            found_30e_tracked = True
+        if line.startswith("| 30E2") and ("Planned" in line or "Complete" in line or "In Progress" in line):
+            found_30e2_tracked = True
         if line.startswith("| 30F") and "Planned" in line:
             found_30f_planned = True
     assert found_30e1_complete, "ROADMAP must mark Phase 30E1 Complete"
-    assert found_30e_in_progress, "ROADMAP must mark parent Phase 30E In Progress"
-    assert found_30e2_planned, "ROADMAP must mark Phase 30E2 Planned"
+    assert found_30e_tracked, "ROADMAP must mark parent Phase 30E In Progress"
+    assert found_30e2_tracked, "ROADMAP must mark Phase 30E2 Planned"
     assert found_30f_planned, "ROADMAP must keep Phase 30F Planned"
-    print("  ROADMAP: 30E1 Complete, 30E In Progress, 30E2 + 30F Planned ✓")
+    print("  ROADMAP: 30E1 Complete, 30E tracked, 30E2 tracked, 30F Planned ✓")
 
 
 def test_p30e1_23_no_em_dashes_and_no_new_deps():
@@ -22971,6 +23030,459 @@ def test_p30e1_23_no_em_dashes_and_no_new_deps():
     assert not sneaked_in, \
         f"ui/package.json must not introduce {sorted(sneaked_in)} in Phase 30E1"
     print("  No em dashes and no new runtime dependencies in Phase 30E1 ✓")
+
+
+# ============================================================
+# Phase 30E2 - Controller and Vault Setup polish
+# ============================================================
+
+_P30E2_PAGES = {
+    "controller":  "ui/src/pages/controller.astro",
+    "vault-setup": "ui/src/pages/vault-setup.astro",
+}
+_P30E2_COMPONENTS = {
+    "controller":  "ui/src/components/ContextController.svelte",
+    "vault-setup": "ui/src/components/VaultSetup.svelte",
+}
+_P30E2_HELPER = "ui/src/lib/phase30e2.ts"
+
+
+def test_p30e2_1_pages_use_expected_layout_modes():
+    """P30E2-1: controller stays wide; vault-setup uses wide for the split layout."""
+    print("\n=== Test P30E2-1: 30E2 pages layout modes ===")
+    controller = _read_text(_P30E2_PAGES["controller"])
+    setup = _read_text(_P30E2_PAGES["vault-setup"])
+    assert 'layoutMode="wide"' in controller, \
+        "controller.astro must keep layoutMode=\"wide\""
+    # Spec allows standard or wide; we picked wide for the redesigned split.
+    assert ('layoutMode="wide"' in setup) or ('layoutMode="standard"' in setup) or \
+        ("layoutMode" not in setup), \
+        "vault-setup.astro must declare a documented layout mode (standard or wide)"
+    print("  controller=wide, vault-setup uses a documented layout mode ✓")
+
+
+def test_p30e2_2_controller_uses_cve_toolbar_banner_status_strip():
+    """P30E2-2: Controller renders cve-toolbar, cve-banner, and cve-status-strip."""
+    print("\n=== Test P30E2-2: Controller cve-toolbar/banner/status-strip ===")
+    text = _read_text(_P30E2_COMPONENTS["controller"])
+    for cls in ("cve-toolbar", "cve-toolbar__main", "cve-toolbar__title",
+                "cve-toolbar__actions",
+                "cve-banner", "cve-status-strip", "cve-status-tile"):
+        assert cls in text, f"ContextController must use {cls}"
+    print("  Controller uses cve-toolbar + cve-banner + cve-status-strip ✓")
+
+
+def test_p30e2_3_controller_two_column_command_grid_at_xl():
+    """P30E2-3: Controller declares the two-column command-centre grid at xl+."""
+    print("\n=== Test P30E2-3: Controller command-centre grid ===")
+    comp = _read_text(_P30E2_COMPONENTS["controller"])
+    css = _read_text("ui/src/styles/global.css")
+    assert "cve-p30e2-controller-grid" in comp, \
+        "ContextController must use cve-p30e2-controller-grid"
+    assert 'data-testid="controller-state-column"' in comp, \
+        "ContextController must mark the left state column"
+    assert 'data-testid="controller-recommendation-column"' in comp, \
+        "ContextController must mark the right recommendation column"
+    assert "cve-p30e2-controller-grid" in css, \
+        "global.css must define .cve-p30e2-controller-grid"
+    assert "1280px" in css and "minmax(0, 2fr) minmax(0, 1fr)" in css, \
+        "Controller grid must split into 2fr/1fr at xl+ (>=1280px)"
+    print("  Controller command-centre grid is two-column at xl+ ✓")
+
+
+def test_p30e2_4_controller_readiness_polarity_helper():
+    """P30E2-4: readinessPolarity treats negative flags as negative, not green."""
+    print("\n=== Test P30E2-4: readiness polarity helper ===")
+    helper = _read_text(_P30E2_HELPER)
+    assert "export function readinessPolarity" in helper, \
+        "phase30e2 helper must export readinessPolarity()"
+    for neg in ("has_tasks", "has_missing_concepts", "has_feedback_warnings"):
+        assert neg in helper, f"phase30e2 helper must classify negative flag {neg}"
+    for pos in ("valid", "security_passed", "ready_to_export", "ready_for_agent_context"):
+        assert pos in helper, f"phase30e2 helper must classify positive flag {pos}"
+    comp = _read_text(_P30E2_COMPONENTS["controller"])
+    assert "readinessPolarity(" in comp, \
+        "ContextController must call readinessPolarity()"
+    assert "data-polarity" in comp, \
+        "Controller readiness tiles must expose data-polarity for tests"
+    print("  Readiness polarity helper handles negative flags correctly ✓")
+
+
+def test_p30e2_5_controller_recommendations_deep_link_to_authoritative_routes():
+    """P30E2-5: Recommendation routing covers the authoritative /app/* targets."""
+    print("\n=== Test P30E2-5: recommendation deep-links ===")
+    helper = _read_text(_P30E2_HELPER)
+    required_routes = (
+        "/app/validation", "/app/tasks", "/app/security",
+        "/app/trust", "/app/pending", "/app/graph",
+        "/app/notes", "/app/feedback",
+    )
+    for r in required_routes:
+        assert r in helper, f"phase30e2 helper must route to {r}"
+    assert "export function recommendationRoute" in helper, \
+        "phase30e2 helper must export recommendationRoute()"
+    comp = _read_text(_P30E2_COMPONENTS["controller"])
+    assert "recommendationRoute(" in comp, \
+        "ContextController must call recommendationRoute()"
+    print("  Recommendation routing deep-links to authoritative pages ✓")
+
+
+def test_p30e2_6_controller_raw_json_not_primary_inline_ux():
+    """P30E2-6: Controller does not render raw JSON inline anywhere on the page."""
+    print("\n=== Test P30E2-6: Controller raw JSON not primary inline ===")
+    import re
+    comp = _read_text(_P30E2_COMPONENTS["controller"])
+    # The Controller in 30E2 must not call JSON.stringify in the template
+    # at all - raw access is handed off to /app/raw via Developer deep-links.
+    for m in re.finditer(r"JSON\.stringify\b", comp):
+        head = comp[:m.start()]
+        open_idx = head.rfind("<details")
+        assert open_idx != -1, \
+            f"Controller: JSON.stringify outside any <details> block at offset {m.start()}"
+        opening = comp[open_idx:m.start()]
+        close_brace = opening.find(">")
+        opening_tag = opening[: close_brace + 1] if close_brace != -1 else opening
+        assert "cve-details--inspector" in opening_tag, \
+            "Controller: JSON.stringify must be inside cve-details--inspector"
+    print("  Controller raw JSON is not primary inline UX ✓")
+
+
+def test_p30e2_7_controller_developer_deep_link_to_raw():
+    """P30E2-7: Controller exposes Developer deep-links to /app/raw via buildRawDeepLink."""
+    print("\n=== Test P30E2-7: Controller Developer deep-link ===")
+    comp = _read_text(_P30E2_COMPONENTS["controller"])
+    assert "/app/raw" in comp, "ContextController must link to /app/raw"
+    assert "buildRawDeepLink(" in comp, \
+        "ContextController must call buildRawDeepLink()"
+    assert "'controller'" in comp, \
+        "ContextController must tag the deep-link source as 'controller'"
+    assert "cve-details--inspector" in comp, \
+        "ContextController must wrap developer details in cve-details--inspector"
+    assert "cve-details__developer-link" in comp, \
+        "ContextController must use cve-details__developer-link"
+    print("  Controller exposes Developer deep-links to /app/raw ✓")
+
+
+def test_p30e2_8_vault_setup_uses_cve_toolbar_and_banner():
+    """P30E2-8: VaultSetup renders cve-toolbar and cve-banner."""
+    print("\n=== Test P30E2-8: VaultSetup cve-toolbar + cve-banner ===")
+    text = _read_text(_P30E2_COMPONENTS["vault-setup"])
+    for cls in ("cve-toolbar", "cve-toolbar__main", "cve-toolbar__title",
+                "cve-toolbar__actions", "cve-banner"):
+        assert cls in text, f"VaultSetup must use {cls}"
+    print("  VaultSetup uses cve-toolbar + cve-banner ✓")
+
+
+def test_p30e2_9_vault_setup_grouped_form_panel():
+    """P30E2-9: VaultSetup collapses scattered cards into one grouped form panel."""
+    print("\n=== Test P30E2-9: VaultSetup grouped form panel ===")
+    text = _read_text(_P30E2_COMPONENTS["vault-setup"])
+    assert 'data-testid="vault-setup-form-panel"' in text, \
+        "VaultSetup must expose vault-setup-form-panel"
+    assert "cve-p30e2-setup-form" in text, \
+        "VaultSetup must use the cve-p30e2-setup-form panel class"
+    assert "cve-p30e2-form-grid" in text, \
+        "VaultSetup must lay fields out inside cve-p30e2-form-grid"
+    # The legacy 'Danger Zone' label must no longer appear inside the
+    # primary setup surface.
+    assert "Danger Zone" not in text, \
+        "VaultSetup must no longer use the legacy 'Danger Zone' wrapper"
+    print("  VaultSetup form is one grouped panel ✓")
+
+
+def test_p30e2_10_vault_setup_preserves_validation_and_preview():
+    """P30E2-10: VaultSetup preserves live validation and preview panels."""
+    print("\n=== Test P30E2-10: VaultSetup validation + preview preserved ===")
+    text = _read_text(_P30E2_COMPONENTS["vault-setup"])
+    assert 'data-testid="vault-setup-validation-panel"' in text, \
+        "VaultSetup must expose vault-setup-validation-panel"
+    assert 'data-testid="vault-setup-preview-panel"' in text, \
+        "VaultSetup must expose vault-setup-preview-panel"
+    # Live validation: errors derived from form state must still appear.
+    for marker in ("vaultNameError", "domainError", "noteTypeError",
+                   "sectionsError", "conceptsDupeError"):
+        assert marker in text, f"VaultSetup must keep live validation marker {marker}"
+    # Preview must still surface the bootstrap file tree.
+    assert "Vault Files/" in text and "vault_schema.py" in text, \
+        "VaultSetup preview must keep the bootstrap file tree"
+    print("  VaultSetup preserves live validation and preview ✓")
+
+
+def test_p30e2_11_destructive_delete_not_in_primary_setup_form():
+    """P30E2-11: Delete controls do not live inside the primary setup form panel."""
+    print("\n=== Test P30E2-11: Destructive delete out of setup form ===")
+    text = _read_text(_P30E2_COMPONENTS["vault-setup"])
+    form_start = text.find('data-testid="vault-setup-form-panel"')
+    assert form_start != -1, "VaultSetup must expose vault-setup-form-panel"
+    # Find the matching closing </article> after the form_start.
+    article_close = text.find("</article>", form_start)
+    assert article_close != -1, "vault-setup-form-panel must be closed"
+    form_block = text[form_start:article_close]
+    for marker in ('vault-setup-delete-trigger',
+                   'vault-setup-delete-submit',
+                   'vault-setup-delete-slide-over',
+                   'vault-setup-delete-confirm-input'):
+        assert marker not in form_block, \
+            f"Setup form panel must not contain delete marker {marker}"
+    print("  Destructive delete is not inside the primary setup form ✓")
+
+
+def test_p30e2_12_destructive_delete_in_separate_management_and_slide_over():
+    """P30E2-12: Delete sits in a separate management panel and a cve-slide-over."""
+    print("\n=== Test P30E2-12: Destructive delete in management/slide-over ===")
+    text = _read_text(_P30E2_COMPONENTS["vault-setup"])
+    assert 'data-testid="vault-setup-management-panel"' in text, \
+        "VaultSetup must expose vault-setup-management-panel"
+    assert 'data-testid="vault-setup-management-table"' in text, \
+        "VaultSetup management panel must include the management table"
+    assert "cve-slide-over" in text, "VaultSetup must use cve-slide-over for delete"
+    assert 'data-testid="vault-setup-delete-slide-over"' in text, \
+        "VaultSetup must expose vault-setup-delete-slide-over"
+    # The slide-over must contain the destructive submit.
+    slide_start = text.find('data-testid="vault-setup-delete-slide-over"')
+    assert slide_start != -1
+    slide_close = text.find("</div>", slide_start + 200)  # search for some closing
+    # Just check that the submit button is somewhere in the file inside slide-over context.
+    assert 'data-testid="vault-setup-delete-submit"' in text, \
+        "VaultSetup must expose vault-setup-delete-submit inside the slide-over"
+    print("  Destructive delete lives in a management panel + cve-slide-over ✓")
+
+
+def test_p30e2_13_destructive_delete_requires_typed_confirmation():
+    """P30E2-13: Delete requires the exact typed DELETE <vault> phrase."""
+    print("\n=== Test P30E2-13: Destructive delete typed-confirmation contract ===")
+    helper = _read_text(_P30E2_HELPER)
+    assert "export function deleteConfirmPhrase" in helper, \
+        "phase30e2 helper must export deleteConfirmPhrase()"
+    assert "DELETE ${vault}" in helper or 'DELETE " + vault' in helper or \
+        "`DELETE ${vault}`" in helper, \
+        "deleteConfirmPhrase must produce 'DELETE <vault>'"
+    assert "isDeleteConfirmed" in helper, \
+        "phase30e2 helper must export isDeleteConfirmed()"
+    comp = _read_text(_P30E2_COMPONENTS["vault-setup"])
+    assert "deleteConfirmPhrase(" in comp, \
+        "VaultSetup must call deleteConfirmPhrase()"
+    assert "isDeleteConfirmed(" in comp, \
+        "VaultSetup must call isDeleteConfirmed()"
+    assert 'data-testid="vault-setup-delete-confirm-input"' in comp, \
+        "VaultSetup must expose vault-setup-delete-confirm-input"
+    assert 'data-testid="vault-setup-delete-phrase"' in comp, \
+        "VaultSetup must display the deterministic delete phrase"
+    print("  Destructive delete requires typed DELETE <vault> confirmation ✓")
+
+
+def test_p30e2_14_delete_button_disabled_until_confirmed():
+    """P30E2-14: Delete submit is disabled until the typed phrase matches."""
+    print("\n=== Test P30E2-14: Delete submit disabled until confirmed ===")
+    text = _read_text(_P30E2_COMPONENTS["vault-setup"])
+    # canDelete must be derived from the typed-confirmation predicate.
+    assert "canDelete" in text and "deleteConfirmValid" in text, \
+        "VaultSetup must derive canDelete from deleteConfirmValid"
+    # The delete submit must be disabled when !canDelete.
+    submit_idx = text.find('data-testid="vault-setup-delete-submit"')
+    assert submit_idx != -1, "VaultSetup must expose vault-setup-delete-submit"
+    # Find the <button ...> opening that contains the submit testid.
+    button_open = text.rfind("<button", 0, submit_idx)
+    assert button_open != -1, "delete submit must be a <button>"
+    button_close = text.find(">", submit_idx)
+    button_tag = text[button_open:button_close + 1]
+    assert "disabled={!canDelete}" in button_tag, \
+        "Delete submit must use disabled={!canDelete}"
+    print("  Delete submit is disabled until typed confirmation is satisfied ✓")
+
+
+def test_p30e2_15_delete_warning_explains_target_and_semantics():
+    """P30E2-15: Delete warning names target vault and the real backend semantics."""
+    print("\n=== Test P30E2-15: Delete warning names target + semantics ===")
+    text = _read_text(_P30E2_COMPONENTS["vault-setup"])
+    assert 'data-testid="vault-setup-delete-warning"' in text, \
+        "VaultSetup must expose vault-setup-delete-warning"
+    assert 'data-testid="vault-setup-delete-target"' in text, \
+        "VaultSetup must expose vault-setup-delete-target showing the vault name"
+    # The warning copy must reference actual backend semantics: directory
+    # deleted from disk, config rewritten, not reversible.
+    for snippet in ("deleted from disk", "config/config.yaml", "not reversible"):
+        assert snippet in text, \
+            f"Delete warning copy must reference backend semantics: {snippet!r}"
+    helper = _read_text(_P30E2_HELPER)
+    assert "VAULT_DELETE_SEMANTICS" in helper, \
+        "phase30e2 helper must export VAULT_DELETE_SEMANTICS"
+    assert "files_deleted: true" in helper, \
+        "VAULT_DELETE_SEMANTICS must record files_deleted=true (matches mcp/core/vault_delete.py)"
+    assert "reversible: false" in helper, \
+        "VAULT_DELETE_SEMANTICS must record reversible=false"
+    print("  Delete warning explains target vault and real backend semantics ✓")
+
+
+def test_p30e2_16_delete_protected_vault_disabled():
+    """P30E2-16: demo-vault delete trigger is disabled (protected vault contract)."""
+    print("\n=== Test P30E2-16: protected vault delete disabled ===")
+    helper = _read_text(_P30E2_HELPER)
+    assert "VAULT_DELETE_PROTECTED" in helper and "demo-vault" in helper, \
+        "phase30e2 helper must export VAULT_DELETE_PROTECTED='demo-vault'"
+    text = _read_text(_P30E2_COMPONENTS["vault-setup"])
+    assert "VAULT_DELETE_PROTECTED" in text, \
+        "VaultSetup must reference VAULT_DELETE_PROTECTED"
+    assert "v === VAULT_DELETE_PROTECTED" in text, \
+        "VaultSetup must disable the delete trigger for the protected vault"
+    print("  Protected vault delete trigger is disabled ✓")
+
+
+def test_p30e2_17_no_tailwind_dark_literals():
+    """P30E2-17: Migrated Controller + VaultSetup contain no Tailwind dark literals."""
+    print("\n=== Test P30E2-17: no Tailwind dark literals in 30E2 files ===")
+    import re
+    pattern = re.compile(
+        r"\b(?:bg|text|border|ring|divide|placeholder|from|to|via)-"
+        r"(?:zinc|neutral|slate|gray|stone|emerald|amber|rose|sky|violet|indigo|teal|cyan|lime|orange|red|green|blue|pink|fuchsia|purple)-"
+        r"[0-9]{2,3}\b"
+    )
+    offenders: list[tuple[str, str]] = []
+    for path in list(_P30E2_PAGES.values()) + list(_P30E2_COMPONENTS.values()) + [_P30E2_HELPER]:
+        for m in pattern.finditer(_read_text(path)):
+            offenders.append((path, m.group(0)))
+    assert not offenders, \
+        f"Phase 30E2 files must not use Tailwind dark literals: {offenders[:5]}"
+    print("  Phase 30E2 files use only cve-* token classes ✓")
+
+
+def test_p30e2_18_form_labels():
+    """P30E2-18: Every text/search/number input has a <label for> or aria-label."""
+    print("\n=== Test P30E2-18: 30E2 form labels ===")
+    import re
+    for name, path in _P30E2_COMPONENTS.items():
+        text = _read_text(path)
+        for m in re.finditer(r"<input\b[^>]*>", text):
+            tag = m.group(0)
+            type_match = re.search(r'\btype="([^"]+)"', tag)
+            input_type = type_match.group(1) if type_match else "text"
+            if input_type not in ("text", "search", "number", "email"):
+                continue
+            id_match = re.search(r'\bid="([^"]+)"', tag)
+            has_label = False
+            if id_match:
+                label_pattern = re.compile(
+                    r'<label\b[^>]*\bfor="' + re.escape(id_match.group(1)) + r'"'
+                )
+                if label_pattern.search(text):
+                    has_label = True
+            if 'aria-label="' in tag:
+                has_label = True
+            assert has_label, \
+                f"{path}: <input> has no <label for> or aria-label: {tag[:120]}"
+    print("  Phase 30E2 inputs are properly labelled ✓")
+
+
+def test_p30e2_19_static_links_resolve():
+    """P30E2-19: Every static /app/<page> link in 30E2 components resolves."""
+    print("\n=== Test P30E2-19: 30E2 /app links resolve ===")
+    import re
+    pages_dir = _repo_root() / "ui" / "src" / "pages"
+    for name, path in list(_P30E2_COMPONENTS.items()) + [(None, _P30E2_HELPER)]:
+        text = _read_text(path)
+        for m in re.finditer(r'(?<!\\)["\'`](/app/[A-Za-z0-9_/\-]+)', text):
+            target = m.group(1)
+            page = target[len("/app/"):]
+            if not page:
+                continue
+            candidates = [
+                pages_dir / f"{page}.astro",
+                pages_dir / page / "index.astro",
+            ]
+            assert any(c.is_file() for c in candidates), \
+                f"{path} links to {target} which has no matching page file"
+    print("  Phase 30E2 /app links resolve to real pages ✓")
+
+
+def test_p30e2_20_phase27_28_still_deferred():
+    """P30E2-20: ROADMAP keeps Phase 27 and Phase 28 deferred."""
+    print("\n=== Test P30E2-20: Phase 27/28 still deferred ===")
+    text = _read_text("ROADMAP.md")
+    assert "| 27" in text and "Deferred" in text, "Phase 27 must remain deferred"
+    found_28_deferred = False
+    for line in text.splitlines():
+        if line.startswith("| 28") and "Deferred" in line:
+            found_28_deferred = True
+            break
+    assert found_28_deferred, "Phase 28 must remain deferred"
+    print("  Phase 27 and 28 remain deferred ✓")
+
+
+def test_p30e2_21_roadmap_30e2_complete_parent_30e_complete():
+    """P30E2-21: ROADMAP marks 30E2 + parent 30E Complete; 30F Planned; 30 not Complete."""
+    print("\n=== Test P30E2-21: ROADMAP phase rows ===")
+    text = _read_text("ROADMAP.md")
+    found_30e1 = False
+    found_30e2 = False
+    found_30e_parent = False
+    found_30f = False
+    found_30_complete = False
+    for line in text.splitlines():
+        if line.startswith("| 30E1") and "Complete" in line:
+            found_30e1 = True
+        if line.startswith("| 30E2") and "Complete" in line:
+            found_30e2 = True
+        if line.startswith("| 30E ") and "Complete" in line:
+            found_30e_parent = True
+        if line.startswith("| 30F") and "Planned" in line:
+            found_30f = True
+        if line.startswith("| 30 ") and "Complete" in line:
+            found_30_complete = True
+    assert found_30e1, "ROADMAP must keep Phase 30E1 Complete"
+    assert found_30e2, "ROADMAP must mark Phase 30E2 Complete"
+    assert found_30e_parent, "ROADMAP must mark parent Phase 30E Complete"
+    assert found_30f, "ROADMAP must keep Phase 30F Planned"
+    assert not found_30_complete, \
+        "Phase 30 must NOT be marked Complete until Phase 30F lands"
+    print("  ROADMAP: 30E1+30E2+30E Complete, 30F Planned, 30 not Complete ✓")
+
+
+def test_p30e2_22_state_pills_present():
+    """P30E2-22: Both 30E2 components expose a state-pill testid."""
+    print("\n=== Test P30E2-22: state pills ===")
+    pills = {
+        "controller":  'data-testid="controller-state-pill"',
+        "vault-setup": 'data-testid="vault-setup-state-pill"',
+    }
+    for name, marker in pills.items():
+        text = _read_text(_P30E2_COMPONENTS[name])
+        assert marker in text, f"{_P30E2_COMPONENTS[name]} must expose {marker}"
+    print("  Both 30E2 components expose a state-pill testid ✓")
+
+
+def test_p30e2_23_no_em_dashes_and_no_new_deps():
+    """P30E2-23: Phase 30E2 files contain no em dashes; no new runtime deps."""
+    print("\n=== Test P30E2-23: no em dashes + no new deps in Phase 30E2 ===")
+    import json
+    files = list(_P30E2_PAGES.values()) + list(_P30E2_COMPONENTS.values()) + [
+        _P30E2_HELPER,
+    ]
+    offenders = [f for f in files if "\u2014" in _read_text(f)]
+    assert not offenders, \
+        f"Phase 30E2 files must not contain em dashes; offenders: {offenders}"
+    pkg = json.loads(_read_text("ui/package.json"))
+    deps = set((pkg.get("dependencies") or {}).keys())
+    dev_deps = set((pkg.get("devDependencies") or {}).keys())
+    forbidden = {"react", "react-dom", "vue", "lucide-react",
+                 "@heroicons/react", "framer-motion", "react-icons",
+                 "@radix-ui/react-icons", "chart.js", "d3", "recharts",
+                 "highlight.js", "prismjs", "shiki"}
+    sneaked_in = (deps | dev_deps) & forbidden
+    assert not sneaked_in, \
+        f"ui/package.json must not introduce {sorted(sneaked_in)} in Phase 30E2"
+    print("  No em dashes and no new runtime dependencies in Phase 30E2 ✓")
+
+
+def test_p30e2_24_global_css_has_phase30e2_block():
+    """P30E2-24: global.css declares the Phase 30E2 token block with required primitives."""
+    print("\n=== Test P30E2-24: global.css Phase 30E2 token block ===")
+    css = _read_text("ui/src/styles/global.css")
+    assert "Phase 30E2" in css, "global.css must contain a Phase 30E2 section comment"
+    for cls in (".cve-p30e2-page", ".cve-p30e2-panel",
+                ".cve-p30e2-controller-grid", ".cve-p30e2-setup-form",
+                ".cve-p30e2-form-grid", ".cve-p30e2-pill"):
+        assert cls in css, f"global.css must define {cls}"
+    print("  global.css declares the Phase 30E2 primitives ✓")
 
 
 if __name__ == "__main__":

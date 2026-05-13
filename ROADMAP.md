@@ -134,9 +134,9 @@ Phase 30 (UI Release Quality Pass). Phase 30A (screenshot-driven page-by-page UX
 | 30D1  | Validation, Tasks, Raw real impls       | Complete |
 | 30D2  | Notes and Graph workspace redesigns     | Complete |
 | 30D3  | Import, Bundles, Exports, Security      | Complete |
-| 30E   | Review/Governance/Developer Polish      | In Progress |
+| 30E   | Review/Governance/Developer Polish      | Complete (2026-05-13) |
 | 30E1  | Pending/Trust/Feedback governance polish| Complete |
-| 30E2  | Controller and Vault Setup polish       | Planned  |
+| 30E2  | Controller and Vault Setup polish       | Complete (2026-05-13) |
 | 30F   | Final QA, A11y, Responsive, Light Mode  | Planned  |
 | 27    | Registry and Reuse Layer                | Deferred |
 | 28    | Optional Semantic Retrieval             | Deferred |
@@ -1168,7 +1168,7 @@ feat(ui): import, bundles, exports, and security workflow redesigns (Phase 30D3)
 
 #### Phase 30E - Review, Governance, and Developer Polish
 
-**Status:** In Progress. Phase 30E1 (Pending, Trust, Feedback) is Complete. Phase 30E2 (Controller, Vault Setup) is Planned.
+**Status:** Complete (2026-05-13). Both Phase 30E1 (Pending, Trust, Feedback) and Phase 30E2 (Controller, Vault Setup) are delivered.
 
 ##### Phase 30E1 - Pending / Trust / Feedback governance polish
 
@@ -1189,14 +1189,13 @@ feat(ui): pending, trust, and feedback governance polish (Phase 30E1)
 
 ##### Phase 30E2 - Controller and Vault Setup polish
 
-**Status:** Planned.
+**Status:** Complete (2026-05-13).
 
-**Scope:**
-- `/app/controller` two-column command-centre layout at xl+; readiness polarity corrected for negative flags; recommendations deep-link to authoritative pages.
-- `/app/vault-setup` destructive vault deletion moved off the onboarding page (separate management route or slide-over from the vault switcher); per-field cards collapsed into a single grouped form panel.
-- `cve-diff` further hardening only if regressions are found while polishing Pending.
-
-**Out of scope:** Final QA, a11y, responsive, and light-mode toggle - deferred to 30F.
+**Scope (delivered):**
+- `/app/controller` rebuilt as a two-column command-centre at xl+ (`controller-state-column` left, `controller-recommendation-column` right). Toolbar, state pill, headline banner, and status strip render on the Phase 30B primitives. Readiness polarity is corrected via `readinessPolarity()` so negative flags (`has_tasks`, `has_missing_concepts`, `has_feedback_warnings`) no longer render as positive. Recommendations are sorted deterministically and deep-link to authoritative `/app/*` routes through `recommendationRoute()`. Raw controller/plan responses are demoted to a `cve-details--inspector` disclosure with Developer deep-links into `/app/raw` via `buildRawDeepLink()`.
+- `/app/vault-setup` collapsed scattered per-field cards into one grouped `cve-p30e2-form-grid` panel. Live validation and the bootstrap preview are preserved. Destructive vault deletion is fully removed from the primary setup form and relocated into a dedicated vault management panel; the actual delete flow runs inside a `cve-slide-over` (`vault-setup-delete-slide-over`) that names the target vault, explains the real backend semantics (files deleted from disk, `config/config.yaml` rewritten, action not reversible by the app), and requires a typed `DELETE <vault>` confirmation enforced by `isDeleteConfirmed()`. `demo-vault` is protected via `VAULT_DELETE_PROTECTED`.
+- Shared helper `ui/src/lib/phase30e2.ts` exposes readiness polarity, recommendation routing, the typed-confirmation phrase, and the deletion-semantics constant; `buildRawDeepLink` is re-exported from `phase30e1`.
+- New token primitives `cve-p30e2-*` added to `global.css` inside `@layer components`. No Tailwind dark literals, no new runtime dependencies, no backend or schema changes, no new MCP tools.
 
 **Suggested Commit**
 

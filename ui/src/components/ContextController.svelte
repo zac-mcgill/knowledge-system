@@ -1,4 +1,23 @@
 <script lang="ts">
+  // Phase 30E2 - Controller as a command-centre planning page.
+  //
+  // Two-column layout at xl+:
+  //   - left/main: readiness state, blockers, warnings, service summary
+  //   - right/secondary: ranked recommendations and next-best action
+  //
+  // Readiness polarity is corrected via readinessPolarity() so negative
+  // flags (has_tasks, has_missing_concepts, has_feedback_warnings) never
+  // render as positive/green just because the field is true.
+  //
+  // Recommendations deep-link to authoritative /app/* routes via
+  // recommendationRoute(); the backend usually populates rec.links.ui
+  // already, but we still expose recommendationRoute() so the link
+  // contract is deterministic.
+  //
+  // Raw controller responses are demoted to cve-details--inspector with
+  // a Developer deep-link to /app/raw (shared Phase 30D deep-link
+  // contract from buildRawDeepLink).
+
   import { onMount } from 'svelte';
   import {
     fetchVaults,
@@ -9,6 +28,15 @@
     type ContextPlanData,
     type ContextRecommendation,
   } from '../lib/api.ts';
+  import {
+    buildRawDeepLink,
+    readinessPolarity,
+    readinessLabel,
+    readinessStatusText,
+    recommendationRoute,
+    sortRecommendations,
+    severityRank,
+  } from '../lib/phase30e2.ts';
   import { getStoredVault, setStoredVault } from '../lib/vaultState.ts';
 
   // ---------------------------------------------------------------------------
@@ -19,25 +47,17 @@
   let vaultsLoading = true;
   let vaultsError = '';
 
-  // ---------------------------------------------------------------------------
-  // Form state
-  // ---------------------------------------------------------------------------
-
   let selectedVault = '';
 
   type Intent = 'review' | 'export' | 'agent-context' | 'quality' | 'security';
   const INTENTS: { value: Intent; label: string; description: string }[] = [
-    { value: 'review', label: 'Review', description: 'General vault health and completeness' },
-    { value: 'export', label: 'Export', description: 'Readiness for context bundle export' },
-    { value: 'agent-context', label: 'Agent Context', description: 'Readiness for LLM agent use' },
-    { value: 'quality', label: 'Quality', description: 'Content quality and coverage gaps' },
-    { value: 'security', label: 'Security', description: 'Security findings and risks' },
+    { value: 'review',        label: 'Review',        description: 'General vault health' },
+    { value: 'export',        label: 'Export',        description: 'Readiness for export' },
+    { value: 'agent-context', label: 'Agent Context', description: 'Readiness for agent use' },
+    { value: 'quality',       label: 'Quality',       description: 'Coverage and quality gaps' },
+    { value: 'security',      label: 'Security',      description: 'Security findings' },
   ];
   let selectedIntent: Intent = 'review';
-
-  // ---------------------------------------------------------------------------
-  // Load state
-  // ---------------------------------------------------------------------------
 
   type LoadState = 'idle' | 'loading' | 'ok' | 'error';
   let stateLoadState: LoadState = 'idle';
@@ -49,16 +69,76 @@
   let stateError = '';
   let planError = '';
 
-  // ---------------------------------------------------------------------------
-  // UI state
-  // ---------------------------------------------------------------------------
+  $: sortedRecs = planData ? sortRecommendations(planData.recommendations) : [];
 
-  let showRawStateJson = false;
-  let showRawPlanJson = false;
+  $: statePillLabel = (() => {
+    if (vaultsLoading) return 'Loading';
+    if (vaultsError) return 'Error';
+    if (!selectedVault) return 'Idle';
+    if (stateLoadState === 'loading' || planLoadState === 'loading') return 'Loading';
+    if (stateLoadState === 'error' || planLoadState === 'error') return 'Error';
+    if (stateLoadState !== 'ok' || planLoadState !== 'ok') return 'Idle';
+    if (!stateData || !planData) return 'Idle';
+    if (stateData.blockers.length > 0) return 'Blocked';
+    if (!stateData.readiness.valid) return 'Blocked';
+    if (planData.recommendations.length > 0) return 'Action needed';
+    return 'Ready';
+  })();
 
-  // ---------------------------------------------------------------------------
-  // Lifecycle
-  // ---------------------------------------------------------------------------
+  $: statePillClass = (() => {
+    switch (statePillLabel) {
+      case 'Ready': return 'cve-p30e2-pill cve-p30e2-pill--ready';
+      case 'Blocked': return 'cve-p30e2-pill cve-p30e2-pill--blocked';
+      case 'Action needed': return 'cve-p30e2-pill cve-p30e2-pill--action';
+      case 'Error': return 'cve-p30e2-pill cve-p30e2-pill--blocked';
+      default: return 'cve-p30e2-pill';
+    }
+  })();
+
+  $: headlineBanner = (() => {
+    if (!selectedVault) return null;
+    if (stateLoadState === 'error') {
+      return { kind: 'danger', title: 'Could not load context state', body: stateError } as const;
+    }
+    if (planLoadState === 'error') {
+      return { kind: 'danger', title: 'Could not build plan', body: planError } as const;
+    }
+    if (!stateData || !planData) return null;
+    if (stateData.blockers.length > 0) {
+      return {
+        kind: 'danger',
+        title: 'Blocked',
+        body: `${stateData.blockers.length} blocker${stateData.blockers.length === 1 ? '' : 's'} must be resolved before this vault is ready.`,
+      } as const;
+    }
+    if (!stateData.readiness.valid) {
+      return {
+        kind: 'danger',
+        title: 'Validation failing',
+        body: 'Validation is currently failing for this vault. Fix validation errors first.',
+      } as const;
+    }
+    if (planData.recommendations.length > 0) {
+      const top = planData.next_best_action;
+      return {
+        kind: 'warning',
+        title: 'Action recommended',
+        body: top ? top.title : `${planData.recommendations.length} recommendation${planData.recommendations.length === 1 ? '' : 's'} pending for intent "${planData.intent}".`,
+      } as const;
+    }
+    if (stateData.warnings.length > 0) {
+      return {
+        kind: 'warning',
+        title: 'Warnings present',
+        body: `${stateData.warnings.length} warning${stateData.warnings.length === 1 ? '' : 's'} reported but no actions required for this intent.`,
+      } as const;
+    }
+    return {
+      kind: 'success',
+      title: 'Ready',
+      body: 'No blockers, no outstanding actions for this intent.',
+    } as const;
+  })();
 
   onMount(async () => {
     const vr = await fetchVaults();
@@ -78,10 +158,6 @@
       await loadAll();
     }
   });
-
-  // ---------------------------------------------------------------------------
-  // Data loading
-  // ---------------------------------------------------------------------------
 
   async function loadAll() {
     if (!selectedVault) return;
@@ -129,274 +205,328 @@
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // Helpers
-  // ---------------------------------------------------------------------------
+  function recommendationHref(rec: ContextRecommendation): string {
+    const route = recommendationRoute(rec);
+    if (selectedVault) {
+      const sep = route.includes('?') ? '&' : '?';
+      return `${route}${sep}vault=${encodeURIComponent(selectedVault)}`;
+    }
+    return route;
+  }
 
-  const SEVERITY_COLOUR: Record<string, string> = {
-    critical: 'text-red-400',
-    high: 'text-orange-400',
-    medium: 'text-amber-400',
-    low: 'text-sky-400',
-    info: 'text-zinc-500',
-  };
+  function severityClass(sev: string): string {
+    const r = severityRank(sev);
+    if (r <= 1) return 'cve-p30e2-sev cve-p30e2-sev--high';
+    if (r === 2) return 'cve-p30e2-sev cve-p30e2-sev--medium';
+    if (r === 3) return 'cve-p30e2-sev cve-p30e2-sev--low';
+    return 'cve-p30e2-sev cve-p30e2-sev--info';
+  }
 
-  const SEVERITY_BG: Record<string, string> = {
-    critical: 'bg-red-950 border-red-800',
-    high: 'bg-orange-950 border-orange-800',
-    medium: 'bg-amber-950 border-amber-800',
-    low: 'bg-sky-950 border-sky-800',
-    info: 'bg-zinc-800 border-zinc-700',
-  };
+  $: rawStateDeepLink = buildRawDeepLink('context-state', selectedVault, 'controller');
+  $: rawPlanDeepLink = buildRawDeepLink('context-plan', selectedVault, 'controller');
 </script>
 
-<!-- ======================================================================
-     Layout
-     ====================================================================== -->
+<!-- ============================================================
+     Toolbar
+     ============================================================ -->
+<div class="cve-page cve-p30e2-page">
 
-<div class="cve-page space-y-6">
-
-  <!-- ── Header ────────────────────────────────────────────────────────── -->
-  <div class="cve-page-header">
-    <h1 class="cve-page-title text-xl font-semibold text-zinc-100">Context Controller</h1>
-    <p class="text-sm text-zinc-500 mt-0.5">
-      Deterministic vault state snapshot and action planner. No LLM — all output
-      is derived from the current state of your vault.
-    </p>
-  </div>
-
-  <!-- ── Controls ──────────────────────────────────────────────────────── -->
-  {#if vaultsLoading}
-    <div class="text-sm text-zinc-500 py-6">Loading vaults…</div>
-  {:else if vaultsError}
-    <div class="bg-red-950 border border-red-800 rounded-lg p-4 text-sm text-red-300">
-      <span class="font-medium">Could not load vaults:</span> {vaultsError}
-    </div>
-  {:else if vaultList.length === 0}
-    <div class="bg-zinc-900 border border-zinc-800 rounded-lg p-6">
-      <p class="text-sm text-zinc-400">No vaults registered. Use Vault Setup to create one.</p>
-    </div>
-  {:else}
-    <div class="flex flex-wrap items-center gap-3">
-      <label class="text-sm text-zinc-400 shrink-0" for="vault-select">Vault</label>
-      <select
-        id="vault-select"
-        bind:value={selectedVault}
-        on:change={handleVaultChange}
-        class="bg-zinc-900 border border-zinc-700 rounded-md px-3 py-1.5 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-sky-600"
+  <header class="cve-toolbar" data-testid="controller-toolbar">
+    <div class="cve-toolbar__main">
+      <div class="cve-toolbar__title">Controller</div>
+      <span
+        class={statePillClass}
+        data-testid="controller-state-pill"
+        aria-live="polite"
       >
-        {#each vaultList as v}
-          <option value={v}>{v}</option>
-        {/each}
-      </select>
+        {statePillLabel}
+      </span>
 
-      <label class="text-sm text-zinc-400 shrink-0" for="intent-select">Intent</label>
-      <select
-        id="intent-select"
-        bind:value={selectedIntent}
-        on:change={handleIntentChange}
-        class="bg-zinc-900 border border-zinc-700 rounded-md px-3 py-1.5 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-sky-600"
-      >
-        {#each INTENTS as intent}
-          <option value={intent.value}>{intent.label} — {intent.description}</option>
-        {/each}
-      </select>
-
-      <button
-        on:click={loadAll}
-        disabled={!selectedVault || stateLoadState === 'loading' || planLoadState === 'loading'}
-        class="ml-auto px-3 py-1.5 rounded-md bg-zinc-800 text-zinc-300 text-sm hover:bg-zinc-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-      >
-        {stateLoadState === 'loading' || planLoadState === 'loading' ? 'Loading…' : 'Refresh'}
-      </button>
-    </div>
-
-    <!-- ═══════════════════════════════════════════════════════════════
-         Vault State
-         ═══════════════════════════════════════════════════════════════ -->
-    <section class="space-y-4">
-      <h2 class="text-sm font-semibold text-zinc-300 uppercase tracking-wide">Vault State</h2>
-
-      {#if stateLoadState === 'idle'}
-        <p class="text-sm text-zinc-500">Select a vault to load the state snapshot.</p>
-      {:else if stateLoadState === 'loading'}
-        <p class="text-sm text-zinc-500">Loading state…</p>
-      {:else if stateLoadState === 'error'}
-        <div class="bg-red-950 border border-red-800 rounded-lg p-4 text-sm text-red-300">
-          {stateError}
-        </div>
-      {:else if stateData}
-
-        <!-- Readiness cards -->
-        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-          {#each Object.entries(stateData.readiness) as [key, val]}
-            <div class="bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-3 flex items-center justify-between gap-2">
-              <div class="min-w-0">
-                <div class="text-xs font-medium text-zinc-500 uppercase tracking-wide mb-1">
-                  {key.replace(/_/g, ' ')}
-                </div>
-                <div class="text-sm font-medium {val ? 'text-emerald-400' : 'text-zinc-600'}">
-                  {val ? 'Yes' : 'No'}
-                </div>
-              </div>
-              <span class="shrink-0 w-2.5 h-2.5 rounded-full {val ? 'bg-emerald-400' : 'bg-zinc-700'}"></span>
-            </div>
+      <div class="cve-toolbar__meta">
+        <label class="cve-p30e2-inline-label" for="controller-vault-select">Vault</label>
+        <select
+          id="controller-vault-select"
+          bind:value={selectedVault}
+          on:change={handleVaultChange}
+          class="cve-p30e2-inline-select"
+          disabled={vaultsLoading || !!vaultsError || vaultList.length === 0}
+        >
+          {#if vaultList.length === 0}
+            <option value="">No vaults available</option>
+          {/if}
+          {#each vaultList as v}
+            <option value={v}>{v}</option>
           {/each}
-        </div>
+        </select>
 
-        <!-- Service summary table -->
-        <div class="bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden">
-          <table class="cve-table w-full text-sm">
-            <thead class="bg-zinc-800 border-b border-zinc-700">
-              <tr>
-                <th class="text-left px-4 py-2.5 text-xs font-medium text-zinc-500 uppercase tracking-wide">Service</th>
-                <th class="text-left px-4 py-2.5 text-xs font-medium text-zinc-500 uppercase tracking-wide">Status / Value</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr class="border-b border-zinc-800">
-                <td class="px-4 py-2.5 text-zinc-300">Validation</td>
-                <td class="px-4 py-2.5">
-                  <span class="font-mono text-xs {stateData.state.summary.validation_status === 'pass' ? 'text-emerald-400' : 'text-red-400'}">
-                    {stateData.state.summary.validation_status}
-                  </span>
-                </td>
-              </tr>
-              <tr class="border-b border-zinc-800">
-                <td class="px-4 py-2.5 text-zinc-300">Security</td>
-                <td class="px-4 py-2.5">
-                  <span class="font-mono text-xs {stateData.state.summary.security_status === 'pass' ? 'text-emerald-400' : stateData.state.summary.security_status === 'warning' ? 'text-amber-400' : 'text-red-400'}">
-                    {stateData.state.summary.security_status}
-                  </span>
-                </td>
-              </tr>
-              <tr class="border-b border-zinc-800">
-                <td class="px-4 py-2.5 text-zinc-300">Pending Tasks</td>
-                <td class="px-4 py-2.5 font-mono text-xs text-zinc-400">{stateData.state.summary.total_tasks}</td>
-              </tr>
-              <tr class="border-b border-zinc-800">
-                <td class="px-4 py-2.5 text-zinc-300">Missing Concepts</td>
-                <td class="px-4 py-2.5 font-mono text-xs text-zinc-400">{stateData.state.summary.total_missing}</td>
-              </tr>
-              <tr class="border-b border-zinc-800">
-                <td class="px-4 py-2.5 text-zinc-300">Feedback Entries</td>
-                <td class="px-4 py-2.5 font-mono text-xs text-zinc-400">{stateData.state.summary.feedback_entry_count}</td>
-              </tr>
-              <tr>
-                <td class="px-4 py-2.5 text-zinc-300">Graph Nodes</td>
-                <td class="px-4 py-2.5 font-mono text-xs text-zinc-400">{stateData.state.summary.graph_node_count}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <!-- Blockers -->
-        {#if stateData.blockers.length > 0}
-          <div>
-            <h3 class="text-xs font-semibold text-red-400 uppercase tracking-wide mb-2">Blockers</h3>
-            <ul class="space-y-1.5">
-              {#each stateData.blockers as b}
-                <li class="bg-red-950 border border-red-800 rounded-md px-3 py-2 text-sm text-red-300">⛔ {b}</li>
-              {/each}
-            </ul>
-          </div>
-        {/if}
-
-        <!-- Warnings -->
-        {#if stateData.warnings.length > 0}
-          <div>
-            <h3 class="text-xs font-semibold text-amber-400 uppercase tracking-wide mb-2">Warnings</h3>
-            <ul class="space-y-1.5">
-              {#each stateData.warnings as w}
-                <li class="bg-amber-950 border border-amber-800 rounded-md px-3 py-2 text-sm text-amber-300">⚠ {w}</li>
-              {/each}
-            </ul>
-          </div>
-        {/if}
-
-        <!-- Raw JSON toggle -->
-        <button
-          on:click={() => showRawStateJson = !showRawStateJson}
-          class="text-xs text-zinc-600 hover:text-zinc-400 underline"
+        <label class="cve-p30e2-inline-label" for="controller-intent-select">Intent</label>
+        <select
+          id="controller-intent-select"
+          bind:value={selectedIntent}
+          on:change={handleIntentChange}
+          class="cve-p30e2-inline-select"
+          disabled={!selectedVault}
         >
-          {showRawStateJson ? 'Hide' : 'Show'} raw JSON
+          {#each INTENTS as intent}
+            <option value={intent.value}>{intent.label}</option>
+          {/each}
+        </select>
+      </div>
+
+      <div class="cve-toolbar__actions">
+        <button
+          type="button"
+          on:click={loadAll}
+          disabled={!selectedVault || stateLoadState === 'loading' || planLoadState === 'loading'}
+          class="cve-p30e2-btn"
+          data-testid="controller-refresh"
+        >
+          {stateLoadState === 'loading' || planLoadState === 'loading' ? 'Loading...' : 'Refresh'}
         </button>
-        {#if showRawStateJson}
-          <pre class="mt-1 text-xs bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-zinc-400 overflow-auto max-h-64">{JSON.stringify(stateData, null, 2)}</pre>
-        {/if}
-      {/if}
+      </div>
+    </div>
+  </header>
+
+  <!-- Headline banner -->
+  {#if vaultsError}
+    <section
+      class="cve-banner cve-banner--danger"
+      data-testid="controller-headline-banner"
+      role="status"
+    >
+      <div>
+        <p class="cve-banner__title">Could not load vaults</p>
+        <p class="cve-banner__body">{vaultsError}</p>
+      </div>
     </section>
-
-    <!-- ═══════════════════════════════════════════════════════════════
-         Recommendation Plan
-         ═══════════════════════════════════════════════════════════════ -->
-    <section class="space-y-4">
-      <h2 class="text-sm font-semibold text-zinc-300 uppercase tracking-wide">
-        Recommendation Plan
-        <span class="ml-2 text-xs font-normal text-zinc-600 normal-case">({selectedIntent})</span>
-      </h2>
-
-      {#if planLoadState === 'idle'}
-        <p class="text-sm text-zinc-500">Select a vault and intent to generate a plan.</p>
-      {:else if planLoadState === 'loading'}
-        <p class="text-sm text-zinc-500">Building plan…</p>
-      {:else if planLoadState === 'error'}
-        <div class="bg-red-950 border border-red-800 rounded-lg p-4 text-sm text-red-300">
-          {planError}
-        </div>
-      {:else if planData}
-
-        <!-- Next best action banner -->
-        {#if planData.next_best_action}
-          <div class="bg-sky-950 border border-sky-800 rounded-lg p-4">
-            <p class="text-xs font-semibold text-sky-500 uppercase tracking-wide mb-1">Next Best Action</p>
-            <p class="text-sm font-medium text-sky-100">{planData.next_best_action.title}</p>
-            <p class="text-xs text-sky-500 font-mono mt-0.5">{planData.next_best_action.action}</p>
-          </div>
-        {:else}
-          <div class="bg-emerald-950 border border-emerald-800 rounded-lg p-4">
-            <p class="text-sm text-emerald-300">✅ No actions required for this intent.</p>
-          </div>
-        {/if}
-
-        <!-- Recommendations list -->
-        {#if planData.recommendations.length > 0}
-          <div class="space-y-2">
-            {#each planData.recommendations as rec}
-              <div class="border rounded-lg p-4 {SEVERITY_BG[rec.severity] ?? 'bg-zinc-900 border-zinc-800'}">
-                <div class="flex items-start gap-3">
-                  <span class="text-xs font-bold text-zinc-600 mt-0.5 shrink-0">#{rec.rank}</span>
-                  <div class="flex-1 min-w-0">
-                    <div class="flex flex-wrap items-center gap-2 mb-1">
-                      <span class="text-sm font-semibold text-zinc-100">{rec.title}</span>
-                      <span class="text-xs px-1.5 py-0.5 rounded font-medium border {SEVERITY_COLOUR[rec.severity] ?? 'text-zinc-500 border-zinc-600'} border-current bg-black/20">
-                        {rec.severity}
-                      </span>
-                    </div>
-                    <p class="text-sm text-zinc-400 mb-2">{rec.reason}</p>
-                    <div class="flex gap-3 text-xs">
-                      <a href={rec.links.ui} class="text-sky-400 hover:underline">Open in UI</a>
-                      <span class="text-zinc-700">|</span>
-                      <span class="text-zinc-600 font-mono">{rec.links.api}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            {/each}
-          </div>
-        {/if}
-
-        <!-- Raw JSON toggle -->
-        <button
-          on:click={() => showRawPlanJson = !showRawPlanJson}
-          class="text-xs text-zinc-600 hover:text-zinc-400 underline"
-        >
-          {showRawPlanJson ? 'Hide' : 'Show'} raw JSON
-        </button>
-        {#if showRawPlanJson}
-          <pre class="mt-1 text-xs bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-zinc-400 overflow-auto max-h-64">{JSON.stringify(planData, null, 2)}</pre>
-        {/if}
-      {/if}
+  {:else if vaultsLoading}
+    <section class="cve-banner cve-banner--info" data-testid="controller-headline-banner">
+      <div>
+        <p class="cve-banner__title">Loading vaults</p>
+        <p class="cve-banner__body">Reading registered vaults from config.</p>
+      </div>
+    </section>
+  {:else if vaultList.length === 0}
+    <section class="cve-banner cve-banner--warning" data-testid="controller-headline-banner">
+      <div>
+        <p class="cve-banner__title">No vaults registered</p>
+        <p class="cve-banner__body">
+          Use <a href="/app/vault-setup" class="cve-link">Vault Setup</a>
+          to create or connect a vault.
+        </p>
+      </div>
+    </section>
+  {:else if headlineBanner}
+    <section
+      class={`cve-banner cve-banner--${headlineBanner.kind}`}
+      data-testid="controller-headline-banner"
+      role="status"
+    >
+      <div>
+        <p class="cve-banner__title">{headlineBanner.title}</p>
+        <p class="cve-banner__body">{headlineBanner.body}</p>
+      </div>
     </section>
   {/if}
+
+  <!-- Status strip -->
+  {#if stateData}
+    <section class="cve-status-strip" data-testid="controller-status-strip" aria-label="Vault summary">
+      {#each Object.entries(stateData.readiness) as [key, val]}
+        {@const polarity = readinessPolarity(key, val)}
+        <div
+          class={`cve-status-tile cve-status-tile--${polarity === 'good' ? 'success' : 'danger'}`}
+          data-testid={`controller-readiness-${key}`}
+          data-polarity={polarity}
+        >
+          <span class="cve-status-tile__label">{readinessLabel(key)}</span>
+          <span class="cve-status-tile__value">{readinessStatusText(key, val)}</span>
+        </div>
+      {/each}
+
+      <div class="cve-status-tile cve-status-tile--neutral" data-testid="controller-tile-tasks">
+        <span class="cve-status-tile__label">Tasks</span>
+        <span class="cve-status-tile__value">{stateData.state.summary.total_tasks}</span>
+      </div>
+      <div class="cve-status-tile cve-status-tile--neutral" data-testid="controller-tile-missing">
+        <span class="cve-status-tile__label">Missing concepts</span>
+        <span class="cve-status-tile__value">{stateData.state.summary.total_missing}</span>
+      </div>
+      <div class="cve-status-tile cve-status-tile--neutral" data-testid="controller-tile-feedback">
+        <span class="cve-status-tile__label">Feedback</span>
+        <span class="cve-status-tile__value">{stateData.state.summary.feedback_entry_count}</span>
+      </div>
+      <div class="cve-status-tile cve-status-tile--neutral" data-testid="controller-tile-graph">
+        <span class="cve-status-tile__label">Graph nodes</span>
+        <span class="cve-status-tile__value">{stateData.state.summary.graph_node_count}</span>
+      </div>
+    </section>
+  {/if}
+
+  <!-- Command-centre grid -->
+  <section class="cve-p30e2-controller-grid" data-testid="controller-command-grid">
+
+    <!-- ── Left: state, blockers, warnings ── -->
+    <div class="cve-p30e2-main" data-testid="controller-state-column">
+
+      <article class="cve-p30e2-panel" data-testid="controller-state-panel">
+        <h2 class="cve-p30e2-panel__title">Vault state</h2>
+
+        {#if stateLoadState === 'idle'}
+          <p class="cve-p30e2-empty">Select a vault to load the state snapshot.</p>
+        {:else if stateLoadState === 'loading'}
+          <p class="cve-p30e2-empty">Loading state...</p>
+        {:else if stateLoadState === 'error'}
+          <p class="cve-p30e2-empty">Could not load state.</p>
+        {:else if stateData}
+
+          <div class="cve-p30e2-kv-list">
+            <div class="cve-kv-row">
+              <span class="cve-kv-row__key">Validation</span>
+              <span class="cve-kv-row__value" data-testid="controller-kv-validation">
+                {stateData.state.summary.validation_status}
+              </span>
+            </div>
+            <div class="cve-kv-row">
+              <span class="cve-kv-row__key">Security</span>
+              <span class="cve-kv-row__value" data-testid="controller-kv-security">
+                {stateData.state.summary.security_status}
+              </span>
+            </div>
+            <div class="cve-kv-row">
+              <span class="cve-kv-row__key">Pending tasks</span>
+              <span class="cve-kv-row__value">{stateData.state.summary.total_tasks}</span>
+            </div>
+            <div class="cve-kv-row">
+              <span class="cve-kv-row__key">Missing concepts</span>
+              <span class="cve-kv-row__value">{stateData.state.summary.total_missing}</span>
+            </div>
+            <div class="cve-kv-row">
+              <span class="cve-kv-row__key">Feedback entries</span>
+              <span class="cve-kv-row__value">{stateData.state.summary.feedback_entry_count}</span>
+            </div>
+            <div class="cve-kv-row">
+              <span class="cve-kv-row__key">Graph nodes</span>
+              <span class="cve-kv-row__value">{stateData.state.summary.graph_node_count}</span>
+            </div>
+          </div>
+        {/if}
+      </article>
+
+      {#if stateData && stateData.blockers.length > 0}
+        <article class="cve-p30e2-panel cve-p30e2-panel--danger" data-testid="controller-blockers-panel">
+          <h2 class="cve-p30e2-panel__title">Blockers</h2>
+          <ul class="cve-p30e2-issue-list">
+            {#each stateData.blockers as b}
+              <li class="cve-p30e2-issue cve-p30e2-issue--blocker">
+                <span class="cve-p30e2-issue__label">Blocker</span>
+                <span class="cve-p30e2-issue__text">{b}</span>
+              </li>
+            {/each}
+          </ul>
+        </article>
+      {/if}
+
+      {#if stateData && stateData.warnings.length > 0}
+        <article class="cve-p30e2-panel cve-p30e2-panel--warning" data-testid="controller-warnings-panel">
+          <h2 class="cve-p30e2-panel__title">Warnings</h2>
+          <ul class="cve-p30e2-issue-list">
+            {#each stateData.warnings as w}
+              <li class="cve-p30e2-issue cve-p30e2-issue--warning">
+                <span class="cve-p30e2-issue__label">Warning</span>
+                <span class="cve-p30e2-issue__text">{w}</span>
+              </li>
+            {/each}
+          </ul>
+        </article>
+      {/if}
+
+    </div>
+
+    <!-- ── Right: recommendations + next best action ── -->
+    <aside class="cve-p30e2-aside" data-testid="controller-recommendation-column">
+
+      <article class="cve-p30e2-panel" data-testid="controller-next-action-panel">
+        <h2 class="cve-p30e2-panel__title">Next best action</h2>
+        {#if planLoadState === 'idle'}
+          <p class="cve-p30e2-empty">Select a vault to generate a plan.</p>
+        {:else if planLoadState === 'loading'}
+          <p class="cve-p30e2-empty">Building plan...</p>
+        {:else if planLoadState === 'error'}
+          <p class="cve-p30e2-empty">Could not build plan.</p>
+        {:else if planData && planData.next_best_action}
+          <p class="cve-p30e2-next-title">{planData.next_best_action.title}</p>
+          {#if sortedRecs.length > 0}
+            <a
+              href={recommendationHref(sortedRecs[0])}
+              class="cve-p30e2-next-cta"
+              data-testid="controller-next-action-link"
+            >
+              Open in {recommendationRoute(sortedRecs[0]).replace('/app/', '')}
+            </a>
+          {/if}
+        {:else if planData}
+          <p class="cve-p30e2-empty">No actions required for intent "{planData.intent}".</p>
+        {/if}
+      </article>
+
+      <article class="cve-p30e2-panel" data-testid="controller-recommendations-panel">
+        <h2 class="cve-p30e2-panel__title">Recommendations</h2>
+
+        {#if planLoadState !== 'ok' || !planData}
+          <p class="cve-p30e2-empty">Recommendations will appear after the plan loads.</p>
+        {:else if sortedRecs.length === 0}
+          <p class="cve-p30e2-empty">No recommendations for intent "{planData.intent}".</p>
+        {:else}
+          <ol class="cve-p30e2-rec-list" data-testid="controller-recommendation-list">
+            {#each sortedRecs as rec}
+              <li class="cve-p30e2-rec" data-testid={`controller-rec-${rec.action}`}>
+                <div class="cve-p30e2-rec__head">
+                  <span class="cve-p30e2-rec__rank">#{rec.rank}</span>
+                  <span class={severityClass(rec.severity)}>{rec.severity}</span>
+                  <span class="cve-p30e2-rec__title">{rec.title}</span>
+                </div>
+                <p class="cve-p30e2-rec__reason">{rec.reason}</p>
+                <a
+                  href={recommendationHref(rec)}
+                  class="cve-p30e2-rec__link"
+                  data-testid={`controller-rec-link-${rec.action}`}
+                >
+                  Open {recommendationRoute(rec)}
+                </a>
+              </li>
+            {/each}
+          </ol>
+        {/if}
+      </article>
+    </aside>
+  </section>
+
+  <!-- Developer / raw JSON behind cve-details--inspector -->
+  <details class="cve-details cve-details--inspector" data-testid="controller-developer-details">
+    <summary class="cve-details__summary">Developer details</summary>
+    <div class="cve-details__body">
+      <p class="cve-p30e2-helper-text">
+        Raw controller responses are exposed via the deterministic Developer route.
+        Use these deep-links to inspect the underlying JSON without leaving the
+        Controller workflow.
+      </p>
+      <div class="cve-p30e2-developer-row">
+        <a
+          href={rawStateDeepLink}
+          class="cve-details__developer-link"
+          data-testid="controller-developer-state-link"
+        >
+          Open context state in Developer
+        </a>
+        <a
+          href={rawPlanDeepLink}
+          class="cve-details__developer-link"
+          data-testid="controller-developer-plan-link"
+        >
+          Open context plan in Developer
+        </a>
+      </div>
+    </div>
+  </details>
 </div>

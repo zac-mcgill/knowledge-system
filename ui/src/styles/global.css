@@ -2457,4 +2457,476 @@
     flex-wrap: wrap;
     gap: var(--cve-space-1);
   }
+
+  /* ------------------------------------------------------------------
+   * Phase 30E2 - Controller command-centre and Vault Setup polish
+   * ------------------------------------------------------------------
+   * Tokenised primitives shared by ContextController.svelte and
+   * VaultSetup.svelte. No raw Tailwind dark literals; every colour
+   * resolves through --cve-* tokens so Phase 30F can flip themes
+   * without touching the migrated components.
+   * ------------------------------------------------------------------ */
+  .cve-p30e2-page {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cve-space-4);
+    min-width: 0;
+  }
+  .cve-p30e2-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--cve-space-1);
+    padding: 0.125rem var(--cve-space-2);
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--cve-text-strong);
+    background-color: var(--cve-surface-muted);
+    border: 1px solid var(--cve-border-soft);
+  }
+  .cve-p30e2-pill--ready {
+    color: var(--cve-success);
+    border-color: var(--cve-success);
+  }
+  .cve-p30e2-pill--blocked {
+    color: var(--cve-danger);
+    border-color: var(--cve-danger);
+  }
+  .cve-p30e2-pill--action {
+    color: var(--cve-warning);
+    border-color: var(--cve-warning);
+  }
+  .cve-p30e2-pill--protected {
+    color: var(--cve-text-muted);
+    border-color: var(--cve-border);
+  }
+  .cve-p30e2-mono {
+    font-family: ui-monospace, "Cascadia Code", "Fira Code", Consolas,
+      "Liberation Mono", Menlo, monospace;
+    font-size: 0.8125rem;
+    color: var(--cve-text-strong);
+  }
+  .cve-p30e2-inline-label {
+    font-size: 0.8125rem;
+    color: var(--cve-text-muted);
+  }
+  .cve-p30e2-inline-select {
+    background-color: var(--cve-surface);
+    border: 1px solid var(--cve-border);
+    color: var(--cve-text);
+    border-radius: var(--cve-radius-sm);
+    padding: 0.25rem var(--cve-space-2);
+    font-size: 0.8125rem;
+  }
+  .cve-p30e2-inline-select:focus-visible {
+    outline: 2px solid var(--cve-focus);
+    outline-offset: 1px;
+  }
+  .cve-p30e2-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--cve-space-1);
+    padding: 0.375rem var(--cve-space-3);
+    border-radius: var(--cve-radius-sm);
+    background-color: var(--cve-surface-muted);
+    border: 1px solid var(--cve-border);
+    color: var(--cve-text);
+    font-size: 0.8125rem;
+    font-weight: 500;
+    cursor: pointer;
+    text-decoration: none;
+  }
+  .cve-p30e2-btn:hover:not(:disabled) {
+    background-color: var(--cve-surface);
+    color: var(--cve-text-strong);
+  }
+  .cve-p30e2-btn:focus-visible {
+    outline: 2px solid var(--cve-focus);
+    outline-offset: 2px;
+  }
+  .cve-p30e2-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+  .cve-p30e2-btn--primary {
+    background-color: var(--cve-info);
+    border-color: var(--cve-info);
+    color: var(--cve-bg);
+  }
+  .cve-p30e2-btn--primary:hover:not(:disabled) {
+    filter: brightness(1.05);
+    color: var(--cve-bg);
+  }
+  .cve-p30e2-btn--danger {
+    background-color: var(--cve-surface);
+    border-color: var(--cve-danger);
+    color: var(--cve-danger);
+  }
+  .cve-p30e2-btn--danger:hover:not(:disabled) {
+    background-color: var(--cve-danger);
+    color: var(--cve-bg);
+  }
+
+  /* ── Controller two-column command-centre grid ── */
+  .cve-p30e2-controller-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--cve-space-4);
+    align-items: start;
+  }
+  @media (min-width: 1280px) {
+    .cve-p30e2-controller-grid {
+      grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+    }
+  }
+  .cve-p30e2-main,
+  .cve-p30e2-aside {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cve-space-3);
+    min-width: 0;
+  }
+  .cve-p30e2-panel {
+    border: 1px solid var(--cve-border-soft);
+    border-radius: var(--cve-radius);
+    background-color: var(--cve-surface);
+    padding: var(--cve-space-3) var(--cve-space-4);
+    display: flex;
+    flex-direction: column;
+    gap: var(--cve-space-2);
+    min-width: 0;
+  }
+  .cve-p30e2-panel--danger { border-left: 3px solid var(--cve-danger); }
+  .cve-p30e2-panel--warning { border-left: 3px solid var(--cve-warning); }
+  .cve-p30e2-panel--success { border-left: 3px solid var(--cve-success); }
+  .cve-p30e2-panel--management { border-left: 3px solid var(--cve-info); }
+  .cve-p30e2-panel__title {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--cve-text-strong);
+    margin: 0;
+  }
+  .cve-p30e2-panel__head {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cve-space-1);
+  }
+  .cve-p30e2-helper-text {
+    font-size: 0.8125rem;
+    color: var(--cve-text-muted);
+    margin: 0;
+  }
+  .cve-p30e2-empty {
+    font-size: 0.8125rem;
+    color: var(--cve-text-faint);
+    margin: 0;
+  }
+  .cve-p30e2-kv-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+  }
+  .cve-p30e2-issue-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--cve-space-1);
+  }
+  .cve-p30e2-issue {
+    display: flex;
+    gap: var(--cve-space-2);
+    padding: var(--cve-space-1) var(--cve-space-2);
+    border-radius: var(--cve-radius-sm);
+    background-color: var(--cve-surface-muted);
+    border: 1px solid var(--cve-border-soft);
+    font-size: 0.8125rem;
+  }
+  .cve-p30e2-issue--blocker {
+    border-left: 3px solid var(--cve-danger);
+  }
+  .cve-p30e2-issue--warning {
+    border-left: 3px solid var(--cve-warning);
+  }
+  .cve-p30e2-issue__label {
+    font-weight: 600;
+    color: var(--cve-text-strong);
+    flex-shrink: 0;
+  }
+  .cve-p30e2-issue__text {
+    color: var(--cve-text);
+    min-width: 0;
+  }
+
+  /* ── Controller recommendations ── */
+  .cve-p30e2-next-title {
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: var(--cve-text-strong);
+    margin: 0;
+  }
+  .cve-p30e2-next-cta {
+    align-self: flex-start;
+    font-size: 0.8125rem;
+    color: var(--cve-info);
+    text-decoration: none;
+    margin-top: var(--cve-space-1);
+  }
+  .cve-p30e2-next-cta:hover {
+    text-decoration: underline;
+    color: var(--cve-text-strong);
+  }
+  .cve-p30e2-rec-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--cve-space-2);
+    max-height: 36rem;
+    overflow-y: auto;
+  }
+  .cve-p30e2-rec {
+    border: 1px solid var(--cve-border-soft);
+    border-radius: var(--cve-radius-sm);
+    background-color: var(--cve-surface-muted);
+    padding: var(--cve-space-2) var(--cve-space-3);
+    display: flex;
+    flex-direction: column;
+    gap: var(--cve-space-1);
+  }
+  .cve-p30e2-rec__head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--cve-space-2);
+  }
+  .cve-p30e2-rec__rank {
+    font-family: ui-monospace, monospace;
+    font-size: 0.75rem;
+    color: var(--cve-text-faint);
+  }
+  .cve-p30e2-rec__title {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--cve-text-strong);
+  }
+  .cve-p30e2-rec__reason {
+    font-size: 0.8125rem;
+    color: var(--cve-text-muted);
+    margin: 0;
+  }
+  .cve-p30e2-rec__link {
+    font-size: 0.75rem;
+    color: var(--cve-info);
+    text-decoration: none;
+  }
+  .cve-p30e2-rec__link:hover {
+    text-decoration: underline;
+    color: var(--cve-text-strong);
+  }
+  .cve-p30e2-sev {
+    display: inline-flex;
+    align-items: center;
+    padding: 0 var(--cve-space-1);
+    border-radius: var(--cve-radius-sm);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    border: 1px solid var(--cve-border);
+    color: var(--cve-text);
+  }
+  .cve-p30e2-sev--high   { color: var(--cve-danger);  border-color: var(--cve-danger);  }
+  .cve-p30e2-sev--medium { color: var(--cve-warning); border-color: var(--cve-warning); }
+  .cve-p30e2-sev--low    { color: var(--cve-info);    border-color: var(--cve-info);    }
+  .cve-p30e2-sev--info   { color: var(--cve-text-muted); border-color: var(--cve-border); }
+
+  .cve-p30e2-developer-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--cve-space-2);
+  }
+
+  /* ── Vault Setup grouped form ── */
+  .cve-p30e2-setup-form {
+    padding: var(--cve-space-4) var(--cve-space-4);
+  }
+  .cve-p30e2-form-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--cve-space-3);
+  }
+  @media (min-width: 1024px) {
+    .cve-p30e2-form-grid {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+  .cve-p30e2-field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cve-space-1);
+    min-width: 0;
+  }
+  .cve-p30e2-field--wide {
+    grid-column: 1 / -1;
+  }
+  .cve-p30e2-field__label {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--cve-space-2);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--cve-text-strong);
+  }
+  .cve-p30e2-field__hint {
+    font-weight: 400;
+    color: var(--cve-text-faint);
+    font-size: 0.75rem;
+  }
+  .cve-p30e2-required {
+    color: var(--cve-danger);
+    margin-left: 0.125rem;
+  }
+  .cve-p30e2-field__help {
+    font-size: 0.75rem;
+    color: var(--cve-text-muted);
+    margin: 0;
+  }
+  .cve-p30e2-field__error {
+    font-size: 0.75rem;
+    color: var(--cve-danger);
+    margin: 0;
+  }
+  .cve-p30e2-input {
+    width: 100%;
+    background-color: var(--cve-bg);
+    border: 1px solid var(--cve-border);
+    color: var(--cve-text-strong);
+    border-radius: var(--cve-radius-sm);
+    padding: 0.375rem var(--cve-space-2);
+    font-size: 0.875rem;
+  }
+  .cve-p30e2-input:focus-visible {
+    outline: 2px solid var(--cve-focus);
+    outline-offset: 1px;
+    border-color: var(--cve-focus);
+  }
+  .cve-p30e2-input[data-invalid="true"] {
+    border-color: var(--cve-danger);
+  }
+  .cve-p30e2-inline-row {
+    display: flex;
+    align-items: center;
+    gap: var(--cve-space-2);
+  }
+  .cve-p30e2-inline-row .cve-p30e2-input {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .cve-p30e2-chip-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--cve-space-1);
+  }
+  .cve-p30e2-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--cve-space-1);
+    padding: 0.125rem var(--cve-space-2);
+    background-color: var(--cve-surface-muted);
+    border: 1px solid var(--cve-border-soft);
+    border-radius: var(--cve-radius-sm);
+    font-size: 0.8125rem;
+    color: var(--cve-text);
+  }
+  .cve-p30e2-chip button {
+    background: transparent;
+    border: none;
+    color: var(--cve-text-faint);
+    cursor: pointer;
+    font-size: 0.875rem;
+    line-height: 1;
+    padding: 0 0.125rem;
+  }
+  .cve-p30e2-chip button:hover {
+    color: var(--cve-danger);
+  }
+  .cve-p30e2-section-label {
+    font-size: 0.6875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--cve-text-faint);
+    margin: 0 0 var(--cve-space-1) 0;
+  }
+  .cve-p30e2-validation-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+  .cve-p30e2-validation-row {
+    display: flex;
+    align-items: center;
+    gap: var(--cve-space-2);
+    font-size: 0.8125rem;
+    color: var(--cve-text);
+  }
+  .cve-p30e2-validation-dot {
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 50%;
+    flex-shrink: 0;
+    display: inline-block;
+  }
+  .cve-p30e2-validation-dot--ok      { background-color: var(--cve-success); }
+  .cve-p30e2-validation-dot--bad     { background-color: var(--cve-danger);  }
+  .cve-p30e2-validation-dot--pending { background-color: var(--cve-border);  }
+  .cve-p30e2-validation-text {
+    color: var(--cve-text);
+  }
+  .cve-p30e2-preview-list {
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+  }
+  .cve-p30e2-preview-tree {
+    background-color: var(--cve-bg);
+    border: 1px solid var(--cve-border-soft);
+    border-radius: var(--cve-radius-sm);
+    padding: var(--cve-space-2);
+    font-family: ui-monospace, monospace;
+    font-size: 0.75rem;
+    color: var(--cve-text-muted);
+    margin: 0;
+    overflow-x: auto;
+    white-space: pre;
+  }
+  .cve-p30e2-file-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+  }
+  .cve-p30e2-success-section {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cve-space-1);
+  }
+  .cve-p30e2-action-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--cve-space-2);
+  }
 }

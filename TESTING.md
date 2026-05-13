@@ -1,13 +1,13 @@
 # Context Vault Engine - Testing
 
-All tests live in `mcp/test_verify.py`. The suite currently has 913 test functions, all of which are executed by the manual runner in `main()` at the bottom of that file. A passing run prints `ALL VERIFICATION TESTS PASSED`. Historical test counts from earlier phases (272, 382, 429, 467, 507, 548, 553, 564, 587, 607, 625, 650, 675, 695, 706, 721, 740, 763, 787, 800, 818, 842, 866, 890) appear later in this document as part of the phase changelog and are not the current total.
+All tests live in `mcp/test_verify.py`. The suite currently has 937 test functions, all of which are executed by the manual runner in `main()` at the bottom of that file. A passing run prints `ALL VERIFICATION TESTS PASSED`. Historical test counts from earlier phases (272, 382, 429, 467, 507, 548, 553, 564, 587, 607, 625, 650, 675, 695, 706, 721, 740, 763, 787, 800, 818, 842, 866, 890, 913) appear later in this document as part of the phase changelog and are not the current total.
 
 ## Current Verification Summary
 
 A full local verification consists of:
 
 ```bash
-py mcp/test_verify.py           # 913 tests, all must pass
+py mcp/test_verify.py           # 937 tests, all must pass
 py run.py validate              # vault schema-compliance
 py run.py security              # status: pass (or warning, never fail)
 py run.py feedback              # exits 0, valid JSON
@@ -2474,9 +2474,9 @@ cd ui; npm run build             # builds without errors
 
 ## Phase 30E1 - Pending / Trust / Feedback Governance Polish
 
-Phase 30E1 is the first sub-slice of Phase 30E. It rebuilds `/app/pending`, `/app/trust`, and `/app/feedback` on top of the Phase 30B primitives. All three pages now use a `cve-toolbar` header with a state pill, a `cve-status-strip` summary, and a Developer deep-link to `/app/raw` built by the shared helper in `ui/src/lib/phase30e1.ts`. PendingChanges renders a `cve-workbench` (queue rail + inspector) with `cve-diff` and gates Accept / Reject behind typed `ACCEPT` / `REJECT` confirmation; the inspector surfaces provenance, trust impact, and hash warnings. TrustEvidence leads with a stale and low-trust governance queue that links each row to Notes, Pending, and Feedback, demoting the legacy Evidence Builder into a closed `<details>` disclosure while keeping the `cve-trust-warning` disclaimer. FeedbackWorkflow uses a labelled filter rail and a `cve-table` triage view with deterministic severity-weighted sort, moves Add Feedback into the toolbar inside a `cve-slide-over`, and pins an Improvement Tasks panel with a deterministic empty state. Raw JSON stays confined to `cve-details--inspector`. No backend route, schema, MCP, or runtime dependency was added. Phase 30E is now In Progress with Phase 30E1 Complete; Phase 30E2 (Controller and Vault Setup polish) and Phase 30F remain Planned. Phase 27 and Phase 28 remain Deferred.
+Phase 30E1 is the first sub-slice of Phase 30E. It rebuilds `/app/pending`, `/app/trust`, and `/app/feedback` on top of the Phase 30B primitives. All three pages now use a `cve-toolbar` header with a state pill, a `cve-status-strip` summary, and a Developer deep-link to `/app/raw` built by the shared helper in `ui/src/lib/phase30e1.ts`. PendingChanges renders a `cve-workbench` (queue rail + inspector) with `cve-diff` and gates Accept / Reject behind typed `ACCEPT` / `REJECT` confirmation; the inspector surfaces provenance, trust impact, and hash warnings. TrustEvidence leads with a stale and low-trust governance queue that links each row to Notes, Pending, and Feedback, demoting the legacy Evidence Builder into a closed `<details>` disclosure while keeping the `cve-trust-warning` disclaimer. FeedbackWorkflow uses a labelled filter rail and a `cve-table` triage view with deterministic severity-weighted sort, moves Add Feedback into the toolbar inside a `cve-slide-over`, and pins an Improvement Tasks panel with a deterministic empty state. Raw JSON stays confined to `cve-details--inspector`. No backend route, schema, MCP, or runtime dependency was added.
 
-The Phase 30E1 work adds 23 deterministic guardrail tests in `mcp/test_verify.py`, bringing the total from 890 to 913.
+The Phase 30E1 work adds 23 deterministic guardrail tests in `mcp/test_verify.py`, taking the total from 890 to 913.
 
 | Test | Purpose |
 |---|---|
@@ -2507,7 +2507,53 @@ The Phase 30E1 work adds 23 deterministic guardrail tests in `mcp/test_verify.py
 **Verification steps for Phase 30E1:**
 
 ```bash
-py mcp/test_verify.py            # 913 tests, all must pass
+py mcp/test_verify.py            # 937 tests, all must pass
+py run.py validate               # vault still valid
+py run.py security               # status: pass
+py run.py feedback               # exits 0, valid JSON
+py run.py export --overwrite     # status: ok
+cd ui; npm run build             # builds without errors
+```
+
+---
+
+## Phase 30E2 - Controller and Vault Setup Polish
+
+Phase 30E2 closes out Phase 30E. `/app/controller` is rebuilt as a two-column command-centre at xl+: the left column owns readiness, blockers, warnings, and the service summary; the right column owns ranked recommendations and the next-best action. Readiness polarity is corrected via `readinessPolarity()` so negative flags (`has_tasks`, `has_missing_concepts`, `has_feedback_warnings`) never render as positive. Recommendations sort deterministically and deep-link to authoritative `/app/*` routes via `recommendationRoute()`. Raw controller and plan responses are demoted to a `cve-details--inspector` disclosure with Developer deep-links into `/app/raw` built by `buildRawDeepLink()`. `/app/vault-setup` collapses scattered per-field cards into one grouped `cve-p30e2-form-grid` panel and preserves live validation plus the bootstrap preview. Destructive vault deletion is removed from the primary setup form and relocated into a dedicated management panel; the actual delete flow runs inside a `cve-slide-over` that names the target vault, explains the real backend semantics (files deleted from disk, `config/config.yaml` rewritten, action not reversible by the app) sourced from `VAULT_DELETE_SEMANTICS`, and requires a typed `DELETE <vault>` confirmation enforced by `isDeleteConfirmed()`. `demo-vault` is protected via `VAULT_DELETE_PROTECTED`. The shared helper `ui/src/lib/phase30e2.ts` re-exports `buildRawDeepLink` from `phase30e1` and exposes the readiness, recommendation, and deletion contracts. No backend route, schema, MCP, or runtime dependency was added. Phase 30E is now Complete; Phase 30F remains Planned. Phase 27 and Phase 28 remain Deferred.
+
+The Phase 30E2 work adds 24 deterministic guardrail tests in `mcp/test_verify.py`, bringing the total from 913 to 937.
+
+| Test | Purpose |
+|---|---|
+| `test_p30e2_1_pages_use_expected_layout_modes` | 30E2 pages declare the expected layout modes |
+| `test_p30e2_2_controller_uses_cve_toolbar_banner_status_strip` | Controller renders `cve-toolbar`, `cve-banner`, and `cve-status-strip` |
+| `test_p30e2_3_controller_two_column_command_grid_at_xl` | Controller uses the two-column command-centre grid at xl+ |
+| `test_p30e2_4_controller_readiness_polarity_helper` | `readinessPolarity()` classifies negative flags correctly |
+| `test_p30e2_5_controller_recommendations_deep_link_to_authoritative_routes` | `recommendationRoute()` covers the authoritative `/app/*` targets |
+| `test_p30e2_6_controller_raw_json_not_primary_inline_ux` | Controller raw JSON appears only inside `cve-details--inspector` |
+| `test_p30e2_7_controller_developer_deep_link_to_raw` | Controller exposes Developer deep-links to `/app/raw` |
+| `test_p30e2_8_vault_setup_uses_cve_toolbar_and_banner` | VaultSetup renders `cve-toolbar` + `cve-banner` |
+| `test_p30e2_9_vault_setup_grouped_form_panel` | VaultSetup uses one grouped form panel (no legacy Danger Zone wrapper) |
+| `test_p30e2_10_vault_setup_preserves_validation_and_preview` | VaultSetup keeps live validation and the bootstrap preview |
+| `test_p30e2_11_destructive_delete_not_in_primary_setup_form` | Destructive delete is not inside the primary setup form |
+| `test_p30e2_12_destructive_delete_in_separate_management_and_slide_over` | Destructive delete lives in a management panel + `cve-slide-over` |
+| `test_p30e2_13_destructive_delete_requires_typed_confirmation` | Destructive delete requires the typed `DELETE <vault>` phrase |
+| `test_p30e2_14_delete_button_disabled_until_confirmed` | Delete submit is disabled until typed confirmation matches |
+| `test_p30e2_15_delete_warning_explains_target_and_semantics` | Delete warning names target vault and real backend semantics |
+| `test_p30e2_16_delete_protected_vault_disabled` | `demo-vault` delete trigger is disabled (protected vault) |
+| `test_p30e2_17_no_tailwind_dark_literals` | Phase 30E2 files avoid Tailwind dark palette literals |
+| `test_p30e2_18_form_labels` | Every text/search input in 30E2 components is labelled |
+| `test_p30e2_19_static_links_resolve` | Every static `/app/<page>` link in 30E2 components resolves to a real page file |
+| `test_p30e2_20_phase27_28_still_deferred` | ROADMAP keeps Phase 27 and 28 Deferred |
+| `test_p30e2_21_roadmap_30e2_complete_parent_30e_complete` | ROADMAP marks 30E1+30E2+30E Complete, 30F Planned, 30 not Complete |
+| `test_p30e2_22_state_pills_present` | Both 30E2 components expose a state-pill testid |
+| `test_p30e2_23_no_em_dashes_and_no_new_deps` | Phase 30E2 files contain no em dashes and `ui/package.json` introduces no new runtime dependencies |
+| `test_p30e2_24_global_css_has_phase30e2_block` | `global.css` declares the Phase 30E2 token primitives |
+
+**Verification steps for Phase 30E2:**
+
+```bash
+py mcp/test_verify.py            # 937 tests, all must pass
 py run.py validate               # vault still valid
 py run.py security               # status: pass
 py run.py feedback               # exits 0, valid JSON

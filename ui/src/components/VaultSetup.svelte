@@ -1,4 +1,20 @@
 <script lang="ts">
+  // Phase 30E2 - Vault Setup polish.
+  //
+  // The page is split into two clearly separated surfaces:
+  //   1. Onboarding / Setup - the grouped Create a Vault form.
+  //   2. Vault Management - listing existing vaults and the destructive
+  //      delete action, which lives behind a cve-slide-over launched
+  //      from the management panel. The delete control no longer appears
+  //      inside the primary setup form.
+  //
+  // Destructive deletion requires the exact typed phrase "DELETE <vault>"
+  // (deterministic, matches backend semantics in mcp/core/vault_delete.py)
+  // and the submit button is disabled until the phrase matches. The
+  // confirmation panel explicitly states that the vault directory will be
+  // removed from disk and that the action is not reversible.
+
+  import { onMount } from 'svelte';
   import {
     bootstrapVault,
     deleteVault,
@@ -7,9 +23,15 @@
     type VaultBootstrapResponse,
     type VaultDeleteResponse,
   } from '../lib/api.ts';
+  import {
+    deleteConfirmPhrase,
+    isDeleteConfirmed,
+    VAULT_DELETE_PROTECTED,
+    VAULT_DELETE_SEMANTICS,
+  } from '../lib/phase30e2.ts';
   import { setStoredVault, getStoredVault, clearStoredVault } from '../lib/vaultState.ts';
 
-  // ── Form state ─────────────────────────────────────────────────────────────
+  // ── Setup form state ─────────────────────────────────────────────────────
   let vaultName = '';
   let domain = '';
   let noteType = '';
@@ -18,127 +40,70 @@
   let expectedConcepts: string[] = [];
   let newConcept = '';
 
-  // ── Submit state ───────────────────────────────────────────────────────────
   type SubmitState = 'idle' | 'loading' | 'success' | 'error';
   let submitState: SubmitState = 'idle';
   let successData: VaultBootstrapResponse | null = null;
   let errorCode = '';
   let errorMsg = '';
 
-  // ── Delete vault state ─────────────────────────────────────────────────────
+  // ── Management state ─────────────────────────────────────────────────────
+  let availableVaults: string[] = [];
+  let vaultsLoaded = false;
+  let vaultsLoadError = '';
+
+  let deleteSlideOpen = false;
   let deleteVaultName = '';
-  let deleteConfirmPhrase = '';
+  let deleteConfirmInput = '';
+
   type DeleteState = 'idle' | 'loading' | 'success' | 'error';
   let deleteState: DeleteState = 'idle';
   let deleteSuccessData: VaultDeleteResponse | null = null;
   let deleteErrorCode = '';
   let deleteErrorMsg = '';
-  let availableVaults: string[] = [];
-  let vaultsLoaded = false;
+
+  onMount(() => {
+    void loadVaults();
+  });
 
   async function loadVaults(): Promise<void> {
+    vaultsLoadError = '';
     const result = await fetchVaults();
     if (isOk(result)) {
       availableVaults = result.data.vaults;
+    } else {
+      vaultsLoadError = result.error?.message ?? 'Could not load vaults.';
     }
     vaultsLoaded = true;
   }
 
-  // Load available vaults for the Danger Zone section
-  loadVaults();
-
-  const PROTECTED_VAULT = 'demo-vault';
-
-  $: expectedDeletePhrase = deleteVaultName ? `DELETE ${deleteVaultName}` : '';
-  $: deleteConfirmValid = deleteConfirmPhrase.trim() === expectedDeletePhrase && expectedDeletePhrase !== '';
-  $: deleteTargetIsProtected = deleteVaultName === PROTECTED_VAULT;
-  $: canDelete =
-    deleteVaultName !== '' &&
-    !deleteTargetIsProtected &&
-    deleteConfirmValid &&
-    deleteState !== 'loading';
-
-  async function handleDelete(): Promise<void> {
-    if (!canDelete) return;
-    deleteState = 'loading';
-    deleteSuccessData = null;
-    deleteErrorCode = '';
-    deleteErrorMsg = '';
-
-    const result = await deleteVault(deleteVaultName, deleteConfirmPhrase.trim());
-
-    if (isOk(result)) {
-      deleteSuccessData = result.data;
-      deleteState = 'success';
-      // Clear selected vault in localStorage if it was the one just deleted
-      const stored = getStoredVault();
-      if (stored === deleteVaultName) {
-        clearStoredVault();
-        setStoredVault(result.data.active_vault);
-      }
-      // Refresh vault list
-      availableVaults = result.data.remaining_vaults;
-      // Reset delete form
-      deleteVaultName = '';
-      deleteConfirmPhrase = '';
-    } else {
-      deleteErrorCode = result.error?.code ?? 'UNKNOWN';
-      deleteErrorMsg = result.error?.message ?? 'An unexpected error occurred.';
-      deleteState = 'error';
-    }
-  }
-
-  function resetDeleteForm(): void {
-    deleteVaultName = '';
-    deleteConfirmPhrase = '';
-    deleteState = 'idle';
-    deleteSuccessData = null;
-    deleteErrorCode = '';
-    deleteErrorMsg = '';
-  }
-
-  function deleteErrorTitle(code: string): string {
-    if (code === 'INVALID_VAULT') return 'Unknown Vault';
-    if (code === 'PROTECTED_VAULT') return 'Protected Vault';
-    if (code === 'LAST_VAULT') return 'Cannot Delete Last Vault';
-    if (code === 'CONFIRMATION_REQUIRED') return 'Confirmation Required';
-    if (code === 'CONFIRMATION_MISMATCH') return 'Confirmation Mismatch';
-    if (code === 'PATH_TRAVERSAL') return 'Security Violation';
-    if (code === 'DELETE_FAILED') return 'Delete Failed';
-    if (code === 'CONFIG_UPDATE_FAILED') return 'Config Update Failed';
-    if (code === 'NETWORK_ERROR') return 'Backend Unavailable';
-    return 'Error';
-  }
-
-  // ── Validation patterns ────────────────────────────────────────────────────
+  // ── Setup validation ─────────────────────────────────────────────────────
   const VAULT_NAME_RE = /^[A-Za-z0-9_-]+$/;
   const NOTE_TYPE_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-  // Reject path separators, common shell meta, and C0 control characters
   const FORBIDDEN_DOMAIN_RE = /[/\\<>:"|?*\u0000-\u001f]/;
 
   $: vaultNameError = vaultName === ''
     ? 'Required'
     : !VAULT_NAME_RE.test(vaultName)
-      ? 'Only letters, numbers, underscores, and hyphens — no spaces or slashes'
+      ? 'Only letters, numbers, underscores, and hyphens (no spaces or slashes).'
       : '';
 
   $: domainError = domain.trim() === ''
     ? 'Required'
     : FORBIDDEN_DOMAIN_RE.test(domain) || domain.includes('..')
-      ? 'Must not contain path separators, traversal markers, or control characters'
+      ? 'Must not contain path separators, traversal markers, or control characters.'
       : '';
 
   $: noteTypeError = noteType === ''
     ? 'Required'
     : !NOTE_TYPE_RE.test(noteType)
-      ? 'Must be lowercase hyphen-separated words (e.g. breed-profile, core-concept)'
+      ? 'Must be lowercase hyphen-separated words (e.g. breed-profile).'
       : '';
 
   $: sectionsError = (() => {
     const trimmed = sections.map(s => s.trim()).filter(Boolean);
-    if (trimmed.length < 2) return 'At least 2 sections required';
+    if (trimmed.length < 2) return 'At least 2 sections required.';
     const lower = trimmed.map(s => s.toLowerCase());
-    if (new Set(lower).size !== lower.length) return 'Sections must not have duplicates';
+    if (new Set(lower).size !== lower.length) return 'Sections must not have duplicates.';
     return '';
   })();
 
@@ -146,7 +111,7 @@
     const trimmed = expectedConcepts.map(c => c.trim()).filter(Boolean);
     const lower = trimmed.map(c => c.toLowerCase());
     return new Set(lower).size !== lower.length
-      ? 'Expected concepts must not have duplicates'
+      ? 'Expected concepts must not have duplicates.'
       : '';
   })();
 
@@ -154,7 +119,7 @@
     !vaultNameError && !domainError && !noteTypeError && !sectionsError && !conceptsDupeError;
   $: canSubmit = formValid && submitState !== 'loading';
 
-  // ── Section management ─────────────────────────────────────────────────────
+  // ── Section management ──────────────────────────────────────────────────
   function addSection() {
     const val = newSection.trim();
     if (!val) return;
@@ -162,16 +127,11 @@
     sections = [...sections, val];
     newSection = '';
   }
-
-  function removeSection(index: number) {
-    sections = sections.filter((_, i) => i !== index);
-  }
-
+  function removeSection(i: number) { sections = sections.filter((_, j) => j !== i); }
   function onSectionKeydown(e: KeyboardEvent) {
     if (e.key === 'Enter') { e.preventDefault(); addSection(); }
   }
 
-  // ── Concept management ─────────────────────────────────────────────────────
   function addConcept() {
     const val = newConcept.trim();
     if (!val) return;
@@ -179,16 +139,12 @@
     expectedConcepts = [...expectedConcepts, val];
     newConcept = '';
   }
-
-  function removeConcept(index: number) {
-    expectedConcepts = expectedConcepts.filter((_, i) => i !== index);
-  }
-
+  function removeConcept(i: number) { expectedConcepts = expectedConcepts.filter((_, j) => j !== i); }
   function onConceptKeydown(e: KeyboardEvent) {
     if (e.key === 'Enter') { e.preventDefault(); addConcept(); }
   }
 
-  // ── Submit ─────────────────────────────────────────────────────────────────
+  // ── Setup submit ────────────────────────────────────────────────────────
   async function handleSubmit() {
     if (!canSubmit) return;
     submitState = 'loading';
@@ -207,8 +163,8 @@
     if (isOk(result)) {
       successData = result.data;
       submitState = 'success';
-      // Persist the new vault so Dashboard selects it immediately.
       setStoredVault(result.data.vault);
+      await loadVaults();
     } else {
       errorCode = result.error?.code ?? 'UNKNOWN';
       errorMsg = result.error?.message ?? 'An unexpected error occurred.';
@@ -230,617 +186,674 @@
     errorMsg = '';
   }
 
-  // ── Preview derivations ────────────────────────────────────────────────────
   $: previewName = vaultName || '<vault-name>';
   $: previewNoteType = noteType || '<note-type>';
   $: previewSections = sections.map(s => s.trim()).filter(Boolean);
   $: previewConcepts = expectedConcepts.map(c => c.trim()).filter(Boolean);
 
-  // Human-readable error title
   function errorTitle(code: string): string {
-    if (code === 'VAULT_EXISTS') return 'Vault Already Exists';
-    if (code === 'PATH_TRAVERSAL') return 'Security Violation';
-    if (code === 'INVALID_INPUT' || code === 'VALIDATION_ERROR') return 'Invalid Input';
-    if (code === 'NETWORK_ERROR') return 'Backend Unavailable';
-    if (code === 'BOOTSTRAP_FAILED') return 'Bootstrap Failed';
-    if (code === 'CONFIG_UPDATE_FAILED') return 'Config Update Failed';
+    if (code === 'VAULT_EXISTS') return 'Vault already exists';
+    if (code === 'PATH_TRAVERSAL') return 'Security violation';
+    if (code === 'INVALID_INPUT' || code === 'VALIDATION_ERROR') return 'Invalid input';
+    if (code === 'NETWORK_ERROR') return 'Backend unavailable';
+    if (code === 'BOOTSTRAP_FAILED') return 'Bootstrap failed';
+    if (code === 'CONFIG_UPDATE_FAILED') return 'Config update failed';
     return 'Error';
   }
+
+  // ── Management / destructive delete ─────────────────────────────────────
+  $: deletableVaults = availableVaults.filter(v => v !== VAULT_DELETE_PROTECTED);
+  $: expectedDeletePhrase = deleteConfirmPhrase(deleteVaultName);
+  $: deleteConfirmValid = isDeleteConfirmed(deleteVaultName, deleteConfirmInput);
+  $: canDelete =
+    deleteVaultName !== '' &&
+    deleteVaultName !== VAULT_DELETE_PROTECTED &&
+    deleteConfirmValid &&
+    deleteState !== 'loading';
+
+  function openDeleteSlide(vault: string): void {
+    if (vault === VAULT_DELETE_PROTECTED) return;
+    deleteVaultName = vault;
+    deleteConfirmInput = '';
+    deleteState = 'idle';
+    deleteSuccessData = null;
+    deleteErrorCode = '';
+    deleteErrorMsg = '';
+    deleteSlideOpen = true;
+  }
+
+  function closeDeleteSlide(): void {
+    deleteSlideOpen = false;
+  }
+
+  async function handleDelete(): Promise<void> {
+    if (!canDelete) return;
+    deleteState = 'loading';
+    deleteSuccessData = null;
+    deleteErrorCode = '';
+    deleteErrorMsg = '';
+
+    const result = await deleteVault(deleteVaultName, deleteConfirmInput.trim());
+
+    if (isOk(result)) {
+      deleteSuccessData = result.data;
+      deleteState = 'success';
+      const stored = getStoredVault();
+      if (stored === deleteVaultName) {
+        clearStoredVault();
+        setStoredVault(result.data.active_vault);
+      }
+      availableVaults = result.data.remaining_vaults;
+      deleteVaultName = '';
+      deleteConfirmInput = '';
+    } else {
+      deleteErrorCode = result.error?.code ?? 'UNKNOWN';
+      deleteErrorMsg = result.error?.message ?? 'An unexpected error occurred.';
+      deleteState = 'error';
+    }
+  }
+
+  function deleteErrorTitle(code: string): string {
+    if (code === 'INVALID_VAULT') return 'Unknown vault';
+    if (code === 'PROTECTED_VAULT') return 'Protected vault';
+    if (code === 'LAST_VAULT') return 'Cannot delete last vault';
+    if (code === 'CONFIRMATION_REQUIRED') return 'Confirmation required';
+    if (code === 'CONFIRMATION_MISMATCH') return 'Confirmation mismatch';
+    if (code === 'PATH_TRAVERSAL') return 'Security violation';
+    if (code === 'DELETE_FAILED') return 'Delete failed';
+    if (code === 'CONFIG_UPDATE_FAILED') return 'Config update failed';
+    if (code === 'NETWORK_ERROR') return 'Backend unavailable';
+    return 'Error';
+  }
+
+  // ── State pill ──────────────────────────────────────────────────────────
+  $: statePillLabel = (() => {
+    if (submitState === 'loading') return 'Creating';
+    if (submitState === 'error') return 'Error';
+    if (submitState === 'success') return 'Created';
+    if (!vaultsLoaded) return 'Loading';
+    if (vaultsLoadError) return 'Error';
+    return 'Idle';
+  })();
+
+  $: statePillClass = (() => {
+    switch (statePillLabel) {
+      case 'Created': return 'cve-p30e2-pill cve-p30e2-pill--ready';
+      case 'Error':   return 'cve-p30e2-pill cve-p30e2-pill--blocked';
+      case 'Creating':return 'cve-p30e2-pill cve-p30e2-pill--action';
+      default:        return 'cve-p30e2-pill';
+    }
+  })();
 </script>
 
-<!-- =========================================================
-     Page header
-     ========================================================= -->
-<div class="cve-page">
-<div class="cve-page-header mb-6">
-  <h1 class="cve-page-title text-xl font-semibold text-zinc-100">Vault Setup</h1>
-  <p class="text-sm text-zinc-500 mt-0.5">
-    Guided vault bootstrap — define your domain, schema, and generate starter files.
-  </p>
-</div>
-
-<!-- =========================================================
-     Success panel (replaces form after successful creation)
-     ========================================================= -->
-{#if submitState === 'success' && successData}
-  <div class="bg-emerald-950 border border-emerald-800 rounded-lg p-5 mb-6">
-    <div class="flex items-start gap-3">
-      <div class="w-8 h-8 bg-emerald-900 border border-emerald-700 rounded-full flex items-center justify-center shrink-0 mt-0.5">
-        <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
-        </svg>
-      </div>
-      <div class="flex-1 min-w-0">
-        <h2 class="text-sm font-semibold text-emerald-300">Vault Created</h2>
-        <p class="text-sm text-emerald-200 mt-0.5">
-          <span class="font-mono font-medium">{successData.vault}</span> was successfully bootstrapped.
-        </p>
-
-        {#if successData.created.length > 0}
-          <div class="mt-3">
-            <p class="text-xs font-medium text-emerald-400 mb-1.5">Files created:</p>
-            <ul class="space-y-1">
-              {#each successData.created as path}
-                <li class="text-xs font-mono text-emerald-300 bg-emerald-900/50 px-2 py-1 rounded">{path}</li>
-              {/each}
-            </ul>
-          </div>
-        {/if}
-
-        {#if successData.expected_concepts && successData.expected_concepts.written > 0}
-          <div class="mt-3 bg-sky-950/40 border border-sky-800/60 rounded p-3">
-            <p class="text-xs text-sky-300">
-              <strong>{successData.expected_concepts.written}</strong> expected concept{successData.expected_concepts.written === 1 ? '' : 's'} written into
-              <span class="font-mono">EXPECTED_CONCEPTS</span> in <span class="font-mono">vault_schema.py</span>.
-              <strong>Missing Concepts</strong> is ready to use.
-            </p>
-          </div>
-        {/if}
-
-        {#if successData.warnings.length > 0}
-          <div class="mt-3 bg-amber-950/60 border border-amber-800 rounded p-3">
-            <p class="text-xs font-medium text-amber-400 mb-1.5">Backend warnings:</p>
-            <ul class="space-y-1">
-              {#each successData.warnings as warning}
-                <li class="text-xs text-amber-300">{warning}</li>
-              {/each}
-            </ul>
-          </div>
-        {/if}
-
-        <p class="text-xs text-emerald-600 mt-3">
-          This vault is now selected. Dashboard will load its data immediately.
-        </p>
-
-        <div class="mt-4 flex flex-wrap gap-3">
-          <a
-            href="/app/?vault={successData.vault}"
-            class="inline-flex items-center gap-1.5 text-sm bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-200 hover:text-zinc-100 px-3 py-1.5 rounded transition-colors"
-          >
-            Go to Dashboard
-          </a>
-          <button
-            on:click={resetForm}
-            class="text-sm text-emerald-400 hover:text-emerald-300 px-3 py-1.5 transition-colors"
-          >
-            Create another vault
-          </button>
-        </div>
-
-        <details class="mt-4">
-          <summary class="text-xs text-zinc-600 hover:text-zinc-400 cursor-pointer select-none">
-            Raw response
-          </summary>
-          <pre class="mt-2 text-xs text-zinc-400 bg-zinc-950 border border-zinc-800 rounded p-2 overflow-x-auto whitespace-pre-wrap">{JSON.stringify(successData, null, 2)}</pre>
-        </details>
-      </div>
-    </div>
-  </div>
-
-{:else}
-  <!-- =======================================================
-       Two-column form layout
-       ======================================================= -->
-  <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-
-    <!-- ── Left column: form fields ─────────────────────────── -->
-    <div class="space-y-4">
-
-      <!-- vault_name -->
-      <div class="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
-        <label for="vault-name" class="block text-sm font-medium text-zinc-200 mb-1">
-          Vault Name <span class="text-red-400">*</span>
-        </label>
-        <p class="text-xs text-zinc-500 mb-2">
-          Directory name for the vault. Letters, numbers, underscores, and hyphens only — no spaces or slashes.
-        </p>
-        <input
-          id="vault-name"
-          type="text"
-          bind:value={vaultName}
-          placeholder="e.g. dogs-vault"
-          autocomplete="off"
-          spellcheck="false"
-          class="w-full bg-zinc-950 border {vaultName && vaultNameError ? 'border-red-600 focus:ring-red-500' : 'border-zinc-700 focus:ring-sky-500'} text-zinc-100 text-sm rounded px-3 py-2 focus:outline-none focus:ring-1 font-mono placeholder:text-zinc-700 placeholder:font-sans"
-        />
-        {#if vaultName && vaultNameError}
-          <p class="text-xs text-red-400 mt-1.5">{vaultNameError}</p>
-        {:else if vaultName && !vaultNameError}
-          <p class="text-xs text-emerald-600 mt-1.5">Looks good.</p>
-        {/if}
-      </div>
-
-      <!-- domain -->
-      <div class="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
-        <label for="domain" class="block text-sm font-medium text-zinc-200 mb-1">
-          Domain <span class="text-red-400">*</span>
-        </label>
-        <p class="text-xs text-zinc-500 mb-2">
-          Human-readable domain label (e.g. "Dogs", "Software Engineering").
-        </p>
-        <input
-          id="domain"
-          type="text"
-          bind:value={domain}
-          placeholder="e.g. Dogs"
-          autocomplete="off"
-          class="w-full bg-zinc-950 border {domain && domainError ? 'border-red-600 focus:ring-red-500' : 'border-zinc-700 focus:ring-sky-500'} text-zinc-100 text-sm rounded px-3 py-2 focus:outline-none focus:ring-1 placeholder:text-zinc-700"
-        />
-        {#if domain && domainError}
-          <p class="text-xs text-red-400 mt-1.5">{domainError}</p>
-        {:else if domain.trim() && !domainError}
-          <p class="text-xs text-emerald-600 mt-1.5">Looks good.</p>
-        {/if}
-      </div>
-
-      <!-- note_type -->
-      <div class="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
-        <label for="note-type" class="block text-sm font-medium text-zinc-200 mb-1">
-          Note Type <span class="text-red-400">*</span>
-        </label>
-        <p class="text-xs text-zinc-500 mb-2">
-          Slug for the primary note type in this vault.
-        </p>
-        <input
-          id="note-type"
-          type="text"
-          bind:value={noteType}
-          placeholder="e.g. breed-profile"
-          autocomplete="off"
-          spellcheck="false"
-          class="w-full bg-zinc-950 border {noteType && noteTypeError ? 'border-red-600 focus:ring-red-500' : 'border-zinc-700 focus:ring-sky-500'} text-zinc-100 text-sm rounded px-3 py-2 focus:outline-none focus:ring-1 font-mono placeholder:text-zinc-700 placeholder:font-sans"
-        />
-        {#if noteType && noteTypeError}
-          <p class="text-xs text-red-400 mt-1.5">{noteTypeError}</p>
-        {:else}
-          <p class="text-xs text-zinc-600 mt-1.5">
-            Examples: <span class="font-mono">breed-profile</span>,
-            <span class="font-mono">core-concept</span>,
-            <span class="font-mono">incident-review</span>
-          </p>
-        {/if}
-      </div>
-
-      <!-- sections -->
-      <div class="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
-        <div class="flex items-center justify-between mb-1">
-          <label class="block text-sm font-medium text-zinc-200">
-            Required Sections <span class="text-red-400">*</span>
-          </label>
-          <span class="text-xs text-zinc-500">{sections.length} section{sections.length === 1 ? '' : 's'}</span>
-        </div>
-        <p class="text-xs text-zinc-500 mb-3">
-          Canonical section headings for notes in this vault. Minimum 2. Drag-to-reorder not required.
-        </p>
-
-        {#if sections.length > 0}
-          <ul class="space-y-1.5 mb-3">
-            {#each sections as section, i}
-              <li class="flex items-center gap-2 bg-zinc-950 border border-zinc-800 rounded px-2.5 py-1.5">
-                <span class="flex-1 text-sm text-zinc-200 truncate">{section}</span>
-                <button
-                  type="button"
-                  on:click={() => removeSection(i)}
-                  class="text-zinc-600 hover:text-red-400 transition-colors shrink-0 p-0.5 rounded"
-                  title="Remove section"
-                >
-                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </li>
-            {/each}
-          </ul>
-        {/if}
-
-        <div class="flex gap-2">
-          <input
-            type="text"
-            bind:value={newSection}
-            on:keydown={onSectionKeydown}
-            placeholder="Add a section…"
-            class="flex-1 bg-zinc-950 border border-zinc-700 text-zinc-100 text-sm rounded px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-sky-500 placeholder:text-zinc-700"
-          />
-          <button
-            type="button"
-            on:click={addSection}
-            class="bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-300 hover:text-zinc-100 text-sm px-3 py-1.5 rounded transition-colors shrink-0"
-          >
-            Add
-          </button>
-        </div>
-
-        {#if sectionsError}
-          <p class="text-xs text-red-400 mt-2">{sectionsError}</p>
-        {/if}
-      </div>
-
-      <!-- expected_concepts -->
-      <div class="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
-        <div class="flex items-center justify-between mb-1">
-          <label class="block text-sm font-medium text-zinc-200">
-            Expected Concepts
-            <span class="ml-1.5 text-xs font-normal text-zinc-500">optional</span>
-          </label>
-          {#if expectedConcepts.length > 0}
-            <span class="text-xs text-zinc-500">{expectedConcepts.length} concept{expectedConcepts.length === 1 ? '' : 's'}</span>
-          {/if}
-        </div>
-        <p class="text-xs text-zinc-500 mb-2">
-          Named concepts expected in this vault's knowledge base. Each concept will be written
-          into <span class="font-mono">EXPECTED_CONCEPTS</span> in <span class="font-mono">vault_schema.py</span>
-          so that <strong>Missing Concepts</strong> works immediately after bootstrap.
-          One concept per line, or add them one at a time.
-        </p>
-
-        {#if expectedConcepts.length > 0}
-          <ul class="space-y-1.5 mb-3">
-            {#each expectedConcepts as concept, i}
-              <li class="flex items-center gap-2 bg-zinc-950 border border-zinc-800 rounded px-2.5 py-1.5">
-                <span class="flex-1 text-sm text-zinc-200 truncate">{concept}</span>
-                <button
-                  type="button"
-                  on:click={() => removeConcept(i)}
-                  class="text-zinc-600 hover:text-red-400 transition-colors shrink-0 p-0.5 rounded"
-                  title="Remove concept"
-                >
-                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </li>
-            {/each}
-          </ul>
-        {/if}
-
-        <div class="flex gap-2">
-          <input
-            type="text"
-            bind:value={newConcept}
-            on:keydown={onConceptKeydown}
-            placeholder="Add a concept…"
-            class="flex-1 bg-zinc-950 border border-zinc-700 text-zinc-100 text-sm rounded px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-sky-500 placeholder:text-zinc-700"
-          />
-          <button
-            type="button"
-            on:click={addConcept}
-            class="bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-300 hover:text-zinc-100 text-sm px-3 py-1.5 rounded transition-colors shrink-0"
-          >
-            Add
-          </button>
-        </div>
-
-        {#if conceptsDupeError}
-          <p class="text-xs text-red-400 mt-2">{conceptsDupeError}</p>
-        {/if}
-      </div>
-
-    </div><!-- end left column -->
-
-    <!-- ── Right column: validation + preview + submit ────────── -->
-    <div class="space-y-4">
-
-      <!-- Live validation panel -->
-      <div class="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
-        <h3 class="text-xs font-medium text-zinc-500 uppercase tracking-wide mb-3">Validation</h3>
-        <ul class="space-y-2">
-          {#each [
-            { label: 'Vault name', ok: !vaultNameError, pending: vaultName === '' },
-            { label: 'Domain', ok: !domainError, pending: domain.trim() === '' },
-            { label: 'Note type', ok: !noteTypeError, pending: noteType === '' },
-            { label: 'Sections (min 2)', ok: !sectionsError, pending: sections.length < 2 },
-            { label: 'Concepts (optional)', ok: !conceptsDupeError, pending: false },
-          ] as check}
-            <li class="flex items-center gap-2 text-sm">
-              {#if check.pending && check.label !== 'Concepts (optional)'}
-                <span class="w-4 h-4 flex items-center justify-center shrink-0">
-                  <span class="w-2 h-2 rounded-full bg-zinc-700"></span>
-                </span>
-                <span class="text-zinc-500">{check.label}</span>
-              {:else if check.ok}
-                <svg class="w-4 h-4 text-emerald-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
-                </svg>
-                <span class="text-zinc-300">{check.label}</span>
-              {:else}
-                <svg class="w-4 h-4 text-red-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-                <span class="text-red-400">{check.label}</span>
-              {/if}
-            </li>
-          {/each}
-        </ul>
-
-        {#if formValid}
-          <div class="mt-3 pt-3 border-t border-zinc-800 flex items-center gap-2">
-            <span class="inline-flex items-center gap-1.5 text-xs bg-emerald-950 text-emerald-400 border border-emerald-800 px-2 py-0.5 rounded-full">
-              <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-              Ready to create
-            </span>
-          </div>
-        {/if}
-      </div>
-
-      <!-- Preview panel -->
-      <div class="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
-        <h3 class="text-xs font-medium text-zinc-500 uppercase tracking-wide mb-3">Preview</h3>
-
-        <div class="space-y-2.5 text-sm">
-          <div class="flex gap-3">
-            <span class="text-zinc-500 w-28 shrink-0">Vault dir</span>
-            <span class="font-mono text-zinc-200 break-all">{previewName}/</span>
-          </div>
-          <div class="flex gap-3">
-            <span class="text-zinc-500 w-28 shrink-0">Domain</span>
-            <span class="text-zinc-200">{domain.trim() || '—'}</span>
-          </div>
-          <div class="flex gap-3">
-            <span class="text-zinc-500 w-28 shrink-0">Note type</span>
-            <span class="font-mono text-zinc-200">{previewNoteType}</span>
-          </div>
-          {#if previewSections.length > 0}
-            <div class="flex gap-3">
-              <span class="text-zinc-500 w-28 shrink-0 pt-0.5">Sections</span>
-              <ul class="space-y-0.5 min-w-0">
-                {#each previewSections as s}
-                  <li class="text-zinc-200">{s}</li>
-                {/each}
-              </ul>
-            </div>
-          {/if}
-          {#if previewConcepts.length > 0}
-            <div class="flex gap-3">
-              <span class="text-zinc-500 w-28 shrink-0 pt-0.5">Concepts</span>
-              <ul class="space-y-0.5 min-w-0">
-                {#each previewConcepts as c}
-                  <li class="text-zinc-200">{c}</li>
-                {/each}
-              </ul>
-            </div>
-          {/if}
-        </div>
-
-        <!-- File tree preview -->
-        <div class="mt-4 pt-4 border-t border-zinc-800">
-          <p class="text-xs text-zinc-500 mb-2">Files that will be created:</p>
-          <div class="font-mono text-xs space-y-0.5 select-none">
-            <div class="text-zinc-300">{previewName}/</div>
-            <div class="pl-4 text-zinc-500">Vault Files/</div>
-            <div class="pl-8 text-zinc-500">Scripts/</div>
-            <div class="pl-12 text-sky-400">vault_schema.py</div>
-            <div class="pl-8 text-zinc-500">Templates/</div>
-            <div class="pl-12 text-sky-400">{previewNoteType}.md</div>
-            <div class="mt-1 text-zinc-600">config/config.yaml  ← updated</div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Error panel -->
-      {#if submitState === 'error'}
-        <div class="bg-red-950 border border-red-800 rounded-lg p-4">
-          <div class="flex items-start gap-2.5">
-            <svg class="w-4 h-4 text-red-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <div class="min-w-0">
-              <p class="text-sm font-medium text-red-300">{errorTitle(errorCode)}</p>
-              <p class="text-sm text-red-200 mt-0.5 break-words">{errorMsg}</p>
-              {#if errorCode === 'NETWORK_ERROR'}
-                <p class="text-xs text-red-400 mt-1.5">
-                  Is the server running?
-                  <span class="font-mono">py mcp/server/mcp_server.py</span>
-                </p>
-              {/if}
-              <p class="text-xs font-mono text-red-700 mt-1.5">{errorCode}</p>
-            </div>
-          </div>
-        </div>
-      {/if}
-
-      <!-- Submit button -->
-      <button
-        type="button"
-        on:click={handleSubmit}
-        disabled={!canSubmit}
-        class="w-full flex items-center justify-center gap-2 bg-sky-600 hover:bg-sky-500 disabled:bg-zinc-800 disabled:text-zinc-600 disabled:cursor-not-allowed text-white disabled:border disabled:border-zinc-700 text-sm font-medium px-4 py-2.5 rounded-lg transition-colors"
+<!-- ============================================================
+     Toolbar
+     ============================================================ -->
+<div class="cve-page cve-p30e2-page">
+  <header class="cve-toolbar" data-testid="vault-setup-toolbar">
+    <div class="cve-toolbar__main">
+      <div class="cve-toolbar__title">Vault Setup</div>
+      <span
+        class={statePillClass}
+        data-testid="vault-setup-state-pill"
+        aria-live="polite"
       >
-        {#if submitState === 'loading'}
-          <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
-          </svg>
-          Creating vault…
-        {:else}
-          Create Vault
-        {/if}
-      </button>
-
-      {#if !formValid && submitState === 'idle'}
-        <p class="text-xs text-zinc-600 text-center">
-          Fill in all required fields above to enable the Create button.
-        </p>
-      {/if}
-
-    </div><!-- end right column -->
-
-  </div><!-- end grid -->
-{/if}
-
-<!-- =========================================================
-     Danger Zone — Vault Management (Deletion)
-     ========================================================= -->
-<div class="cve-danger-zone mt-10">
-  <div class="border-t border-zinc-800 pt-8">
-    <h2 class="cve-danger-zone__title text-base font-semibold text-red-400 mb-1">Danger Zone</h2>
-    <p class="text-xs text-zinc-500 mb-5">
-      Permanently delete a vault and all its files. This cannot be undone by the app.
-      Exported packages are <strong>not</strong> the source of truth. The vault folder contains all notes.
-    </p>
-
-    <!-- Delete success message -->
-    {#if deleteState === 'success' && deleteSuccessData}
-      <div class="bg-emerald-950 border border-emerald-800 rounded-lg p-4 mb-4">
-        <div class="flex items-start gap-2.5">
-          <svg class="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
-          </svg>
-          <div class="min-w-0">
-            <p class="text-sm font-medium text-emerald-300">Vault deleted</p>
-            <p class="text-sm text-emerald-200 mt-0.5">
-              <span class="font-mono font-medium">{deleteSuccessData.deleted}</span> has been permanently removed.
-              Active vault set to <span class="font-mono font-medium">{deleteSuccessData.active_vault}</span>.
-            </p>
-            <div class="mt-3 flex flex-wrap gap-3">
-              <a
-                href="/app/?vault={deleteSuccessData.active_vault}"
-                class="inline-flex items-center gap-1.5 text-xs bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-200 px-3 py-1.5 rounded transition-colors"
-              >
-                Go to Dashboard
-              </a>
-              <button
-                on:click={resetDeleteForm}
-                class="text-xs text-zinc-400 hover:text-zinc-300 px-3 py-1.5 transition-colors"
-              >
-                Dismiss
-              </button>
-            </div>
-          </div>
-        </div>
+        {statePillLabel}
+      </span>
+      <div class="cve-toolbar__meta">
+        Create or connect a vault. Destructive vault management lives in a separate panel below.
       </div>
-    {/if}
-
-    <!-- Delete error message -->
-    {#if deleteState === 'error'}
-      <div class="bg-red-950 border border-red-800 rounded-lg p-4 mb-4">
-        <div class="flex items-start gap-2.5">
-          <svg class="w-4 h-4 text-red-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <div class="min-w-0">
-            <p class="text-sm font-medium text-red-300">{deleteErrorTitle(deleteErrorCode)}</p>
-            <p class="text-sm text-red-200 mt-0.5 break-words">{deleteErrorMsg}</p>
-            <p class="text-xs font-mono text-red-700 mt-1.5">{deleteErrorCode}</p>
-            <button
-              on:click={() => { deleteState = 'idle'; }}
-              class="text-xs text-red-400 hover:text-red-300 mt-2 transition-colors"
-            >
-              Dismiss
-            </button>
-          </div>
-        </div>
-      </div>
-    {/if}
-
-    <div class="bg-zinc-900 border border-red-900/50 rounded-lg p-4">
-
-      <!-- Vault selector -->
-      <div class="mb-4">
-        <label for="delete-vault-select" class="block text-sm font-medium text-zinc-300 mb-1.5">
-          Vault to delete
-        </label>
-        {#if !vaultsLoaded}
-          <p class="text-xs text-zinc-500">Loading vaults…</p>
-        {:else}
-          <select
-            id="delete-vault-select"
-            bind:value={deleteVaultName}
-            on:change={() => { deleteConfirmPhrase = ''; deleteState = 'idle'; }}
-            class="w-full bg-zinc-950 border border-zinc-700 text-zinc-100 text-sm rounded px-3 py-2 focus:outline-none focus:ring-1 focus:ring-red-600"
-          >
-            <option value="">— Select a vault —</option>
-            {#each availableVaults as v}
-              <option value={v} disabled={v === PROTECTED_VAULT}>
-                {v}{v === PROTECTED_VAULT ? ' (protected)' : ''}
-              </option>
-            {/each}
-          </select>
-          {#if deleteTargetIsProtected}
-            <p class="text-xs text-amber-400 mt-1.5">
-              <strong>demo-vault</strong> is protected and cannot be deleted via the app.
-            </p>
-          {/if}
-        {/if}
-      </div>
-
-      {#if deleteVaultName && !deleteTargetIsProtected}
-        <!-- Warning banner -->
-        <div class="bg-red-950/60 border border-red-800/60 rounded p-3 mb-4">
-          <p class="text-xs text-red-300 font-medium mb-1">Warning — this is permanent</p>
-          <ul class="text-xs text-red-400 space-y-0.5 list-disc list-inside">
-            <li>The entire <span class="font-mono">{deleteVaultName}/</span> folder will be deleted from disk.</li>
-            <li>This cannot be undone by the app.</li>
-            <li>Exported packages are not the source of truth — do not rely on them as backups.</li>
-          </ul>
-        </div>
-
-        <!-- Confirmation phrase -->
-        <div class="mb-4">
-          <label for="delete-confirm" class="block text-sm font-medium text-zinc-300 mb-1.5">
-            Type the confirmation phrase to enable deletion
-          </label>
-          <p class="text-xs text-zinc-500 mb-2">
-            To confirm, type exactly:
-            <span class="font-mono text-zinc-300 bg-zinc-800 px-1.5 py-0.5 rounded">DELETE {deleteVaultName}</span>
-          </p>
-          <input
-            id="delete-confirm"
-            type="text"
-            bind:value={deleteConfirmPhrase}
-            autocomplete="off"
-            spellcheck="false"
-            placeholder="DELETE {deleteVaultName}"
-            class="cve-input w-full bg-zinc-950 border {deleteConfirmPhrase && !deleteConfirmValid ? 'border-red-600 focus:ring-red-500' : deleteConfirmValid ? 'border-emerald-700 focus:ring-emerald-600' : 'border-zinc-700 focus:ring-zinc-600'} text-zinc-100 text-sm rounded px-3 py-2 focus:outline-none focus:ring-1 font-mono placeholder:text-zinc-700 placeholder:font-sans"
-          />
-          {#if deleteConfirmPhrase && !deleteConfirmValid}
-            <p class="text-xs text-red-400 mt-1.5">
-              Phrase must be exactly: <span class="font-mono">DELETE {deleteVaultName}</span>
-            </p>
-          {:else if deleteConfirmValid}
-            <p class="text-xs text-emerald-600 mt-1.5">Confirmation matches.</p>
-          {/if}
-        </div>
-
-        <!-- Delete button -->
+      <div class="cve-toolbar__actions">
         <button
           type="button"
-          on:click={handleDelete}
-          disabled={!canDelete}
-          class="cve-btn cve-btn-danger w-full flex items-center justify-center gap-2 bg-red-700 hover:bg-red-600 disabled:bg-zinc-800 disabled:text-zinc-600 disabled:cursor-not-allowed text-white disabled:border disabled:border-zinc-700 text-sm font-medium px-4 py-2.5 rounded-lg transition-colors"
+          on:click={() => void loadVaults()}
+          class="cve-p30e2-btn"
+          data-testid="vault-setup-refresh"
         >
-          {#if deleteState === 'loading'}
-            <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
-            </svg>
-            Deleting…
-          {:else}
-            Delete {deleteVaultName}
-          {/if}
+          Refresh vaults
         </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Headline banner -->
+  {#if submitState === 'success' && successData}
+    <section
+      class="cve-banner cve-banner--success"
+      data-testid="vault-setup-headline-banner"
+      role="status"
+    >
+      <div>
+        <p class="cve-banner__title">Vault created</p>
+        <p class="cve-banner__body">
+          <span class="cve-p30e2-mono">{successData.vault}</span> was bootstrapped and is now the active vault.
+        </p>
+      </div>
+    </section>
+  {:else if submitState === 'error'}
+    <section
+      class="cve-banner cve-banner--danger"
+      data-testid="vault-setup-headline-banner"
+      role="status"
+    >
+      <div>
+        <p class="cve-banner__title">{errorTitle(errorCode)}</p>
+        <p class="cve-banner__body">{errorMsg}</p>
+      </div>
+    </section>
+  {:else if vaultsLoadError}
+    <section class="cve-banner cve-banner--warning" data-testid="vault-setup-headline-banner">
+      <div>
+        <p class="cve-banner__title">Could not load existing vaults</p>
+        <p class="cve-banner__body">{vaultsLoadError}</p>
+      </div>
+    </section>
+  {:else}
+    <section class="cve-banner cve-banner--info" data-testid="vault-setup-headline-banner">
+      <div>
+        <p class="cve-banner__title">Create or connect a vault</p>
+        <p class="cve-banner__body">
+          Fill in the grouped setup form below. Existing vaults are listed in the management panel.
+        </p>
+      </div>
+    </section>
+  {/if}
+
+  <!-- ============================================================
+       Success follow-up (replaces form when the last submit succeeded)
+       ============================================================ -->
+  {#if submitState === 'success' && successData}
+    <article class="cve-p30e2-panel cve-p30e2-panel--success" data-testid="vault-setup-success-panel">
+      <h2 class="cve-p30e2-panel__title">Vault created</h2>
+      <p class="cve-p30e2-helper-text">
+        <span class="cve-p30e2-mono">{successData.vault}</span> was bootstrapped successfully.
+      </p>
+
+      {#if successData.created.length > 0}
+        <div class="cve-p30e2-success-section">
+          <p class="cve-p30e2-section-label">Files created:</p>
+          <ul class="cve-p30e2-file-list">
+            {#each successData.created as path}
+              <li class="cve-p30e2-mono">{path}</li>
+            {/each}
+          </ul>
+        </div>
       {/if}
 
-    </div><!-- end danger zone card -->
-  </div>
+      {#if successData.expected_concepts && successData.expected_concepts.written > 0}
+        <p class="cve-p30e2-helper-text">
+          <strong>{successData.expected_concepts.written}</strong>
+          expected concept{successData.expected_concepts.written === 1 ? '' : 's'} written into
+          <span class="cve-p30e2-mono">EXPECTED_CONCEPTS</span> in
+          <span class="cve-p30e2-mono">vault_schema.py</span>.
+        </p>
+      {/if}
+
+      {#if successData.warnings.length > 0}
+        <div class="cve-p30e2-success-section">
+          <p class="cve-p30e2-section-label">Backend warnings:</p>
+          <ul class="cve-p30e2-issue-list">
+            {#each successData.warnings as warning}
+              <li class="cve-p30e2-issue cve-p30e2-issue--warning">
+                <span class="cve-p30e2-issue__label">Warning</span>
+                <span class="cve-p30e2-issue__text">{warning}</span>
+              </li>
+            {/each}
+          </ul>
+        </div>
+      {/if}
+
+      <div class="cve-p30e2-action-row">
+        <a
+          href={`/app/?vault=${encodeURIComponent(successData.vault)}`}
+          class="cve-p30e2-btn cve-p30e2-btn--primary"
+          data-testid="vault-setup-go-dashboard"
+        >
+          Go to Dashboard
+        </a>
+        <button type="button" on:click={resetForm} class="cve-p30e2-btn">
+          Create another vault
+        </button>
+      </div>
+    </article>
+
+  {:else}
+    <!-- ============================================================
+         Primary onboarding / setup form (one grouped panel)
+         ============================================================ -->
+    <article class="cve-p30e2-panel cve-p30e2-setup-form" data-testid="vault-setup-form-panel">
+      <h2 class="cve-p30e2-panel__title">Create a new vault</h2>
+      <p class="cve-p30e2-helper-text">
+        Define the vault directory name, domain, primary note type, and starter
+        sections. The destructive delete action lives in the Vault Management
+        panel below.
+      </p>
+
+      <div class="cve-p30e2-form-grid">
+
+        <!-- Vault name -->
+        <div class="cve-p30e2-field" data-testid="vault-setup-field-name">
+          <label for="vault-name" class="cve-p30e2-field__label">
+            Vault name <span class="cve-p30e2-required">*</span>
+          </label>
+          <p class="cve-p30e2-field__help">
+            Directory name. Letters, numbers, underscores, and hyphens only.
+          </p>
+          <input
+            id="vault-name"
+            type="text"
+            bind:value={vaultName}
+            placeholder="e.g. dogs-vault"
+            autocomplete="off"
+            spellcheck="false"
+            class="cve-p30e2-input cve-p30e2-mono"
+            data-invalid={vaultName !== '' && !!vaultNameError}
+          />
+          {#if vaultName && vaultNameError}
+            <p class="cve-p30e2-field__error" data-testid="vault-setup-error-name">{vaultNameError}</p>
+          {/if}
+        </div>
+
+        <!-- Domain -->
+        <div class="cve-p30e2-field" data-testid="vault-setup-field-domain">
+          <label for="vault-domain" class="cve-p30e2-field__label">
+            Domain <span class="cve-p30e2-required">*</span>
+          </label>
+          <p class="cve-p30e2-field__help">
+            Human-readable label (e.g. "Dogs", "Software Engineering").
+          </p>
+          <input
+            id="vault-domain"
+            type="text"
+            bind:value={domain}
+            placeholder="e.g. Dogs"
+            autocomplete="off"
+            class="cve-p30e2-input"
+            data-invalid={domain !== '' && !!domainError}
+          />
+          {#if domain && domainError}
+            <p class="cve-p30e2-field__error" data-testid="vault-setup-error-domain">{domainError}</p>
+          {/if}
+        </div>
+
+        <!-- Note type -->
+        <div class="cve-p30e2-field" data-testid="vault-setup-field-note-type">
+          <label for="vault-note-type" class="cve-p30e2-field__label">
+            Note type <span class="cve-p30e2-required">*</span>
+          </label>
+          <p class="cve-p30e2-field__help">
+            Slug for the primary note type (e.g. breed-profile, core-concept).
+          </p>
+          <input
+            id="vault-note-type"
+            type="text"
+            bind:value={noteType}
+            placeholder="e.g. breed-profile"
+            autocomplete="off"
+            spellcheck="false"
+            class="cve-p30e2-input cve-p30e2-mono"
+            data-invalid={noteType !== '' && !!noteTypeError}
+          />
+          {#if noteType && noteTypeError}
+            <p class="cve-p30e2-field__error" data-testid="vault-setup-error-note-type">{noteTypeError}</p>
+          {/if}
+        </div>
+
+        <!-- Sections -->
+        <div class="cve-p30e2-field cve-p30e2-field--wide" data-testid="vault-setup-field-sections">
+          <label for="vault-section-input" class="cve-p30e2-field__label">
+            Required sections <span class="cve-p30e2-required">*</span>
+            <span class="cve-p30e2-field__hint">{sections.length} section{sections.length === 1 ? '' : 's'}</span>
+          </label>
+          <p class="cve-p30e2-field__help">
+            Canonical section headings for notes in this vault. Minimum 2.
+          </p>
+
+          {#if sections.length > 0}
+            <ul class="cve-p30e2-chip-list">
+              {#each sections as section, i}
+                <li class="cve-p30e2-chip">
+                  <span>{section}</span>
+                  <button type="button" on:click={() => removeSection(i)} aria-label={`Remove section ${section}`}>x</button>
+                </li>
+              {/each}
+            </ul>
+          {/if}
+
+          <div class="cve-p30e2-inline-row">
+            <input
+              id="vault-section-input"
+              type="text"
+              bind:value={newSection}
+              on:keydown={onSectionKeydown}
+              placeholder="Add a section..."
+              class="cve-p30e2-input"
+            />
+            <button type="button" on:click={addSection} class="cve-p30e2-btn">Add</button>
+          </div>
+          {#if sectionsError}
+            <p class="cve-p30e2-field__error" data-testid="vault-setup-error-sections">{sectionsError}</p>
+          {/if}
+        </div>
+
+        <!-- Expected concepts -->
+        <div class="cve-p30e2-field cve-p30e2-field--wide" data-testid="vault-setup-field-concepts">
+          <label for="vault-concept-input" class="cve-p30e2-field__label">
+            Expected concepts
+            <span class="cve-p30e2-field__hint">optional</span>
+          </label>
+          <p class="cve-p30e2-field__help">
+            Concepts written into <span class="cve-p30e2-mono">EXPECTED_CONCEPTS</span>
+            in <span class="cve-p30e2-mono">vault_schema.py</span> so Missing Concepts
+            works immediately after bootstrap.
+          </p>
+
+          {#if expectedConcepts.length > 0}
+            <ul class="cve-p30e2-chip-list">
+              {#each expectedConcepts as concept, i}
+                <li class="cve-p30e2-chip">
+                  <span>{concept}</span>
+                  <button type="button" on:click={() => removeConcept(i)} aria-label={`Remove concept ${concept}`}>x</button>
+                </li>
+              {/each}
+            </ul>
+          {/if}
+
+          <div class="cve-p30e2-inline-row">
+            <input
+              id="vault-concept-input"
+              type="text"
+              bind:value={newConcept}
+              on:keydown={onConceptKeydown}
+              placeholder="Add a concept..."
+              class="cve-p30e2-input"
+            />
+            <button type="button" on:click={addConcept} class="cve-p30e2-btn">Add</button>
+          </div>
+          {#if conceptsDupeError}
+            <p class="cve-p30e2-field__error" data-testid="vault-setup-error-concepts">{conceptsDupeError}</p>
+          {/if}
+        </div>
+
+        <!-- Validation summary -->
+        <div class="cve-p30e2-field cve-p30e2-field--wide" data-testid="vault-setup-validation-panel">
+          <p class="cve-p30e2-section-label">Validation</p>
+          <ul class="cve-p30e2-validation-list">
+            {#each [
+              { label: 'Vault name', ok: !vaultNameError, pending: vaultName === '' },
+              { label: 'Domain',     ok: !domainError,   pending: domain.trim() === '' },
+              { label: 'Note type',  ok: !noteTypeError, pending: noteType === '' },
+              { label: 'Sections (minimum 2)', ok: !sectionsError, pending: sections.length < 2 },
+              { label: 'Concepts (optional)',  ok: !conceptsDupeError, pending: false },
+            ] as check}
+              <li class="cve-p30e2-validation-row">
+                {#if check.pending && check.label !== 'Concepts (optional)'}
+                  <span class="cve-p30e2-validation-dot cve-p30e2-validation-dot--pending" aria-hidden="true"></span>
+                  <span class="cve-p30e2-validation-text">Pending: {check.label}</span>
+                {:else if check.ok}
+                  <span class="cve-p30e2-validation-dot cve-p30e2-validation-dot--ok" aria-hidden="true"></span>
+                  <span class="cve-p30e2-validation-text">OK: {check.label}</span>
+                {:else}
+                  <span class="cve-p30e2-validation-dot cve-p30e2-validation-dot--bad" aria-hidden="true"></span>
+                  <span class="cve-p30e2-validation-text">Issue: {check.label}</span>
+                {/if}
+              </li>
+            {/each}
+          </ul>
+        </div>
+
+        <!-- Preview -->
+        <div class="cve-p30e2-field cve-p30e2-field--wide" data-testid="vault-setup-preview-panel">
+          <p class="cve-p30e2-section-label">Preview</p>
+          <dl class="cve-p30e2-preview-list">
+            <div class="cve-kv-row">
+              <dt class="cve-kv-row__key">Vault dir</dt>
+              <dd class="cve-kv-row__value">{previewName}/</dd>
+            </div>
+            <div class="cve-kv-row">
+              <dt class="cve-kv-row__key">Domain</dt>
+              <dd class="cve-kv-row__value">{domain.trim() || '-'}</dd>
+            </div>
+            <div class="cve-kv-row">
+              <dt class="cve-kv-row__key">Note type</dt>
+              <dd class="cve-kv-row__value">{previewNoteType}</dd>
+            </div>
+            {#if previewSections.length > 0}
+              <div class="cve-kv-row">
+                <dt class="cve-kv-row__key">Sections</dt>
+                <dd class="cve-kv-row__value">{previewSections.join(', ')}</dd>
+              </div>
+            {/if}
+            {#if previewConcepts.length > 0}
+              <div class="cve-kv-row">
+                <dt class="cve-kv-row__key">Concepts</dt>
+                <dd class="cve-kv-row__value">{previewConcepts.join(', ')}</dd>
+              </div>
+            {/if}
+          </dl>
+
+          <p class="cve-p30e2-section-label" style="margin-top: var(--cve-space-3)">Files</p>
+          <pre class="cve-p30e2-preview-tree">
+{previewName}/
+  Vault Files/
+    Scripts/
+      vault_schema.py
+    Templates/
+      {previewNoteType}.md
+  config/config.yaml (updated)</pre>
+        </div>
+
+        <div class="cve-p30e2-action-row cve-p30e2-field--wide">
+          <button
+            type="button"
+            on:click={handleSubmit}
+            disabled={!canSubmit}
+            class="cve-p30e2-btn cve-p30e2-btn--primary"
+            data-testid="vault-setup-submit"
+          >
+            {submitState === 'loading' ? 'Creating vault...' : 'Create vault'}
+          </button>
+          {#if !formValid && submitState === 'idle'}
+            <span class="cve-p30e2-helper-text">Complete the required fields above to enable Create.</span>
+          {/if}
+        </div>
+      </div>
+    </article>
+  {/if}
+
+  <!-- ============================================================
+       Vault management panel (destructive actions live here)
+       ============================================================ -->
+  <article
+    class="cve-p30e2-panel cve-p30e2-panel--management"
+    data-testid="vault-setup-management-panel"
+  >
+    <div class="cve-p30e2-panel__head">
+      <h2 class="cve-p30e2-panel__title">Vault management</h2>
+      <p class="cve-p30e2-helper-text">
+        Existing vaults registered in <span class="cve-p30e2-mono">config/config.yaml</span>.
+        Destructive deletion is gated behind a typed confirmation in a separate slide-over panel.
+      </p>
+    </div>
+
+    {#if deleteState === 'success' && deleteSuccessData}
+      <div class="cve-banner cve-banner--success" data-testid="vault-setup-delete-success">
+        <div>
+          <p class="cve-banner__title">Vault deleted</p>
+          <p class="cve-banner__body">
+            <span class="cve-p30e2-mono">{deleteSuccessData.deleted}</span> was permanently removed from disk.
+            Active vault set to <span class="cve-p30e2-mono">{deleteSuccessData.active_vault}</span>.
+          </p>
+        </div>
+      </div>
+    {/if}
+
+    {#if !vaultsLoaded}
+      <p class="cve-p30e2-empty">Loading vaults...</p>
+    {:else if availableVaults.length === 0}
+      <p class="cve-p30e2-empty">No vaults registered yet. Use the form above to create one.</p>
+    {:else}
+      <div class="cve-table-wrap">
+        <table class="cve-table" data-testid="vault-setup-management-table">
+          <thead>
+            <tr>
+              <th scope="col">Vault</th>
+              <th scope="col">Status</th>
+              <th scope="col">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {#each availableVaults as v}
+              <tr data-testid={`vault-setup-management-row-${v}`}>
+                <td class="cve-p30e2-mono">{v}</td>
+                <td>
+                  {#if v === VAULT_DELETE_PROTECTED}
+                    <span class="cve-p30e2-pill cve-p30e2-pill--protected">Protected</span>
+                  {:else}
+                    <span class="cve-p30e2-pill">Active</span>
+                  {/if}
+                </td>
+                <td>
+                  <a
+                    href={`/app/?vault=${encodeURIComponent(v)}`}
+                    class="cve-link"
+                  >
+                    Open dashboard
+                  </a>
+                  <button
+                    type="button"
+                    class="cve-p30e2-btn cve-p30e2-btn--danger"
+                    disabled={v === VAULT_DELETE_PROTECTED}
+                    on:click={() => openDeleteSlide(v)}
+                    data-testid={`vault-setup-delete-trigger-${v}`}
+                  >
+                    Delete...
+                  </button>
+                </td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+      </div>
+    {/if}
+  </article>
 </div>
+
+<!-- ============================================================
+     Destructive delete slide-over
+     ============================================================ -->
+<div
+  class="cve-slide-over"
+  data-open={deleteSlideOpen ? 'true' : 'false'}
+  data-testid="vault-setup-delete-slide-over"
+  aria-hidden={!deleteSlideOpen}
+>
+  <button
+    type="button"
+    class="cve-slide-over__backdrop"
+    aria-label="Close delete confirmation"
+    on:click={closeDeleteSlide}
+  ></button>
+
+  <div class="cve-slide-over__panel" role="dialog" aria-modal="true" aria-labelledby="vault-delete-title">
+    <header class="cve-slide-over__header">
+      <span id="vault-delete-title">Delete vault</span>
+      <button
+        type="button"
+        class="cve-p30e2-btn"
+        on:click={closeDeleteSlide}
+        data-testid="vault-setup-delete-close"
+      >
+        Close
+      </button>
+    </header>
+
+    <div class="cve-slide-over__body">
+      {#if deleteVaultName}
+        <p class="cve-p30e2-helper-text">
+          Target vault:
+          <span class="cve-p30e2-mono" data-testid="vault-setup-delete-target">{deleteVaultName}</span>
+        </p>
+
+        <section
+          class="cve-banner cve-banner--danger cve-danger-zone"
+          data-testid="vault-setup-delete-warning"
+          role="status"
+        >
+          <div>
+            <p class="cve-banner__title">This action cannot be undone</p>
+            <p class="cve-banner__body">
+              The entire
+              <span class="cve-p30e2-mono">{deleteVaultName}/</span>
+              folder will be deleted from disk and removed from
+              <span class="cve-p30e2-mono">config/config.yaml</span>.
+              {#if VAULT_DELETE_SEMANTICS.files_deleted}
+                Vault files are permanently removed.
+              {/if}
+              {#if !VAULT_DELETE_SEMANTICS.reversible}
+                This action is not reversible by the app. Exported packages are not the source of truth.
+              {/if}
+            </p>
+          </div>
+        </section>
+
+        <div class="cve-p30e2-field">
+          <label for="vault-delete-confirm" class="cve-p30e2-field__label">
+            Type the confirmation phrase
+          </label>
+          <p class="cve-p30e2-field__help">
+            To proceed, type exactly:
+            <span class="cve-p30e2-mono" data-testid="vault-setup-delete-phrase">{expectedDeletePhrase}</span>
+          </p>
+          <input
+            id="vault-delete-confirm"
+            type="text"
+            bind:value={deleteConfirmInput}
+            autocomplete="off"
+            spellcheck="false"
+            placeholder={expectedDeletePhrase}
+            class="cve-p30e2-input cve-p30e2-mono"
+            data-testid="vault-setup-delete-confirm-input"
+            data-invalid={deleteConfirmInput !== '' && !deleteConfirmValid}
+          />
+          {#if deleteConfirmInput && !deleteConfirmValid}
+            <p class="cve-p30e2-field__error">
+              Phrase must be exactly:
+              <span class="cve-p30e2-mono">{expectedDeletePhrase}</span>
+            </p>
+          {/if}
+        </div>
+
+        {#if deleteState === 'error'}
+          <section class="cve-banner cve-banner--danger" data-testid="vault-setup-delete-error">
+            <div>
+              <p class="cve-banner__title">{deleteErrorTitle(deleteErrorCode)}</p>
+              <p class="cve-banner__body">{deleteErrorMsg}</p>
+            </div>
+          </section>
+        {/if}
+      {:else}
+        <p class="cve-p30e2-empty">Select a vault from the management table to begin.</p>
+      {/if}
+    </div>
+
+    <footer class="cve-slide-over__footer">
+      <button
+        type="button"
+        class="cve-p30e2-btn"
+        on:click={closeDeleteSlide}
+      >
+        Cancel
+      </button>
+      <button
+        type="button"
+        class="cve-p30e2-btn cve-p30e2-btn--danger"
+        disabled={!canDelete}
+        on:click={handleDelete}
+        data-testid="vault-setup-delete-submit"
+      >
+        {deleteState === 'loading' ? 'Deleting...' : `Delete ${deleteVaultName || 'vault'}`}
+      </button>
+    </footer>
+  </div>
 </div>
