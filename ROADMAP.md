@@ -94,6 +94,8 @@ The backend is strong. The local UI has reached a usable application baseline. T
 
 Phase 30 (UI Release Quality Pass) is complete. Phase 29A (Roadmap formalisation and UI/UX audit), Phase 29B, Phase 29C, Phase 29D, and Phase 29E shipped earlier and remain complete. Phase 30A, 30B, 30C, 30D (30D1, 30D2, 30D3), 30E (30E1, 30E2), and 30F all shipped. Phase 30F delivered the user-facing light/dark theme toggle (persisted via the `cve-theme` localStorage key with a default-dark fallback), completed the `--cve-*` token sweep so every primitive has explicit dark and light values, tokenised the AppLayout chrome, added source-level accessibility and responsive guardrails (form labelling, icon-only button names, status-badge text, bounded raw/diff/table viewports, narrow-viewport workbench fallback), and reaffirmed write-safety contracts (typed `OVERWRITE`, typed `DELETE <vault>`, typed `ACCEPT` / `REJECT`, import preview/write separation). Parent Phase 30 is complete. Phase 27 (Registry and Reuse Layer) and Phase 28 (Optional Semantic Retrieval) remain explicitly deferred and are not started, prepared, or implied by Phase 30 or Phase 30F.
 
+Phase 31A (Release Candidate Verification) is release-candidate verification only. It prepares the project for a clean release candidate by documenting the automated verification command order, the manual browser visual QA matrix, the manual keyboard QA checklist, the manual screen-reader QA checklist, and release artefact hygiene rules in `RELEASE_CHECKLIST.md`. Phase 31A does not start Phase 27 (Registry and Reuse Layer) and does not start Phase 28 (Optional Semantic Retrieval); both remain Deferred. Phase 31A introduces no backend route, API contract, schema, MCP, or runtime dependency changes, performs no UI redesign or new feature work, adds no new write actions, and does not create a release tag or publish a GitHub release. Phase 30F automated source-level tests do not replace manual browser visual QA or screen-reader QA; those remain manual and are tracked in `RELEASE_CHECKLIST.md`.
+
 ## Phase Status Overview
 
 | Phase | Name                                    | Status   |
@@ -138,6 +140,7 @@ Phase 30 (UI Release Quality Pass) is complete. Phase 29A (Roadmap formalisation
 | 30E1  | Pending/Trust/Feedback governance polish| Complete |
 | 30E2  | Controller and Vault Setup polish       | Complete |
 | 30F   | Final QA, A11y, Responsive, Light Mode  | Complete |
+| 31A   | Release Candidate Verification          | Active   |
 | 27    | Registry and Reuse Layer                | Deferred |
 | 28    | Optional Semantic Retrieval             | Deferred |
 
@@ -1246,6 +1249,46 @@ feat(ui): final UI release-quality QA, accessibility, and light-mode toggle (Pha
 #### Phase 30 Strategic Note
 
 Phase 30 does not supersede or start Phase 27 (Registry and Reuse Layer) or Phase 28 (Optional Semantic Retrieval). Both remain explicitly deferred and are not started, prepared, or implied by any Phase 30 sub-phase. No semantic retrieval, registry, LLM, RAG, SaaS, cloud, React, charting, or third-party UI library work is introduced.
+
+---
+
+### Phase 31A - Release Candidate Verification
+
+**Status:** Active (post-Phase-30 release-candidate preparation). Phase 30 is complete. Phase 31A is release-candidate verification only. Phase 27 (Registry and Reuse Layer) and Phase 28 (Optional Semantic Retrieval) remain Deferred and are not started by Phase 31A.
+
+**Purpose**
+
+Phase 30 closed the UI Release Quality Pass at the source level. The Phase 30F closure report explicitly states that browser visual QA and screen-reader QA remain manual checks before any release announcement. Phase 31A prepares the project for a clean release candidate by capturing the manual QA matrix and verification command order in `RELEASE_CHECKLIST.md` without starting any new feature work.
+
+**Scope**
+
+- Document the automated verification command order in `RELEASE_CHECKLIST.md`.
+- Document the manual browser visual QA matrix (15 `/app/*` routes across 5 viewport tiers, per-route layout, theme, scroll, table, slide-over, destructive-action, and theme-persistence checks) in `RELEASE_CHECKLIST.md`.
+- Document the manual keyboard QA checklist in `RELEASE_CHECKLIST.md`.
+- Document the manual screen-reader QA checklist in `RELEASE_CHECKLIST.md`, clearly marked manual unless actually performed.
+- Document release artefact hygiene rules (`dist/`, `ui/dist/`, runtime-generated artefacts, screenshots, local reports, temporary files) in `RELEASE_CHECKLIST.md`.
+- Add a concise Release Candidate Verification section to `TESTING.md` that distinguishes automated source-level checks from manual browser/screen-reader QA.
+- Add deterministic guardrail tests that verify the checklist exists and that Phase 27 and Phase 28 remain Deferred.
+
+**Out of scope**
+
+- No backend route changes, API contract changes, schema changes, or MCP changes.
+- No new dependencies, no React, Vue, charting, animation, or icon library.
+- No UI redesign, no new feature work, no new write actions, no route removal, no page consolidation.
+- No registry layer, no semantic retrieval, no LLM/RAG/cloud/SaaS work.
+- Phase 27 and Phase 28 are not started, prepared, or implied.
+- No release tag, no GitHub release.
+- No claim that browser visual QA or screen-reader QA has passed unless actually performed.
+
+**Honesty note**
+
+Phase 31A automates only the existence of the manual checklist and the deferred status of Phase 27 and Phase 28. The browser visual QA, keyboard QA, and screen-reader QA passes themselves remain manual. Ticking those rows in `RELEASE_CHECKLIST.md` requires a human carrying out the check; nothing in Phase 31A or Phase 30F performs those passes automatically.
+
+**Suggested Commit**
+
+```
+docs(release): add Phase 31A release-candidate verification checklist
+```
 
 ---
 

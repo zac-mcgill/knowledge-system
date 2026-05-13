@@ -11874,6 +11874,22 @@ def main():
     test_p30f_47_global_css_phase30f_closure_block_present()
     test_p30f_48_workbench_narrow_viewport_fallback()
 
+    # Phase 31A - Release Candidate Verification
+    test_p31a_1_release_checklist_has_phase31a_section()
+    test_p31a_2_release_checklist_lists_all_15_app_routes()
+    test_p31a_3_release_checklist_includes_viewport_set()
+    test_p31a_4_release_checklist_includes_keyboard_qa()
+    test_p31a_5_release_checklist_screen_reader_marked_manual()
+    test_p31a_6_release_checklist_artefact_hygiene()
+    test_p31a_7_testing_distinguishes_automated_from_manual_qa()
+    test_p31a_8_roadmap_states_phase30_complete()
+    test_p31a_9_roadmap_states_phase31a_is_rc_only()
+    test_p31a_10_roadmap_keeps_phase27_deferred()
+    test_p31a_11_roadmap_keeps_phase28_deferred()
+    test_p31a_12_readme_does_not_overclaim_qa()
+    test_p31a_13_no_new_runtime_dependencies()
+    test_p31a_14_no_em_dashes_in_phase31a_docs()
+
     print()
     print("=" * 60)
     print("ALL VERIFICATION TESTS PASSED")
@@ -19488,9 +19504,9 @@ def _repo_root():
 
 
 def test_doc_drift_readme_test_count():
-    """DOC-DRIFT-1: README quotes the current 985-test total, no stale counts."""
+    """DOC-DRIFT-1: README quotes the current 999-test total, no stale counts."""
     readme = (_repo_root() / "README.md").read_text(encoding="utf-8")
-    assert "985" in readme, "README.md must mention the current test count 985"
+    assert "999" in readme, "README.md must mention the current test count 999"
     stale_phrases = [
         "553 deterministic tests",
         "548 deterministic tests",
@@ -19527,29 +19543,31 @@ def test_doc_drift_readme_test_count():
         "913 tests.",
         "937 deterministic tests",
         "937 tests.",
+        "985 deterministic tests",
+        "985 tests.",
     ]
     for phrase in stale_phrases:
         assert phrase not in readme, f"README.md still mentions stale phrase {phrase!r}"
-    print(f"  README mentions 985 tests, no stale counts present ✓")
+    print(f"  README mentions 999 tests, no stale counts present ✓")
 
 
 def test_doc_drift_testing_test_count():
-    """DOC-DRIFT-2: TESTING.md current total is 985 and historical markers retained."""
+    """DOC-DRIFT-2: TESTING.md current total is 999 and historical markers retained."""
     text = (_repo_root() / "TESTING.md").read_text(encoding="utf-8")
-    assert "985 test functions" in text, "TESTING.md must state 985 test functions"
-    for marker in ("429", "467", "507", "548", "564", "587", "607", "625", "650", "675", "695", "706", "721", "740", "763", "787", "800", "818", "842", "866", "890", "913", "937"):
+    assert "999 test functions" in text, "TESTING.md must state 999 test functions"
+    for marker in ("429", "467", "507", "548", "564", "587", "607", "625", "650", "675", "695", "706", "721", "740", "763", "787", "800", "818", "842", "866", "890", "913", "937", "985"):
         assert marker in text, f"TESTING.md must retain historical test-count marker {marker}"
-    print(f"  TESTING.md states 985 functions and keeps historical markers ✓")
+    print(f"  TESTING.md states 999 functions and keeps historical markers ✓")
 
 
 def test_doc_drift_release_checklist_test_count():
-    """DOC-DRIFT-3: RELEASE_CHECKLIST references 985 tests and required commands."""
+    """DOC-DRIFT-3: RELEASE_CHECKLIST references 999 tests and required commands."""
     text = (_repo_root() / "RELEASE_CHECKLIST.md").read_text(encoding="utf-8")
-    assert "985" in text, "RELEASE_CHECKLIST.md must reference the 985-test target"
+    assert "999" in text, "RELEASE_CHECKLIST.md must reference the 999-test target"
     for req in ("test_verify.py", "run.py validate", "run.py security",
                 "run.py export", "GitHub Release"):
         assert req in text, f"RELEASE_CHECKLIST.md must contain {req!r}"
-    print(f"  RELEASE_CHECKLIST mentions 985 tests and required commands ✓")
+    print(f"  RELEASE_CHECKLIST mentions 999 tests and required commands ✓")
 
 
 def test_doc_drift_roadmap_active_phase():
@@ -20938,10 +20956,10 @@ def test_p29e_19_readme_states_phase29_complete():
 
 def test_p29e_20_release_checklist_test_count_updated():
     """P29E-20: RELEASE_CHECKLIST.md references the current test count.
-    Phase 30F bumped the total from 937 to 985."""
+    Phase 31A bumped the total from 985 to 999."""
     print("\n=== Test P29E-20: RELEASE_CHECKLIST test count ===")
     text = (_repo_root() / "RELEASE_CHECKLIST.md").read_text(encoding="utf-8")
-    assert "985" in text, "RELEASE_CHECKLIST.md must reference the current 985-test target"
+    assert "999" in text, "RELEASE_CHECKLIST.md must reference the current 999-test target"
     # The previous counts must not linger in the checklist after this phase.
     assert "all 763 tests green" not in text, \
         "RELEASE_CHECKLIST.md must not still say 'all 763 tests green'"
@@ -20961,7 +20979,9 @@ def test_p29e_20_release_checklist_test_count_updated():
         "RELEASE_CHECKLIST.md must not still say 'all 913 tests green'"
     assert "all 937 tests green" not in text, \
         "RELEASE_CHECKLIST.md must not still say 'all 937 tests green'"
-    print("  RELEASE_CHECKLIST.md references 985 tests ✓")
+    assert "all 985 tests green" not in text, \
+        "RELEASE_CHECKLIST.md must not still say 'all 985 tests green'"
+    print("  RELEASE_CHECKLIST.md references 999 tests ✓")
 
 
 def test_p29e_21_ui_ux_audit_has_phase29e_note():
@@ -24402,6 +24422,268 @@ def _tokens_in_block(block: str) -> set:
     scope at call time."""
     import re
     return set(re.findall(r"(--cve-[A-Za-z0-9_-]+)\s*:", block))
+
+
+# ============================================================
+# Phase 31A - Release Candidate Verification Guardrails
+# ============================================================
+
+_P31A_APP_ROUTES = (
+    "/app/",
+    "/app/vault-setup",
+    "/app/notes",
+    "/app/graph",
+    "/app/import",
+    "/app/bundles",
+    "/app/exports",
+    "/app/security",
+    "/app/validation",
+    "/app/tasks",
+    "/app/raw",
+    "/app/pending",
+    "/app/trust",
+    "/app/feedback",
+    "/app/controller",
+)
+
+_P31A_VIEWPORTS = (
+    "3440x1440",
+    "2560x1440",
+    "1920x1080",
+    "1366x768",
+    "narrow mobile/tablet",
+)
+
+
+def test_p31a_1_release_checklist_has_phase31a_section():
+    """P31A-1: RELEASE_CHECKLIST.md contains a Phase 31A release-candidate section."""
+    print("\n=== Test P31A-1: RELEASE_CHECKLIST has Phase 31A section ===")
+    text = _read_text("RELEASE_CHECKLIST.md")
+    assert "Phase 31A" in text, \
+        "RELEASE_CHECKLIST.md must include a Phase 31A section"
+    assert "Release Candidate Verification" in text, \
+        "RELEASE_CHECKLIST.md must name the Release Candidate Verification section"
+    for cmd in ("py mcp/test_verify.py", "py run.py validate",
+                "py run.py security", "py run.py feedback",
+                "py run.py export --overwrite",
+                "cd ui && npm run build", "git status --short"):
+        assert cmd in text, \
+            f"RELEASE_CHECKLIST.md Phase 31A section must list {cmd!r}"
+    print("  RELEASE_CHECKLIST.md contains Phase 31A release-candidate section \u2713")
+
+
+def test_p31a_2_release_checklist_lists_all_15_app_routes():
+    """P31A-2: RELEASE_CHECKLIST.md lists all 15 /app routes for visual QA."""
+    print("\n=== Test P31A-2: RELEASE_CHECKLIST lists 15 /app routes ===")
+    text = _read_text("RELEASE_CHECKLIST.md")
+    missing = [r for r in _P31A_APP_ROUTES if r not in text]
+    assert not missing, \
+        f"RELEASE_CHECKLIST.md missing /app routes for visual QA: {missing}"
+    print(f"  All {len(_P31A_APP_ROUTES)} /app routes present \u2713")
+
+
+def test_p31a_3_release_checklist_includes_viewport_set():
+    """P31A-3: RELEASE_CHECKLIST.md includes the required viewport set."""
+    print("\n=== Test P31A-3: RELEASE_CHECKLIST viewport set ===")
+    text = _read_text("RELEASE_CHECKLIST.md")
+    missing = [v for v in _P31A_VIEWPORTS if v not in text]
+    assert not missing, \
+        f"RELEASE_CHECKLIST.md missing required viewport entries: {missing}"
+    print("  All required viewports present \u2713")
+
+
+def test_p31a_4_release_checklist_includes_keyboard_qa():
+    """P31A-4: RELEASE_CHECKLIST.md includes the keyboard QA checklist."""
+    print("\n=== Test P31A-4: RELEASE_CHECKLIST keyboard QA ===")
+    text = _read_text("RELEASE_CHECKLIST.md")
+    lower = text.lower()
+    assert "keyboard qa" in lower, \
+        "RELEASE_CHECKLIST.md must include a Keyboard QA checklist"
+    for needle in ("tab order", "focus-visible", "slide-over",
+                   "typed confirmation"):
+        assert needle in lower, \
+            f"RELEASE_CHECKLIST.md keyboard QA must mention {needle!r}"
+    print("  Keyboard QA checklist present \u2713")
+
+
+def test_p31a_5_release_checklist_screen_reader_marked_manual():
+    """P31A-5: RELEASE_CHECKLIST.md includes screen-reader QA marked manual."""
+    print("\n=== Test P31A-5: RELEASE_CHECKLIST screen-reader QA manual ===")
+    text = _read_text("RELEASE_CHECKLIST.md")
+    lower = text.lower()
+    assert "screen-reader qa" in lower or "screen reader qa" in lower, \
+        "RELEASE_CHECKLIST.md must include a Screen-reader QA checklist"
+    assert "manual" in lower, \
+        "RELEASE_CHECKLIST.md screen-reader QA must be labelled manual"
+    for needle in ("landmark", "accessible name", "label",
+                   "status badge", "close control"):
+        assert needle in lower, \
+            f"RELEASE_CHECKLIST.md screen-reader QA must mention {needle!r}"
+    # The checklist must not claim screen-reader QA has been performed.
+    forbidden = (
+        "screen reader pass: verified",
+        "screen-reader qa performed",
+        "screen reader qa performed",
+        "automated screen reader",
+    )
+    for claim in forbidden:
+        assert claim not in lower, \
+            f"RELEASE_CHECKLIST.md must not claim {claim!r}"
+    print("  Screen-reader QA present and marked manual \u2713")
+
+
+def test_p31a_6_release_checklist_artefact_hygiene():
+    """P31A-6: RELEASE_CHECKLIST.md includes artefact hygiene checks."""
+    print("\n=== Test P31A-6: RELEASE_CHECKLIST artefact hygiene ===")
+    text = _read_text("RELEASE_CHECKLIST.md")
+    lower = text.lower()
+    for needle in ("dist/", "ui/dist/", "screenshots",
+                   "temporary files", "git status --short"):
+        assert needle in lower, \
+            f"RELEASE_CHECKLIST.md artefact hygiene must mention {needle!r}"
+    print("  Release artefact hygiene checks present \u2713")
+
+
+def test_p31a_7_testing_distinguishes_automated_from_manual_qa():
+    """P31A-7: TESTING.md distinguishes automated source-level from manual QA."""
+    print("\n=== Test P31A-7: TESTING.md distinguishes automated vs manual ===")
+    text = _read_text("TESTING.md")
+    lower = text.lower()
+    assert "release candidate verification" in lower, \
+        "TESTING.md must include a Release Candidate Verification section"
+    assert "source-level" in lower, \
+        "TESTING.md must label automated checks as source-level"
+    assert "manual" in lower, \
+        "TESTING.md must label browser/screen-reader QA as manual"
+    assert "do not replace" in lower, \
+        "TESTING.md must state Phase 30F automated tests do not replace manual visual QA"
+    for cmd in ("py mcp/test_verify.py", "py run.py validate",
+                "py run.py security", "py run.py feedback",
+                "py run.py export --overwrite",
+                "cd ui && npm run build", "git status --short"):
+        assert cmd in text, \
+            f"TESTING.md release-candidate section must list {cmd!r}"
+    print("  TESTING.md distinguishes automated source-level from manual QA \u2713")
+
+
+def test_p31a_8_roadmap_states_phase30_complete():
+    """P31A-8: ROADMAP.md states Phase 30 is complete."""
+    print("\n=== Test P31A-8: ROADMAP states Phase 30 complete ===")
+    text = _read_text("ROADMAP.md").lower()
+    assert ("phase 30 (ui release quality pass) is complete" in text
+            or "parent phase 30 is complete" in text
+            or "phase 30 is complete" in text), \
+        "ROADMAP.md must state Phase 30 is complete"
+    print("  ROADMAP.md states Phase 30 complete \u2713")
+
+
+def test_p31a_9_roadmap_states_phase31a_is_rc_only():
+    """P31A-9: ROADMAP.md states Phase 31A is release-candidate verification only."""
+    print("\n=== Test P31A-9: ROADMAP describes Phase 31A as RC verification only ===")
+    text = _read_text("ROADMAP.md")
+    assert "Phase 31A" in text, \
+        "ROADMAP.md must mention Phase 31A"
+    lower = text.lower()
+    assert "release-candidate verification only" in lower \
+        or "release candidate verification only" in lower, \
+        "ROADMAP.md must describe Phase 31A as release-candidate verification only"
+    assert ("does not start phase 27" in lower
+            and "does not start phase 28" in lower), \
+        "ROADMAP.md Phase 31A entry must state it does not start Phase 27 or Phase 28"
+    print("  ROADMAP.md describes Phase 31A as release-candidate verification only \u2713")
+
+
+def test_p31a_10_roadmap_keeps_phase27_deferred():
+    """P31A-10: ROADMAP.md keeps Phase 27 Deferred."""
+    print("\n=== Test P31A-10: Phase 27 still Deferred ===")
+    text = _read_text("ROADMAP.md")
+    assert "| 27    | Registry and Reuse Layer                | Deferred |" in text, \
+        "ROADMAP.md status table must keep Phase 27 Deferred"
+    for forbidden in ("Phase 27 Complete", "Phase 27 - Complete",
+                      "Phase 27 is complete"):
+        assert forbidden not in text, \
+            f"ROADMAP.md must not mark {forbidden!r}"
+    print("  Phase 27 remains Deferred \u2713")
+
+
+def test_p31a_11_roadmap_keeps_phase28_deferred():
+    """P31A-11: ROADMAP.md keeps Phase 28 Deferred."""
+    print("\n=== Test P31A-11: Phase 28 still Deferred ===")
+    text = _read_text("ROADMAP.md")
+    assert "| 28    | Optional Semantic Retrieval             | Deferred |" in text, \
+        "ROADMAP.md status table must keep Phase 28 Deferred"
+    for forbidden in ("Phase 28 Complete", "Phase 28 - Complete",
+                      "Phase 28 is complete"):
+        assert forbidden not in text, \
+            f"ROADMAP.md must not mark {forbidden!r}"
+    print("  Phase 28 remains Deferred \u2713")
+
+
+def test_p31a_12_readme_does_not_overclaim_qa():
+    """P31A-12: README.md does not claim browser visual QA or screen-reader QA has passed."""
+    print("\n=== Test P31A-12: README honest about manual QA ===")
+    text = _read_text("README.md").lower()
+    forbidden_claims = (
+        "browser visual qa performed",
+        "browser visual qa passed",
+        "screen-reader qa performed",
+        "screen reader qa performed",
+        "screen-reader qa passed",
+        "screen reader qa passed",
+        "automated screen reader",
+        "all keyboard traversal verified automatically",
+        "visual qa automated",
+    )
+    for claim in forbidden_claims:
+        assert claim not in text, \
+            f"README.md must not claim {claim!r}"
+    # The README should still acknowledge that manual checks are tracked.
+    assert "release_checklist.md" in text or "release-candidate" in text, \
+        "README.md should reference RELEASE_CHECKLIST.md for manual QA tracking"
+    print("  README.md does not overclaim browser or screen-reader QA \u2713")
+
+
+def test_p31a_13_no_new_runtime_dependencies():
+    """P31A-13: Phase 31A introduces no new UI runtime dependency."""
+    print("\n=== Test P31A-13: no new UI runtime dependencies ===")
+    import json
+    pkg = json.loads(_read_text("ui/package.json"))
+    deps = set((pkg.get("dependencies") or {}).keys())
+    dev_deps = set((pkg.get("devDependencies") or {}).keys())
+    forbidden = {
+        "react", "react-dom",
+        "vue",
+        "lucide-react", "@heroicons/react", "react-icons",
+        "@radix-ui/react-icons",
+        "framer-motion", "motion",
+        "chart.js", "d3", "recharts", "echarts", "plotly.js",
+        "prismjs", "highlight.js", "shiki",
+        "playwright", "@playwright/test", "puppeteer",
+        "@axe-core/playwright", "axe-core",
+    }
+    sneaked_in = (deps | dev_deps) & forbidden
+    assert not sneaked_in, \
+        f"ui/package.json must not introduce {sorted(sneaked_in)} in Phase 31A"
+    print("  No React/Vue/charting/animation/icon/browser-tooling dependencies \u2713")
+
+
+def test_p31a_14_no_em_dashes_in_phase31a_docs():
+    """P31A-14: Docs modified by Phase 31A contain no em dashes."""
+    print("\n=== Test P31A-14: no em dashes in Phase 31A docs ===")
+    docs = ["ROADMAP.md", "TESTING.md", "README.md", "RELEASE_CHECKLIST.md"]
+    offenders = []
+    for name in docs:
+        text = _read_text(name)
+        # Only inspect the Phase 31A-authored regions for em dashes; older
+        # historical sections may include em dashes that pre-date Phase 31A
+        # guardrails. The simplest portable check is to scan the entire
+        # file because earlier phases (e.g. Phase 29E, Phase 30F) have
+        # already kept these files em-dash free.
+        if "\u2014" in text:
+            offenders.append(name)
+    assert not offenders, \
+        f"Project-authored docs must not contain em dashes; offenders: {offenders}"
+    print("  No em dashes in Phase 31A docs \u2713")
 
 
 if __name__ == "__main__":

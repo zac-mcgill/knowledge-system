@@ -4,9 +4,114 @@ Use this checklist before tagging a release. All steps are local and determinist
 
 ---
 
+## Phase 31A - Release Candidate Verification
+
+Phase 30 is complete. Phase 31A is release-candidate verification only. It does not start Phase 27 (Registry and Reuse Layer) or Phase 28 (Optional Semantic Retrieval); both remain Deferred. No new feature work, no backend route changes, no API contract changes, no schema changes, no MCP changes, no new dependencies, no UI redesign, and no new write actions are introduced by Phase 31A. Phase 30F automated source-level tests do not replace manual visual QA or screen-reader QA; those remain manual and are tracked below.
+
+### A. Automated Verification Commands
+
+Run these commands locally, in order, on a clean working tree. All must pass before tagging a release candidate.
+
+```bash
+py mcp/test_verify.py
+py run.py validate
+py run.py security
+py run.py feedback
+py run.py export --overwrite
+cd ui && npm run build
+git status --short
+```
+
+- [ ] `py mcp/test_verify.py` exits 0 and prints `ALL VERIFICATION TESTS PASSED` (current target: all tests green; the suite is sized in the hundreds of tests and is the source of truth, not this checklist)
+- [ ] `py run.py validate` reports all notes valid
+- [ ] `py run.py security` exits 0 with status `pass` or `warning` only (never `fail`)
+- [ ] `py run.py feedback` exits 0 and prints valid JSON
+- [ ] `py run.py export --overwrite` writes a fresh package to `dist/`
+- [ ] `cd ui && npm run build` completes with zero errors
+- [ ] `git status --short` is clean except for expected untracked artefacts (`dist/`, `ui/dist/`, generated state files) which must remain untracked
+
+### B. Browser Visual QA Matrix (Manual)
+
+This matrix is manual unless actually performed. The deterministic Phase 30F source-level checks do not replace this pass. Mark a row only after performing the check in a real browser.
+
+Routes to inspect:
+
+- [ ] /app/
+- [ ] /app/vault-setup
+- [ ] /app/notes
+- [ ] /app/graph
+- [ ] /app/import
+- [ ] /app/bundles
+- [ ] /app/exports
+- [ ] /app/security
+- [ ] /app/validation
+- [ ] /app/tasks
+- [ ] /app/raw
+- [ ] /app/pending
+- [ ] /app/trust
+- [ ] /app/feedback
+- [ ] /app/controller
+
+Viewports to inspect (each route should be sampled at each width):
+
+- [ ] 3440x1440 or ultrawide equivalent
+- [ ] 2560x1440
+- [ ] 1920x1080
+- [ ] 1366x768
+- [ ] narrow mobile/tablet width (around 480 to 768 px)
+
+Per-route checks:
+
+- [ ] no horizontal overflow on the page shell
+- [ ] no cramped panel padding
+- [ ] no excessive unused blank space
+- [ ] internal scroll works on workspace pages (workbench rails and inspectors scroll, the page shell does not)
+- [ ] light mode is readable
+- [ ] dark mode remains readable
+- [ ] tables and raw viewers stay bounded
+- [ ] slide-over panels fit narrow screens
+- [ ] destructive actions remain visually separated
+- [ ] theme toggle persists after a full page reload (`cve-theme` localStorage key respected)
+
+### C. Keyboard QA Checklist (Manual)
+
+This pass is manual unless actually performed. The Phase 30F automated tests assert source-level shape only.
+
+- [ ] Tab order reaches the sidebar/nav, the theme toggle, toolbar actions, form controls, tables, details blocks, and slide-over controls
+- [ ] `:focus-visible` is visible in both light and dark themes on every interactive control
+- [ ] Escape or an explicit close control closes slide-overs where supported, without trapping focus
+- [ ] disabled destructive buttons are either skipped in the tab order or announced as disabled by the browser
+- [ ] typed confirmations (`OVERWRITE`, `DELETE <vault>`, `ACCEPT`, `REJECT`) can be completed with the keyboard only
+
+### D. Screen-reader QA Checklist (Manual)
+
+Screen-reader QA is manual unless actually performed. Do not mark any row checked unless the check was actually carried out with a screen reader (for example NVDA, JAWS, VoiceOver, or Narrator). If the pass has not been performed, leave every row unchecked and record that fact in the release notes.
+
+- [ ] App shell landmarks (`header`, `nav`, `main`, `aside`, `footer`) are announced
+- [ ] page heading is meaningful for every `/app/*` route
+- [ ] theme toggle has an accessible name and announces its current state
+- [ ] every form control has an associated label
+- [ ] status badges convey meaning through text or an icon, not colour alone
+- [ ] slide-overs have an accessible name and an accessible close control
+- [ ] dangerous actions explain their consequences before requiring typed confirmation
+
+State explicitly: this checklist has not been performed automatically by Phase 30F or Phase 31A. The boxes above are intended to be ticked only by a human running an assistive technology.
+
+### E. Release Artefact Hygiene
+
+- [ ] no `dist/` directory committed
+- [ ] no `ui/dist/` directory committed
+- [ ] no runtime-generated artefacts committed (pending change snapshots, exported packages, security report dumps)
+- [ ] no screenshots committed
+- [ ] no local reports committed
+- [ ] no temporary files committed (`.tmp`, `.bak`, editor swap files)
+- [ ] `git status --short` shows a clean working tree once these directories are excluded
+
+---
+
 ## Pre-release Verification
 
-- [ ] `python mcp/test_verify.py` passes, all 985 tests green (no skips, no failures)
+- [ ] `python mcp/test_verify.py` passes, all 999 tests green (no skips, no failures)
 - [ ] `python run.py validate` passes, all notes valid
 - [ ] `python run.py security` passes, status is `pass` or `warning` only (no `fail`)
 - [ ] `python run.py feedback` passes, exits 0, valid JSON

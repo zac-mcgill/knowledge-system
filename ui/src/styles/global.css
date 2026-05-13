@@ -1716,9 +1716,8 @@
     position: sticky;
     bottom: 0;
     z-index: 2;
-    background-color: var(--cve-bg);
+    background-color: var(--cve-surface);
     padding: var(--cve-space-3) 0 0;
-    border-top: 1px solid var(--cve-border-soft);
     display: flex;
     flex-wrap: wrap;
     gap: var(--cve-space-2);

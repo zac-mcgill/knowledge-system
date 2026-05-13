@@ -1,13 +1,13 @@
 # Context Vault Engine - Testing
 
-All tests live in `mcp/test_verify.py`. The suite currently has 985 test functions, all of which are executed by the manual runner in `main()` at the bottom of that file. A passing run prints `ALL VERIFICATION TESTS PASSED`. Historical test counts from earlier phases (272, 382, 429, 467, 507, 548, 553, 564, 587, 607, 625, 650, 675, 695, 706, 721, 740, 763, 787, 800, 818, 842, 866, 890, 913, 937) appear later in this document as part of the phase changelog and are not the current total.
+All tests live in `mcp/test_verify.py`. The suite currently has 999 test functions, all of which are executed by the manual runner in `main()` at the bottom of that file. A passing run prints `ALL VERIFICATION TESTS PASSED`. Historical test counts from earlier phases (272, 382, 429, 467, 507, 548, 553, 564, 587, 607, 625, 650, 675, 695, 706, 721, 740, 763, 787, 800, 818, 842, 866, 890, 913, 937, 985) appear later in this document as part of the phase changelog and are not the current total.
 
 ## Current Verification Summary
 
 A full local verification consists of:
 
 ```bash
-py mcp/test_verify.py           # 985 tests, all must pass
+py mcp/test_verify.py           # 999 tests, all must pass
 py run.py validate              # vault schema-compliance
 py run.py security              # status: pass (or warning, never fail)
 py run.py feedback              # exits 0, valid JSON
@@ -2602,3 +2602,37 @@ cd ui; npm run build             # builds without errors
 ```
 
 ---
+
+## Release Candidate Verification (Phase 31A)
+
+Phase 31A is release-candidate verification only. It does not start Phase 27 (Registry and Reuse Layer) or Phase 28 (Optional Semantic Retrieval); both remain Deferred. Phase 31A introduces no backend route, API contract, schema, MCP, or runtime dependency changes, performs no UI redesign or new feature work, and does not create a release tag or publish a GitHub release.
+
+### Automated Verification Command Order
+
+Run these commands locally, in order, on a clean working tree before tagging a release candidate. They are the same commands required by every Phase 30 sub-phase and remain the source of truth.
+
+```bash
+py mcp/test_verify.py            # full deterministic suite; must print ALL VERIFICATION TESTS PASSED
+py run.py validate               # vault schema-compliance
+py run.py security               # status: pass or warning (never fail)
+py run.py feedback               # exits 0; valid JSON
+py run.py export --overwrite     # status: ok; package written to dist/
+cd ui && npm run build           # builds without errors
+git status --short               # clean except for expected untracked artefacts
+```
+
+### Automated vs Manual Distinction
+
+The Phase 30F automated tests (`test_p30f_1` through `test_p30f_48`) are source-level only. They assert the shape of UI source files, CSS tokens, route integrity, and write-safety contracts. They do not exercise a real browser and do not exercise an assistive technology.
+
+The following checks remain manual and are tracked in `RELEASE_CHECKLIST.md`:
+
+- **Browser visual QA matrix.** Every `/app/*` route (15 routes) sampled at every viewport tier (3440x1440, 2560x1440, 1920x1080, 1366x768, narrow mobile/tablet) for layout, theme, scroll, table, slide-over, destructive-action separation, and theme persistence after reload.
+- **Keyboard QA.** Tab order, `:focus-visible` in both themes, slide-over close behaviour, disabled-button announcement, and typed-confirmation completion without a mouse.
+- **Screen-reader QA.** Landmarks, page heading, theme-toggle accessible name and state, form-control labels, status-badge text content, slide-over accessible name and close control, dangerous-action consequences.
+
+The Phase 30F automated tests do not replace any of these manual passes. A release candidate is not complete until the manual passes have been performed or have been explicitly recorded as not performed in the release notes.
+
+### Release Artefact Hygiene
+
+`git status --short` should show no committed `dist/`, no committed `ui/dist/`, no committed runtime-generated artefacts (pending change snapshots, exported packages, security report dumps), no committed screenshots, no committed local reports, and no committed temporary files.
