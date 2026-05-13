@@ -248,7 +248,7 @@
           <label class="cve-label" for="tasks-vault-select">Vault</label>
           <select
             id="tasks-vault-select"
-            class="cve-select"
+            class="cve-select cve-toolbar__select"
             value={selectedVault}
             on:change={handleVaultChange}
             aria-label="Active vault"

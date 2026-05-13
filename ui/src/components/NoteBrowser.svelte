@@ -605,7 +605,7 @@
           <label class="cve-label" for="notes-vault-select">Vault</label>
           <select
             id="notes-vault-select"
-            class="cve-select"
+            class="cve-select cve-toolbar__select"
             bind:value={selectedVault}
             on:change={onVaultChange}
             aria-label="Active vault"

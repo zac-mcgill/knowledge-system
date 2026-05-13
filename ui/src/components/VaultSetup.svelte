@@ -292,9 +292,9 @@
 <div class="cve-page cve-p30e2-page">
   <header class="cve-toolbar" data-testid="vault-setup-toolbar">
     <div class="cve-toolbar__main">
-      <div class="cve-toolbar__title">Vault Setup</div>
+      <h1 class="cve-toolbar__title">Vault Setup</h1>
       <span
-        class={statePillClass}
+        class="{statePillClass} cve-toolbar__status"
         data-testid="vault-setup-state-pill"
         aria-live="polite"
       >
@@ -307,8 +307,9 @@
         <button
           type="button"
           on:click={() => void loadVaults()}
-          class="cve-p30e2-btn"
+          class="cve-btn cve-btn-secondary"
           data-testid="vault-setup-refresh"
+          aria-label="Refresh vaults"
         >
           Refresh vaults
         </button>

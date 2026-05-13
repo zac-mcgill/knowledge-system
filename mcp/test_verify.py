@@ -11890,6 +11890,30 @@ def main():
     test_p31a_13_no_new_runtime_dependencies()
     test_p31a_14_no_em_dashes_in_phase31a_docs()
 
+    # Phase 31B - App Header and Toolbar Normalisation Pass
+    test_p31b_1_global_css_has_phase31b_block()
+    test_p31b_2_toolbar_title_typography_defined()
+    test_p31b_3_toolbar_status_class_defined()
+    test_p31b_4_toolbar_select_class_defined()
+    test_p31b_5_toolbar_context_class_defined()
+    test_p31b_6_toolbar_action_variants_defined()
+    test_p31b_7_toolbar_responsive_wrap()
+    test_p31b_8_toolbar_actions_padding_height_gap()
+    test_p31b_9_all_app_components_use_cve_toolbar()
+    test_p31b_10_titles_use_semantic_heading()
+    test_p31b_11_refresh_actions_are_buttons_not_links()
+    test_p31b_12_validation_tasks_shortcuts_link_to_correct_routes()
+    test_p31b_13_header_links_resolve_to_existing_app_routes()
+    test_p31b_14_no_raw_dark_palette_in_toolbar_sources()
+    test_p31b_15_no_external_font_imports()
+    test_p31b_16_no_new_runtime_dependencies()
+    test_p31b_17_roadmap_lists_phase31b_polish()
+    test_p31b_18_roadmap_keeps_phase27_28_deferred()
+    test_p31b_19_ui_ux_audit_has_phase31b_note()
+    test_p31b_20_release_checklist_has_header_visual_check()
+    test_p31b_21_testing_md_has_phase31b_family()
+    test_p31b_22_no_em_dashes_in_phase31b_docs()
+
     print()
     print("=" * 60)
     print("ALL VERIFICATION TESTS PASSED")
@@ -19504,9 +19528,9 @@ def _repo_root():
 
 
 def test_doc_drift_readme_test_count():
-    """DOC-DRIFT-1: README quotes the current 999-test total, no stale counts."""
+    """DOC-DRIFT-1: README quotes the current 1021-test total, no stale counts."""
     readme = (_repo_root() / "README.md").read_text(encoding="utf-8")
-    assert "999" in readme, "README.md must mention the current test count 999"
+    assert "1021" in readme, "README.md must mention the current test count 1021"
     stale_phrases = [
         "553 deterministic tests",
         "548 deterministic tests",
@@ -19545,29 +19569,31 @@ def test_doc_drift_readme_test_count():
         "937 tests.",
         "985 deterministic tests",
         "985 tests.",
+        "999 deterministic tests",
+        "999 tests.",
     ]
     for phrase in stale_phrases:
         assert phrase not in readme, f"README.md still mentions stale phrase {phrase!r}"
-    print(f"  README mentions 999 tests, no stale counts present ✓")
+    print(f"  README mentions 1021 tests, no stale counts present ✓")
 
 
 def test_doc_drift_testing_test_count():
-    """DOC-DRIFT-2: TESTING.md current total is 999 and historical markers retained."""
+    """DOC-DRIFT-2: TESTING.md current total is 1021 and historical markers retained."""
     text = (_repo_root() / "TESTING.md").read_text(encoding="utf-8")
-    assert "999 test functions" in text, "TESTING.md must state 999 test functions"
-    for marker in ("429", "467", "507", "548", "564", "587", "607", "625", "650", "675", "695", "706", "721", "740", "763", "787", "800", "818", "842", "866", "890", "913", "937", "985"):
+    assert "1021 test functions" in text, "TESTING.md must state 1021 test functions"
+    for marker in ("429", "467", "507", "548", "564", "587", "607", "625", "650", "675", "695", "706", "721", "740", "763", "787", "800", "818", "842", "866", "890", "913", "937", "985", "999"):
         assert marker in text, f"TESTING.md must retain historical test-count marker {marker}"
-    print(f"  TESTING.md states 999 functions and keeps historical markers ✓")
+    print(f"  TESTING.md states 1021 functions and keeps historical markers ✓")
 
 
 def test_doc_drift_release_checklist_test_count():
-    """DOC-DRIFT-3: RELEASE_CHECKLIST references 999 tests and required commands."""
+    """DOC-DRIFT-3: RELEASE_CHECKLIST references 1021 tests and required commands."""
     text = (_repo_root() / "RELEASE_CHECKLIST.md").read_text(encoding="utf-8")
-    assert "999" in text, "RELEASE_CHECKLIST.md must reference the 999-test target"
+    assert "1021" in text, "RELEASE_CHECKLIST.md must reference the 1021-test target"
     for req in ("test_verify.py", "run.py validate", "run.py security",
                 "run.py export", "GitHub Release"):
         assert req in text, f"RELEASE_CHECKLIST.md must contain {req!r}"
-    print(f"  RELEASE_CHECKLIST mentions 999 tests and required commands ✓")
+    print(f"  RELEASE_CHECKLIST mentions 1021 tests and required commands ✓")
 
 
 def test_doc_drift_roadmap_active_phase():
@@ -20956,10 +20982,10 @@ def test_p29e_19_readme_states_phase29_complete():
 
 def test_p29e_20_release_checklist_test_count_updated():
     """P29E-20: RELEASE_CHECKLIST.md references the current test count.
-    Phase 31A bumped the total from 985 to 999."""
+    Phase 31B bumped the total from 999 to 1021."""
     print("\n=== Test P29E-20: RELEASE_CHECKLIST test count ===")
     text = (_repo_root() / "RELEASE_CHECKLIST.md").read_text(encoding="utf-8")
-    assert "999" in text, "RELEASE_CHECKLIST.md must reference the current 999-test target"
+    assert "1021" in text, "RELEASE_CHECKLIST.md must reference the current 1021-test target"
     # The previous counts must not linger in the checklist after this phase.
     assert "all 763 tests green" not in text, \
         "RELEASE_CHECKLIST.md must not still say 'all 763 tests green'"
@@ -20981,7 +21007,9 @@ def test_p29e_20_release_checklist_test_count_updated():
         "RELEASE_CHECKLIST.md must not still say 'all 937 tests green'"
     assert "all 985 tests green" not in text, \
         "RELEASE_CHECKLIST.md must not still say 'all 985 tests green'"
-    print("  RELEASE_CHECKLIST.md references 999 tests ✓")
+    assert "all 999 tests green" not in text, \
+        "RELEASE_CHECKLIST.md must not still say 'all 999 tests green'"
+    print("  RELEASE_CHECKLIST.md references 1021 tests \u2713")
 
 
 def test_p29e_21_ui_ux_audit_has_phase29e_note():
@@ -24684,6 +24712,422 @@ def test_p31a_14_no_em_dashes_in_phase31a_docs():
     assert not offenders, \
         f"Project-authored docs must not contain em dashes; offenders: {offenders}"
     print("  No em dashes in Phase 31A docs \u2713")
+
+
+# ============================================================
+# Phase 31B - App Header and Toolbar Normalisation Pass
+# ============================================================
+
+_P31B_WORKFLOW_COMPONENTS = (
+    "ui/src/components/Dashboard.svelte",
+    "ui/src/components/VaultSetup.svelte",
+    "ui/src/components/NoteBrowser.svelte",
+    "ui/src/components/GraphExplorer.svelte",
+    "ui/src/components/ImportReview.svelte",
+    "ui/src/components/BundleBuilder.svelte",
+    "ui/src/components/ExportPackage.svelte",
+    "ui/src/components/SecurityScan.svelte",
+    "ui/src/components/ValidationReview.svelte",
+    "ui/src/components/TaskReview.svelte",
+    "ui/src/components/RawDeveloperExplorer.svelte",
+    "ui/src/components/PendingChanges.svelte",
+    "ui/src/components/TrustEvidence.svelte",
+    "ui/src/components/FeedbackWorkflow.svelte",
+    "ui/src/components/ContextController.svelte",
+)
+
+
+def _p31b_global_css() -> str:
+    return _read_text("ui/src/styles/global.css")
+
+
+def _p31b_extract_phase31b_block(css: str) -> str:
+    """Return the source slice from the Phase 31B comment marker to the
+    next top-level Phase marker or end of file. Used to assert that
+    declarations are made inside the Phase 31B block, not just present
+    somewhere in the file."""
+    start = css.find("Phase 31B")
+    assert start != -1, "global.css must contain a Phase 31B marker"
+    # End at the next Phase comment marker if one is added in the future.
+    rest = css[start:]
+    next_marker = rest.find("Phase 32", 10)
+    return rest if next_marker == -1 else rest[:next_marker]
+
+
+def _p31b_header_blocks(svelte_text: str) -> list[str]:
+    """Return the inner HTML of every `<header class="cve-toolbar"...>
+    ...</header>` block in a Svelte source file."""
+    import re
+    blocks: list[str] = []
+    pattern = re.compile(
+        r'<header[^>]*class="[^"]*cve-toolbar[^"]*"[^>]*>(.*?)</header>',
+        re.DOTALL,
+    )
+    for m in pattern.finditer(svelte_text):
+        blocks.append(m.group(1))
+    return blocks
+
+
+def test_p31b_1_global_css_has_phase31b_block():
+    """P31B-1: global.css contains a Phase 31B toolbar normalisation block."""
+    print("\n=== Test P31B-1: global.css Phase 31B block ===")
+    css = _p31b_global_css()
+    assert "Phase 31B" in css, "global.css must contain a Phase 31B marker"
+    assert "Toolbar normalisation" in css, \
+        "global.css must label the Phase 31B block as Toolbar normalisation"
+    print("  global.css contains Phase 31B toolbar normalisation block \u2713")
+
+
+def test_p31b_2_toolbar_title_typography_defined():
+    """P31B-2: Phase 31B block declares explicit title typography."""
+    print("\n=== Test P31B-2: cve-toolbar__title typography ===")
+    block = _p31b_extract_phase31b_block(_p31b_global_css())
+    assert ".cve-toolbar__title" in block, \
+        "Phase 31B block must restyle .cve-toolbar__title"
+    # Typography axes the Phase 31B pass is responsible for.
+    for prop in ("font-size", "font-weight", "line-height"):
+        assert prop in block.split(".cve-toolbar__title")[1].split("}")[0], \
+            f"Phase 31B .cve-toolbar__title must declare {prop}"
+    print("  cve-toolbar__title typography is explicit \u2713")
+
+
+def test_p31b_3_toolbar_status_class_defined():
+    """P31B-3: cve-toolbar__status class defined in the Phase 31B block."""
+    print("\n=== Test P31B-3: cve-toolbar__status defined ===")
+    block = _p31b_extract_phase31b_block(_p31b_global_css())
+    assert ".cve-toolbar__status" in block, \
+        "Phase 31B block must define .cve-toolbar__status"
+    print("  cve-toolbar__status class present \u2713")
+
+
+def test_p31b_4_toolbar_select_class_defined():
+    """P31B-4: cve-toolbar__select class defined in the Phase 31B block."""
+    print("\n=== Test P31B-4: cve-toolbar__select defined ===")
+    block = _p31b_extract_phase31b_block(_p31b_global_css())
+    assert ".cve-toolbar__select" in block, \
+        "Phase 31B block must define .cve-toolbar__select"
+    print("  cve-toolbar__select class present \u2713")
+
+
+def test_p31b_5_toolbar_context_class_defined():
+    """P31B-5: cve-toolbar__context class defined in the Phase 31B block."""
+    print("\n=== Test P31B-5: cve-toolbar__context defined ===")
+    block = _p31b_extract_phase31b_block(_p31b_global_css())
+    assert ".cve-toolbar__context" in block, \
+        "Phase 31B block must define .cve-toolbar__context"
+    print("  cve-toolbar__context class present \u2713")
+
+
+def test_p31b_6_toolbar_action_variants_defined():
+    """P31B-6: cve-toolbar__action plus primary/secondary/danger variants."""
+    print("\n=== Test P31B-6: cve-toolbar__action variants ===")
+    block = _p31b_extract_phase31b_block(_p31b_global_css())
+    for name in (
+        ".cve-toolbar__action",
+        ".cve-toolbar__action--primary",
+        ".cve-toolbar__action--secondary",
+        ".cve-toolbar__action--danger",
+    ):
+        assert name in block, \
+            f"Phase 31B block must define {name}"
+    print("  cve-toolbar__action plus variants defined \u2713")
+
+
+def test_p31b_7_toolbar_responsive_wrap():
+    """P31B-7: Phase 31B block declares responsive wrapping behaviour."""
+    print("\n=== Test P31B-7: cve-toolbar responsive wrapping ===")
+    block = _p31b_extract_phase31b_block(_p31b_global_css())
+    assert "flex-wrap" in block, \
+        "Phase 31B block must set flex-wrap on the toolbar"
+    assert "@media" in block, \
+        "Phase 31B block must declare at least one responsive media query"
+    assert "max-width: 768px" in block or "max-width:768px" in block, \
+        "Phase 31B block must include a narrow-viewport breakpoint"
+    print("  Toolbar has explicit responsive wrap rules \u2713")
+
+
+def test_p31b_8_toolbar_actions_padding_height_gap():
+    """P31B-8: cve-toolbar__action has consistent padding, height, and gap."""
+    print("\n=== Test P31B-8: cve-toolbar__action padding/height/gap ===")
+    block = _p31b_extract_phase31b_block(_p31b_global_css())
+    # The actions container declares a gap.
+    actions_block = block.split(".cve-toolbar__actions")[1].split("}")[0]
+    assert "gap" in actions_block, \
+        "Phase 31B .cve-toolbar__actions must declare gap"
+    # An action declares min-height and padding.
+    action_split = block.split(".cve-toolbar__action")[1]
+    action_block = action_split.split("}")[0]
+    assert "min-height" in action_block, \
+        "Phase 31B .cve-toolbar__action must declare min-height"
+    assert "padding" in action_block, \
+        "Phase 31B .cve-toolbar__action must declare padding"
+    print("  cve-toolbar action padding/height/gap normalised \u2713")
+
+
+def test_p31b_9_all_app_components_use_cve_toolbar():
+    """P31B-9: every migrated workflow component renders a cve-toolbar header."""
+    print("\n=== Test P31B-9: all 15 components use cve-toolbar ===")
+    missing = []
+    for rel in _P31B_WORKFLOW_COMPONENTS:
+        text = _read_text(rel)
+        if '<header class="cve-toolbar"' not in text \
+                and 'class="cve-toolbar"' not in text:
+            missing.append(rel)
+    assert not missing, \
+        f"Components missing canonical cve-toolbar header: {missing}"
+    print(f"  All {len(_P31B_WORKFLOW_COMPONENTS)} components use cve-toolbar \u2713")
+
+
+def test_p31b_10_titles_use_semantic_heading():
+    """P31B-10: cve-toolbar__title is rendered as a semantic heading element."""
+    print("\n=== Test P31B-10: titles use semantic heading ===")
+    offenders = []
+    for rel in _P31B_WORKFLOW_COMPONENTS:
+        text = _read_text(rel)
+        for header in _p31b_header_blocks(text):
+            if 'cve-toolbar__title' not in header:
+                continue
+            # The title must be an h1/h2 (semantic heading), not a div or span.
+            import re
+            div_match = re.search(
+                r'<div[^>]*class="[^"]*cve-toolbar__title', header
+            )
+            span_match = re.search(
+                r'<span[^>]*class="[^"]*cve-toolbar__title', header
+            )
+            if div_match or span_match:
+                offenders.append(rel)
+                break
+    assert not offenders, \
+        f"cve-toolbar__title must be a semantic heading; offenders: {offenders}"
+    print("  All toolbar titles use semantic heading elements \u2713")
+
+
+def test_p31b_11_refresh_actions_are_buttons_not_links():
+    """P31B-11: Refresh actions in toolbars are <button>, not <a>."""
+    print("\n=== Test P31B-11: Refresh actions are buttons ===")
+    import re
+    bad = []
+    refresh_link = re.compile(
+        r'<a\b[^>]*>\s*(?:Refresh|Reload|Re-run)\b',
+        re.IGNORECASE,
+    )
+    for rel in _P31B_WORKFLOW_COMPONENTS:
+        text = _read_text(rel)
+        for header in _p31b_header_blocks(text):
+            if refresh_link.search(header):
+                bad.append(rel)
+                break
+    assert not bad, \
+        f"Refresh/Reload/Re-run must be <button>; offenders: {bad}"
+    print("  Refresh actions are buttons, not links \u2713")
+
+
+def test_p31b_12_validation_tasks_shortcuts_link_to_correct_routes():
+    """P31B-12: Validation/Tasks shortcuts in toolbars link to /app/validation
+    and /app/tasks."""
+    print("\n=== Test P31B-12: Validation/Tasks shortcut hrefs ===")
+    import re
+    anchor_pattern = re.compile(
+        r'<a\b[^>]*href="([^"]+)"[^>]*>\s*(Validation|Tasks)\s*</a>',
+        re.IGNORECASE | re.DOTALL,
+    )
+    expected = {"Validation": "/app/validation", "Tasks": "/app/tasks"}
+    offenders = []
+    for rel in _P31B_WORKFLOW_COMPONENTS:
+        text = _read_text(rel)
+        for header in _p31b_header_blocks(text):
+            for href, label in anchor_pattern.findall(header):
+                key = label.strip()
+                want = expected.get(key)
+                if want and href != want:
+                    offenders.append((rel, key, href))
+    assert not offenders, \
+        f"Validation/Tasks shortcuts have wrong hrefs: {offenders}"
+    print("  Validation/Tasks shortcuts link to correct /app routes \u2713")
+
+
+def test_p31b_13_header_links_resolve_to_existing_app_routes():
+    """P31B-13: hrefs starting with /app/ inside toolbars resolve to known routes."""
+    print("\n=== Test P31B-13: header /app/ links resolve ===")
+    import re
+    href_pattern = re.compile(r'href="(/app/[^"#?]*)"')
+    known = set(_P31A_APP_ROUTES)
+    # /app/ index alias.
+    known |= {"/app"}
+    offenders = []
+    for rel in _P31B_WORKFLOW_COMPONENTS:
+        text = _read_text(rel)
+        for header in _p31b_header_blocks(text):
+            for href in href_pattern.findall(header):
+                normalised = href.rstrip("/") if href != "/app/" else href
+                if href in known:
+                    continue
+                if normalised in known:
+                    continue
+                # Allow trailing-slash variants for known routes.
+                if (href + "/") in known or href.rstrip("/") in {r.rstrip("/") for r in known}:
+                    continue
+                offenders.append((rel, href))
+    assert not offenders, \
+        f"Toolbar /app/ hrefs do not resolve to known routes: {offenders}"
+    print("  Toolbar /app/ hrefs resolve to existing routes \u2713")
+
+
+def test_p31b_14_no_raw_dark_palette_in_toolbar_sources():
+    """P31B-14: toolbar/header source does not embed raw dark palette literals."""
+    print("\n=== Test P31B-14: no raw dark palette in headers ===")
+    import re
+    forbidden_patterns = [
+        re.compile(r"\brgb\(\s*24\s+24\s+27\s*\)"),     # zinc-900
+        re.compile(r"\brgb\(\s*39\s+39\s+42\s*\)"),     # zinc-800
+        re.compile(r"\brgb\(\s*63\s+63\s+70\s*\)"),     # zinc-700
+        re.compile(r"\bbg-zinc-(?:700|800|900|950)\b"),
+        re.compile(r"\btext-zinc-(?:100|200|50)\b"),
+    ]
+    offenders = []
+    for rel in _P31B_WORKFLOW_COMPONENTS:
+        text = _read_text(rel)
+        for header in _p31b_header_blocks(text):
+            for pat in forbidden_patterns:
+                if pat.search(header):
+                    offenders.append((rel, pat.pattern))
+                    break
+    assert not offenders, \
+        f"Toolbar source contains raw dark palette literals: {offenders}"
+    print("  No raw dark palette literals in toolbar/header sources \u2713")
+
+
+def test_p31b_15_no_external_font_imports():
+    """P31B-15: global.css does not import external fonts."""
+    print("\n=== Test P31B-15: no external font imports ===")
+    css = _p31b_global_css()
+    lower = css.lower()
+    for needle in ("fonts.googleapis.com", "fonts.gstatic.com",
+                   "use.typekit.net", "fonts.bunny.net"):
+        assert needle not in lower, \
+            f"global.css must not reference {needle!r}"
+    # @import lines other than tailwindcss are not allowed.
+    import re
+    for m in re.finditer(r'@import\s+["\']([^"\']+)["\']', css):
+        value = m.group(1).lower()
+        assert value == "tailwindcss", \
+            f"global.css contains unexpected @import: {value!r}"
+    print("  No external font imports \u2713")
+
+
+def test_p31b_16_no_new_runtime_dependencies():
+    """P31B-16: Phase 31B introduces no new UI runtime dependency."""
+    print("\n=== Test P31B-16: no new UI runtime dependencies ===")
+    import json
+    pkg = json.loads(_read_text("ui/package.json"))
+    deps = set((pkg.get("dependencies") or {}).keys())
+    dev_deps = set((pkg.get("devDependencies") or {}).keys())
+    forbidden = {
+        "react", "react-dom",
+        "vue",
+        "lucide-react", "@heroicons/react", "react-icons",
+        "@radix-ui/react-icons",
+        "framer-motion", "motion",
+        "chart.js", "d3", "recharts", "echarts", "plotly.js",
+    }
+    sneaked_in = (deps | dev_deps) & forbidden
+    assert not sneaked_in, \
+        f"ui/package.json must not introduce {sorted(sneaked_in)} in Phase 31B"
+    print("  No React/Vue/charting/animation/icon dependencies \u2713")
+
+
+def test_p31b_17_roadmap_lists_phase31b_polish():
+    """P31B-17: ROADMAP.md documents Phase 31B as a UI polish/normalisation pass."""
+    print("\n=== Test P31B-17: ROADMAP Phase 31B entry ===")
+    text = _read_text("ROADMAP.md")
+    assert "Phase 31B" in text, "ROADMAP.md must mention Phase 31B"
+    lower = text.lower()
+    assert "header" in lower and "toolbar" in lower and "normalisation" in lower, \
+        "ROADMAP.md Phase 31B section must describe header/toolbar normalisation"
+    assert "polish" in lower, \
+        "ROADMAP.md Phase 31B section must label this as a polish pass"
+    # Phase 31B must not be presented as feature work.
+    for forbidden in (
+        "phase 31b adds a new feature",
+        "phase 31b introduces a new route",
+        "phase 31b starts phase 27",
+        "phase 31b starts phase 28",
+    ):
+        assert forbidden not in lower, \
+            f"ROADMAP.md must not claim {forbidden!r}"
+    # Status table row for 31B present.
+    assert "| 31B" in text, "ROADMAP.md status table must include a 31B row"
+    print("  ROADMAP.md describes Phase 31B as UI polish/normalisation \u2713")
+
+
+def test_p31b_18_roadmap_keeps_phase27_28_deferred():
+    """P31B-18: Phase 27 and Phase 28 remain Deferred after Phase 31B."""
+    print("\n=== Test P31B-18: Phase 27 and 28 still Deferred ===")
+    text = _read_text("ROADMAP.md")
+    assert "| 27    | Registry and Reuse Layer                | Deferred |" in text, \
+        "ROADMAP.md must keep Phase 27 Deferred"
+    assert "| 28    | Optional Semantic Retrieval             | Deferred |" in text, \
+        "ROADMAP.md must keep Phase 28 Deferred"
+    # Parent Phase 30 must remain Complete.
+    lower = text.lower()
+    assert ("parent phase 30 is complete" in lower
+            or "phase 30 (ui release quality pass) is complete" in lower
+            or "phase 30 is complete" in lower), \
+        "ROADMAP.md must keep Phase 30 Complete"
+    print("  Phase 27/28 Deferred and Phase 30 Complete \u2713")
+
+
+def test_p31b_19_ui_ux_audit_has_phase31b_note():
+    """P31B-19: UI_UX_AUDIT.md contains a Phase 31B header normalisation note."""
+    print("\n=== Test P31B-19: UI_UX_AUDIT Phase 31B note ===")
+    text = _read_text("UI_UX_AUDIT.md")
+    assert "Phase 31B" in text, "UI_UX_AUDIT.md must include a Phase 31B note"
+    lower = text.lower()
+    assert "toolbar" in lower or "header" in lower, \
+        "UI_UX_AUDIT.md Phase 31B note must describe the header/toolbar pass"
+    print("  UI_UX_AUDIT.md contains Phase 31B note \u2713")
+
+
+def test_p31b_20_release_checklist_has_header_visual_check():
+    """P31B-20: RELEASE_CHECKLIST.md lists a manual visual header consistency check
+    across all 15 /app routes."""
+    print("\n=== Test P31B-20: RELEASE_CHECKLIST header visual check ===")
+    text = _read_text("RELEASE_CHECKLIST.md")
+    lower = text.lower()
+    assert "header consistency" in lower or "header normalisation" in lower \
+        or "header/toolbar" in lower, \
+        "RELEASE_CHECKLIST.md must include a manual header consistency check"
+    # All 15 /app routes must still be listed.
+    missing = [r for r in _P31A_APP_ROUTES if r not in text]
+    assert not missing, \
+        f"RELEASE_CHECKLIST.md missing /app routes after Phase 31B: {missing}"
+    print("  RELEASE_CHECKLIST.md contains manual header visual check \u2713")
+
+
+def test_p31b_21_testing_md_has_phase31b_family():
+    """P31B-21: TESTING.md summarises the Phase 31B test family."""
+    print("\n=== Test P31B-21: TESTING.md Phase 31B summary ===")
+    text = _read_text("TESTING.md")
+    assert "Phase 31B" in text, "TESTING.md must summarise the Phase 31B test family"
+    lower = text.lower()
+    assert "toolbar" in lower and "normalisation" in lower, \
+        "TESTING.md Phase 31B summary must describe toolbar normalisation"
+    print("  TESTING.md summarises Phase 31B test family \u2713")
+
+
+def test_p31b_22_no_em_dashes_in_phase31b_docs():
+    """P31B-22: Docs touched by Phase 31B contain no em dashes."""
+    print("\n=== Test P31B-22: no em dashes in Phase 31B docs ===")
+    docs = ["ROADMAP.md", "TESTING.md", "README.md", "RELEASE_CHECKLIST.md",
+            "UI_UX_AUDIT.md"]
+    offenders = []
+    for name in docs:
+        if "\u2014" in _read_text(name):
+            offenders.append(name)
+    assert not offenders, \
+        f"Docs must not contain em dashes; offenders: {offenders}"
+    print("  No em dashes in Phase 31B docs \u2713")
 
 
 if __name__ == "__main__":

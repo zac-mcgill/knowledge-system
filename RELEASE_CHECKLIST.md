@@ -111,7 +111,7 @@ State explicitly: this checklist has not been performed automatically by Phase 3
 
 ## Pre-release Verification
 
-- [ ] `python mcp/test_verify.py` passes, all 999 tests green (no skips, no failures)
+- [ ] `python mcp/test_verify.py` passes, all 1021 tests green (no skips, no failures)
 - [ ] `python run.py validate` passes, all notes valid
 - [ ] `python run.py security` passes, status is `pass` or `warning` only (no `fail`)
 - [ ] `python run.py feedback` passes, exits 0, valid JSON
@@ -143,6 +143,22 @@ The UI is not release-quality today. Phase 30A (consolidated in `UI_UX_AUDIT.md`
 - [ ] Responsive pass at ultrawide (3440+ px), 1440p, 1080p, 1366x768, and narrow (mobile / tablet) breakpoints; workflow pages use internal scroll, not whole-page scroll, on long lists or long detail bodies
 - [ ] No raw Tailwind dark palette literals (`bg-zinc-*`, `text-zinc-*`, `border-zinc-*`, `bg-emerald-9*`, `bg-amber-9*`, `bg-rose-9*`, `bg-sky-9*`) remain on migrated pages
 - [ ] Generated artefact hygiene unchanged: `ui/dist/` and `dist/` remain untracked and are absent from `git status --short`
+
+---
+
+## Phase 31B - Header Consistency Visual Check
+
+Phase 31B normalises the `cve-toolbar` page header contract across all migrated /app routes. Source-level guardrails are tested automatically; the following manual visual check is required for each /app route before tagging a release that claims a consistent header system.
+
+Manual visual check across all 15 /app routes (`/app/`, `/app/vault-setup`, `/app/notes`, `/app/graph`, `/app/import`, `/app/bundles`, `/app/exports`, `/app/security`, `/app/validation`, `/app/tasks`, `/app/raw`, `/app/pending`, `/app/trust`, `/app/feedback`, `/app/controller`):
+
+- [ ] Page title typography is consistent across all 15 routes (size, weight, line height, colour)
+- [ ] Status pill placement, when present, is adjacent to the title and aligned to the same baseline
+- [ ] Vault selector size and position is consistent across routes that expose a vault selector
+- [ ] Action group ordering follows: utility nav (Validation, Tasks, Raw) -> Refresh -> page-specific primary action
+- [ ] Refresh actions render as buttons, never as links
+- [ ] Toolbar wraps cleanly at 1366x768 and narrow tablet/mobile widths with no horizontal overflow
+- [ ] Header consistency verified in both dark and light themes
 
 ---
 

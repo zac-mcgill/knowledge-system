@@ -233,9 +233,9 @@
 
   <header class="cve-toolbar" data-testid="controller-toolbar">
     <div class="cve-toolbar__main">
-      <div class="cve-toolbar__title">Controller</div>
+      <h1 class="cve-toolbar__title">Controller</h1>
       <span
-        class={statePillClass}
+        class="{statePillClass} cve-toolbar__status"
         data-testid="controller-state-pill"
         aria-live="polite"
       >
@@ -248,8 +248,9 @@
           id="controller-vault-select"
           bind:value={selectedVault}
           on:change={handleVaultChange}
-          class="cve-p30e2-inline-select"
+          class="cve-p30e2-inline-select cve-toolbar__select"
           disabled={vaultsLoading || !!vaultsError || vaultList.length === 0}
+          aria-label="Active vault"
         >
           {#if vaultList.length === 0}
             <option value="">No vaults available</option>
@@ -264,8 +265,9 @@
           id="controller-intent-select"
           bind:value={selectedIntent}
           on:change={handleIntentChange}
-          class="cve-p30e2-inline-select"
+          class="cve-p30e2-inline-select cve-toolbar__select"
           disabled={!selectedVault}
+          aria-label="Controller intent"
         >
           {#each INTENTS as intent}
             <option value={intent.value}>{intent.label}</option>
@@ -278,8 +280,9 @@
           type="button"
           on:click={loadAll}
           disabled={!selectedVault || stateLoadState === 'loading' || planLoadState === 'loading'}
-          class="cve-p30e2-btn"
+          class="cve-btn cve-btn-secondary"
           data-testid="controller-refresh"
+          aria-label="Refresh controller"
         >
           {stateLoadState === 'loading' || planLoadState === 'loading' ? 'Loading...' : 'Refresh'}
         </button>

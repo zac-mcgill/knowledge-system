@@ -3079,3 +3079,209 @@
   }
 }
 
+/* ------------------------------------------------------------------
+   Phase 31B - Toolbar normalisation
+   ------------------------------------------------------------------
+   Pure CSS pass that brings the `cve-toolbar` page header into a
+   single coherent system across all migrated /app routes. No new
+   tokens, no new dependencies, no external fonts. Every value
+   resolves through existing `--cve-*` tokens so the Phase 30F
+   light/dark themes stay coherent. Header markup remains the same
+   structure introduced in Phase 30B; this block tightens typography,
+   normalises action heights, gives the status pill a canonical slot,
+   and adds responsive wrapping guardrails so the header never
+   crushes the title or overflows at narrow viewports.
+   Canonical action ordering inside `cve-toolbar__actions` is:
+     1) utility nav: Validation, Tasks, Raw (links)
+     2) Refresh / Reload (button)
+     3) page-specific primary action (button)
+   Destructive actions live outside the toolbar action group.
+   ------------------------------------------------------------------ */
+@layer components {
+  /* Title block: stronger typography, balanced beside meta and
+     actions. Applies to both `<h1 class="cve-toolbar__title">` and
+     `<div class="cve-toolbar__title">` (existing markup variants).
+     `min-width: 0` lets the flex item shrink without forcing the
+     toolbar to overflow. */
+  .cve-toolbar__title {
+    font-size: 1.125rem;
+    font-weight: 600;
+    line-height: 1.3;
+    letter-spacing: -0.005em;
+    color: var(--cve-text-strong);
+    min-width: 0;
+    margin: 0;
+    margin-right: auto;
+  }
+  @media (min-width: 1024px) {
+    .cve-toolbar__title {
+      font-size: 1.25rem;
+    }
+  }
+  /* Optional subtitle / context line directly under the title.
+     Kept small and muted so it does not compete visually. */
+  .cve-toolbar__subtitle {
+    display: block;
+    font-size: 0.8125rem;
+    font-weight: 400;
+    line-height: 1.4;
+    color: var(--cve-text-muted);
+    margin-top: 0.125rem;
+  }
+  /* Status pill slot beside the title. Status remains communicated
+     via accessible text, not colour alone. */
+  .cve-toolbar__status {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.125rem 0.5rem;
+    border-radius: 999px;
+    border: 1px solid var(--cve-border);
+    background-color: var(--cve-surface-muted);
+    color: var(--cve-text);
+    font-size: 0.6875rem;
+    font-weight: 500;
+    line-height: 1.4;
+    white-space: nowrap;
+  }
+  /* Context group: vault selector and inline context details.
+     Acts as an alias of `cve-toolbar__meta` so pages can opt into a
+     more explicit class name without restructuring markup. */
+  .cve-toolbar__context {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--cve-space-2);
+    color: var(--cve-text-muted);
+    font-size: 0.8125rem;
+    min-width: 0;
+  }
+  /* Canonical select inside the toolbar. Heights and padding match
+     the canonical action height so the vault selector aligns with
+     adjacent buttons and links. */
+  .cve-toolbar__select {
+    appearance: auto;
+    width: auto;
+    flex: 0 0 auto;
+    height: 2rem;
+    padding: 0 0.625rem;
+    border-radius: var(--cve-radius);
+    border: 1px solid var(--cve-border);
+    background-color: var(--cve-surface);
+    color: var(--cve-text);
+    font-size: 0.8125rem;
+    line-height: 1.2;
+    min-width: 8rem;
+    max-width: 16rem;
+  }
+  /* Inline labels for selects inside the toolbar should never grow
+     to push controls onto a second row. */
+  .cve-toolbar__main .cve-label,
+  .cve-toolbar__meta .cve-label {
+    flex: 0 0 auto;
+    margin: 0;
+  }
+  /* Meta block itself should not steal the whole toolbar row; it
+     hugs its content and shares the row with actions and title. */
+  .cve-toolbar__meta {
+    flex: 0 1 auto;
+  }
+  .cve-toolbar__select:focus-visible {
+    outline: 2px solid var(--cve-focus);
+    outline-offset: 2px;
+  }
+  /* Canonical action heights, padding, gaps. Forces a consistent
+     baseline for buttons and links rendered inside the toolbar,
+     regardless of which existing button class they wear. */
+  .cve-toolbar__action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2rem;
+    padding: 0 0.75rem;
+    border-radius: var(--cve-radius);
+    font-size: 0.8125rem;
+    font-weight: 500;
+    line-height: 1.2;
+    white-space: nowrap;
+  }
+  .cve-toolbar__actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--cve-space-2);
+    row-gap: var(--cve-space-2);
+  }
+  .cve-toolbar__actions > .cve-btn,
+  .cve-toolbar__actions > .cve-link,
+  .cve-toolbar__actions > .cve-p30e2-btn,
+  .cve-toolbar__actions > .cve-details__developer-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2rem;
+    padding: 0 0.75rem;
+    border-radius: var(--cve-radius);
+    font-size: 0.8125rem;
+    font-weight: 500;
+    line-height: 1.2;
+    white-space: nowrap;
+  }
+  /* Variant tokens. These compose with `cve-toolbar__action` and use
+     existing semantic tokens. Pages can opt in without rewriting. */
+  .cve-toolbar__action--secondary {
+    background-color: var(--cve-surface);
+    border: 1px solid var(--cve-border);
+    color: var(--cve-text);
+  }
+  .cve-toolbar__action--primary {
+    background-color: var(--cve-accent-soft);
+    border: 1px solid var(--cve-accent);
+    color: var(--cve-text-strong);
+  }
+  .cve-toolbar__action--danger {
+    background-color: rgba(220, 38, 38, 0.15);
+    border: 1px solid var(--cve-danger);
+    color: var(--cve-text-strong);
+  }
+  /* Meta row also wraps cleanly and lets selects shrink. */
+  .cve-toolbar__meta {
+    flex-wrap: wrap;
+    min-width: 0;
+  }
+  .cve-toolbar__meta > .cve-select,
+  .cve-toolbar__meta > .cve-toolbar__select {
+    max-width: 16rem;
+  }
+  /* Responsive wrapping: at narrow widths the title takes a full row
+     while actions wrap below. Prevents the title being crushed by a
+     long vault name or many actions. */
+  .cve-toolbar {
+    flex-wrap: wrap;
+    row-gap: var(--cve-space-2);
+  }
+  .cve-toolbar__main {
+    flex-wrap: wrap;
+    row-gap: var(--cve-space-2);
+    min-width: 0;
+  }
+  @media (max-width: 768px) {
+    .cve-toolbar__title {
+      flex-basis: 100%;
+      margin-right: 0;
+    }
+    .cve-toolbar__actions {
+      width: 100%;
+      justify-content: flex-start;
+    }
+  }
+  /* Phase 31B - guardrail: ensure heading typography for `<h1>` and
+     `<div>` variants of the title remain identical so semantic
+     markup can be upgraded without visual regression. */
+  h1.cve-toolbar__title,
+  h2.cve-toolbar__title,
+  div.cve-toolbar__title {
+    font-family: inherit;
+  }
+}
+

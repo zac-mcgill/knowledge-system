@@ -403,7 +403,7 @@
           <label class="cve-label" for="graph-vault-select">Vault</label>
           <select
             id="graph-vault-select"
-            class="cve-select"
+            class="cve-select cve-toolbar__select"
             bind:value={selectedVault}
             on:change={onVaultChange}
             aria-label="Active vault"

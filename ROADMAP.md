@@ -96,6 +96,8 @@ Phase 30 (UI Release Quality Pass) is complete. Phase 29A (Roadmap formalisation
 
 Phase 31A (Release Candidate Verification) is release-candidate verification only. It prepares the project for a clean release candidate by documenting the automated verification command order, the manual browser visual QA matrix, the manual keyboard QA checklist, the manual screen-reader QA checklist, and release artefact hygiene rules in `RELEASE_CHECKLIST.md`. Phase 31A does not start Phase 27 (Registry and Reuse Layer) and does not start Phase 28 (Optional Semantic Retrieval); both remain Deferred. Phase 31A introduces no backend route, API contract, schema, MCP, or runtime dependency changes, performs no UI redesign or new feature work, adds no new write actions, and does not create a release tag or publish a GitHub release. Phase 30F automated source-level tests do not replace manual browser visual QA or screen-reader QA; those remain manual and are tracked in `RELEASE_CHECKLIST.md`.
 
+Phase 31B (App Header and Toolbar Normalisation Pass) is a focused UI polish and normalisation pass that sits on top of Phase 30 and Phase 31A. It normalises the `cve-toolbar` page header contract across all migrated /app routes so page title typography, the vault selector placement, status pills, Validation/Tasks/Refresh action ordering, and responsive wrapping behaviour are consistent. Phase 31B is a UI polish pass, not feature work: it makes no backend route, API contract, schema, or MCP changes, introduces no new runtime dependency, imports no external font, redesigns no page bodies, removes no routes, and adds no new write actions. Phase 31B does not start Phase 27 (Registry and Reuse Layer) and does not start Phase 28 (Optional Semantic Retrieval); both remain Deferred.
+
 ## Phase Status Overview
 
 | Phase | Name                                    | Status   |
@@ -141,6 +143,7 @@ Phase 31A (Release Candidate Verification) is release-candidate verification onl
 | 30E2  | Controller and Vault Setup polish       | Complete |
 | 30F   | Final QA, A11y, Responsive, Light Mode  | Complete |
 | 31A   | Release Candidate Verification          | Active   |
+| 31B   | App Header and Toolbar Normalisation    | Complete |
 | 27    | Registry and Reuse Layer                | Deferred |
 | 28    | Optional Semantic Retrieval             | Deferred |
 

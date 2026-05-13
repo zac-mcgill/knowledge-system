@@ -197,7 +197,7 @@
           <label class="cve-label" for="validation-vault-select">Vault</label>
           <select
             id="validation-vault-select"
-            class="cve-select"
+            class="cve-select cve-toolbar__select"
             value={selectedVault}
             on:change={handleVaultChange}
             aria-label="Active vault"

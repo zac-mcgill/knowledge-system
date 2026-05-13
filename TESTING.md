@@ -1,13 +1,13 @@
 # Context Vault Engine - Testing
 
-All tests live in `mcp/test_verify.py`. The suite currently has 999 test functions, all of which are executed by the manual runner in `main()` at the bottom of that file. A passing run prints `ALL VERIFICATION TESTS PASSED`. Historical test counts from earlier phases (272, 382, 429, 467, 507, 548, 553, 564, 587, 607, 625, 650, 675, 695, 706, 721, 740, 763, 787, 800, 818, 842, 866, 890, 913, 937, 985) appear later in this document as part of the phase changelog and are not the current total.
+All tests live in `mcp/test_verify.py`. The suite currently has 1021 test functions, all of which are executed by the manual runner in `main()` at the bottom of that file. A passing run prints `ALL VERIFICATION TESTS PASSED`. Historical test counts from earlier phases (272, 382, 429, 467, 507, 548, 553, 564, 587, 607, 625, 650, 675, 695, 706, 721, 740, 763, 787, 800, 818, 842, 866, 890, 913, 937, 985, 999) appear later in this document as part of the phase changelog and are not the current total.
 
 ## Current Verification Summary
 
 A full local verification consists of:
 
 ```bash
-py mcp/test_verify.py           # 999 tests, all must pass
+py mcp/test_verify.py           # 1021 tests, all must pass
 py run.py validate              # vault schema-compliance
 py run.py security              # status: pass (or warning, never fail)
 py run.py feedback              # exits 0, valid JSON
@@ -2636,3 +2636,31 @@ The Phase 30F automated tests do not replace any of these manual passes. A relea
 ### Release Artefact Hygiene
 
 `git status --short` should show no committed `dist/`, no committed `ui/dist/`, no committed runtime-generated artefacts (pending change snapshots, exported packages, security report dumps), no committed screenshots, no committed local reports, and no committed temporary files.
+
+---
+
+## Phase 31B - App Header and Toolbar Normalisation Pass
+
+Phase 31B is a focused UI polish pass that follows Phase 31A. It normalises the `cve-toolbar` page header contract across all migrated /app routes so page title typography, status pill placement, vault selector positioning, Validation/Tasks/Refresh action ordering, and responsive wrapping behaviour are consistent. Phase 31B is not feature work: it makes no backend route, API contract, schema, or MCP changes, introduces no new runtime dependency, imports no external font, redesigns no page bodies, removes no routes, and adds no new write actions. Phase 31B keeps Phase 27 (Registry and Reuse Layer) and Phase 28 (Optional Semantic Retrieval) Deferred.
+
+### Phase 31B Test Family
+
+The Phase 31B work adds 22 deterministic source-level guardrail tests in `mcp/test_verify.py`, bringing the total from 999 to 1021. The tests cover:
+
+- The Phase 31B toolbar normalisation block in `ui/src/styles/global.css`.
+- Canonical typography for `.cve-toolbar__title` (font-size, font-weight, line-height).
+- The `.cve-toolbar__status`, `.cve-toolbar__context`, `.cve-toolbar__select`, `.cve-toolbar__action` (plus `--primary`, `--secondary`, `--danger`) class contracts.
+- Responsive wrapping behaviour with `flex-wrap` and a narrow-viewport media query.
+- Consistent action padding, min-height, and gap on toolbar actions.
+- Every migrated workflow component (Dashboard, VaultSetup, NoteBrowser, GraphExplorer, ImportReview, BundleBuilder, ExportPackage, SecurityScan, ValidationReview, TaskReview, RawDeveloperExplorer, PendingChanges, TrustEvidence, FeedbackWorkflow, ContextController) renders a `cve-toolbar` header.
+- `.cve-toolbar__title` is a semantic heading element, not a `<div>` or `<span>`.
+- Refresh, Reload, and Re-run actions are `<button>`, not `<a>`.
+- Validation and Tasks shortcuts, where present in a toolbar, link to `/app/validation` and `/app/tasks`.
+- Every `/app/*` href in a toolbar resolves to a known route.
+- No raw Tailwind dark palette literals appear in toolbar source.
+- No external font import is added to `global.css`.
+- No new React/Vue/charting/animation/icon dependency is introduced.
+- ROADMAP.md, UI_UX_AUDIT.md, RELEASE_CHECKLIST.md, and TESTING.md document the Phase 31B pass and keep Phase 27/28 Deferred.
+- No em dashes appear in Phase 31B-touched docs.
+
+Phase 31B does not perform browser visual verification or screen-reader traversal in the automated suite. A manual visual header consistency check across all 15 /app routes is tracked in `RELEASE_CHECKLIST.md`.

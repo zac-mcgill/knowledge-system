@@ -739,3 +739,35 @@ Phase 30F is the closing slice of Phase 30 (UI Release Quality Pass). It introdu
 ## 27. Phase 30 Closure Note (2026-05-13)
 
 Phase 30 (UI Release Quality Pass) is Complete. All sub-phases - 30A (screenshot-driven audit), 30B (app shell, theme, layout, and primitive foundation), 30C (Dashboard Redesign), 30D (Core Workflow Page Redesigns: 30D1 Validation/Tasks/Raw, 30D2 Notes/Graph, 30D3 Import/Bundles/Exports/Security), 30E (Review/Governance/Developer Polish: 30E1 Pending/Trust/Feedback, 30E2 Controller/Vault Setup), and 30F (Final QA, light mode, accessibility, responsive guardrails) - have shipped. Phase 27 (Registry and Reuse Layer) and Phase 28 (Optional Semantic Retrieval) remain explicitly Deferred and are not started, prepared, or implied by Phase 30 or any of its sub-phases. The audit's "No React needed" decision still stands; the local UI remained Astro + Svelte + Tailwind throughout, with no charting, animation, or icon library introduced.
+
+
+## 28. Phase 31B - App Header and Toolbar Normalisation Pass (2026-05-15)
+
+Phase 31B is a focused UI polish pass that normalises the `cve-toolbar` page header contract across every migrated /app route. The pass introduces no backend route, API contract, schema, or MCP changes, adds no new runtime dependency, imports no external font, redesigns no page bodies, removes no routes, and adds no new write actions. Phase 27 (Registry and Reuse Layer) and Phase 28 (Optional Semantic Retrieval) remain Deferred and are not started, prepared, or implied by Phase 31B.
+
+**Inconsistencies addressed.**
+
+- Page title elements were a mix of `<h1>`, `<div>`, and `<span>` with divergent font-size, weight, and line-height across workflow pages.
+- Status pills were rendered with bespoke palette utilities on some pages and with shared `cve-badge` styling on others.
+- Vault selectors and intent selectors used inconsistent heights and spacing, breaking baseline alignment with adjacent title and pill elements.
+- Refresh / Reload / Re-run controls were a mix of `<button>` and styled `<a>` elements; some used legacy per-phase button utilities (for example `cve-p30e2-btn`).
+- Toolbar action ordering varied: some pages placed Refresh before the utility shortcuts; others placed page-specific primary actions before Refresh.
+- Toolbar layout did not wrap cleanly at 1366x768 and narrow tablet/mobile widths on some pages.
+
+**Canonical header contract.**
+
+- Every migrated workflow page renders an `<header class="cve-toolbar">` containing a `cve-toolbar__main` block and a `cve-toolbar__actions` block.
+- The page title is a semantic heading element styled with `.cve-toolbar__title`.
+- Status pills use `.cve-toolbar__status` and are placed inside `cve-toolbar__main`.
+- Vault and intent selectors use `.cve-toolbar__select` and live inside the toolbar header, not inside a separate context bar.
+- Toolbar action buttons use `.cve-toolbar__action` (with `--primary` / `--secondary` / `--danger` modifiers where applicable) or the equivalent `cve-btn` / `cve-btn-secondary` primitives, never `<a>` elements.
+- Action group ordering: utility shortcuts (Validation, Tasks, Raw) -> Refresh -> page-specific primary action.
+- The toolbar wraps with `flex-wrap` and a narrow-viewport media query so all controls remain reachable at 1366x768 and at tablet/mobile widths without horizontal overflow.
+
+**Outcome.**
+
+- `ui/src/styles/global.css` gains a Phase 31B `@layer components` block defining `.cve-toolbar__title` typography, `.cve-toolbar__subtitle`, `.cve-toolbar__status`, `.cve-toolbar__context`, `.cve-toolbar__select`, `.cve-toolbar__action` (with `--primary` / `--secondary` / `--danger` modifiers), responsive wrap rules, and a narrow-viewport media query.
+- `VaultSetup.svelte` and `ContextController.svelte` are normalised onto the canonical header contract; legacy per-phase button classes are removed, refresh actions are buttons, and selectors gain `cve-toolbar__select` and aria-labels.
+- `mcp/test_verify.py` adds 22 deterministic Phase 31B guardrail tests (P31B-1 through P31B-22); total test count rises from 999 to 1021.
+- Phase 31B is Complete. Phase 27 and Phase 28 remain Deferred.
+- No new runtime dependencies, no external font imports, no charting/animation/icon libraries, and no em dashes in modified files.
