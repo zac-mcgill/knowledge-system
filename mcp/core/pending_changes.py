@@ -134,9 +134,13 @@ def _validate_content(content: str, norm_path: str, schema: Any) -> list[str]:
         except OSError as exc:
             return [f"Cannot write temp file for validation: {exc}"]
         try:
-            errors = _validate_file(str(tmp_note), str(tmp_root), schema)
+            # validate_file expects pathlib.Path arguments (it calls
+            # .relative_to() on the filepath internally).  Passing strings
+            # previously surfaced an opaque AttributeError to the user.
+            errors = _validate_file(tmp_note, tmp_root, schema)
         except Exception as exc:
-            return [f"Validation error: {exc}"]
+            logger.exception("validate_file raised for pending change")
+            return [f"Schema validator raised an internal error: {exc}"]
         if not errors:
             return []
         return [str(e) for e in errors] if isinstance(errors, list) else [str(errors)]

@@ -11283,6 +11283,8 @@ def main():
     test_p23_accept_stale_hash()
     test_p23_accepted_archived()
     test_p23_invalid_cannot_be_accepted()
+    test_p23_validate_content_no_path_str_regression()
+    test_p23_invalid_change_listable_and_not_acceptable()
     test_p23_json_sorted_keys()
     test_p23_http_list_pending()
     test_p23_http_create_note_draft()
@@ -17232,6 +17234,106 @@ def test_p23_invalid_cannot_be_accepted():
         accept_result = _pc.accept_pending_change(vault_name, change["id"])
         assert accept_result.get("status") == "error"
     print("  Invalid change correctly blocked from accept ✓")
+
+
+def test_p23_validate_content_no_path_str_regression():
+    """P23-16b: _validate_content must not surface a raw
+    \"'str' object has no attribute 'relative_to'\" AttributeError.
+
+    Regression test for the live-MCP issue where validate_file received
+    string arguments instead of pathlib.Path and crashed.
+    """
+    print("\n=== Test P23-16b: validate_content path-type regression ===")
+    with _p23_temp_vault() as (vault_name, vault_path):
+        from mcp.core import pending_changes as _pc
+        # Schema-valid fields → no validation errors expected at all.
+        result = _pc.create_note_draft(
+            vault_name,
+            "Fundamentals/PathRegression.md",
+            {
+                "type": "core-concept",
+                "domain": "fundamentals",
+                "status": "partial",
+                "has_key_principles": True,
+                "has_how_it_works": True,
+                "has_tradeoffs": True,
+                "difficulty": "intermediate",
+            },
+            "## Definition\n\nx\n\n## Why It Matters\n\nx\n\n"
+            "## Key Principles\n\n- x\n\n## How It Works\n\n1. x\n\n"
+            "## Examples\n\n- x\n\n## Pitfalls\n\n- x\n\n"
+            "## Trade-offs\n\n| Aspect | Benefit | Cost |\n"
+            "| --- | --- | --- |\n| a | b | c |\n\n## Related Concepts\n\n- x\n",
+        )
+        assert result.get("status") == "ok", result
+        change = result["data"]["change"]
+        for err in change.get("validation_errors") or []:
+            assert "object has no attribute 'relative_to'" not in err, (
+                f"Raw AttributeError leaked into validation_errors: {err}"
+            )
+            # No raw uncaught-exception markers should appear either.
+            assert not err.startswith("Validation error: '"), (
+                f"Validator raised raw Python error: {err}"
+            )
+    print("  No raw AttributeError leak from validate_file ✓")
+
+
+def test_p23_invalid_change_listable_and_not_acceptable():
+    """P23-16c: invalid pending changes are listable via status='invalid' and 'all',
+    and are blocked from acceptance.
+
+    Also verifies no direct vault note write occurs during draft creation.
+    """
+    print("\n=== Test P23-16c: invalid change listable + not acceptable ===")
+    with _p23_temp_vault() as (vault_name, vault_path):
+        from mcp.core import pending_changes as _pc
+        target = "Fundamentals/InvisibleInvalid.md"
+        # Schema-invalid status value ("draft" not in {complete, partial}).
+        result = _pc.create_note_draft(
+            vault_name, target,
+            {"type": "core-concept", "domain": "fundamentals", "status": "draft"},
+            "## Overview\n\nbody\n",
+        )
+        assert result.get("status") == "ok", result
+        change = result["data"]["change"]
+        assert change["status"] == "invalid", change
+        assert change["validation_status"] == "fail", change
+        # Validation errors must be actionable (mention a schema concept) and
+        # must not be the raw relative_to AttributeError.
+        joined = " | ".join(change["validation_errors"])
+        assert "relative_to" not in joined, joined
+
+        # No direct note write occurred.
+        assert not (vault_path / target).exists(), (
+            "create_note_draft must not write the target note to the vault"
+        )
+
+        # Listable via status='invalid'.
+        r_inv = _pc.list_pending_changes(vault_name, status="invalid")
+        assert r_inv.get("status") == "ok"
+        ids_inv = {c["id"] for c in r_inv["data"]["changes"]}
+        assert change["id"] in ids_inv, "Invalid change not listed under status='invalid'"
+
+        # Listable via status=None (i.e. 'all').
+        r_all = _pc.list_pending_changes(vault_name, status=None)
+        assert r_all.get("status") == "ok"
+        ids_all = {c["id"] for c in r_all["data"]["changes"]}
+        assert change["id"] in ids_all, "Invalid change not listed under status=None"
+
+        # Default status='pending' filter must NOT surface invalid changes.
+        r_pending = _pc.list_pending_changes(vault_name)
+        ids_pending = {c["id"] for c in r_pending["data"]["changes"]}
+        assert change["id"] not in ids_pending, (
+            "Invalid change incorrectly surfaced under default pending filter"
+        )
+
+        # Cannot be accepted.
+        accept = _pc.accept_pending_change(vault_name, change["id"])
+        assert accept.get("status") == "error"
+        assert accept["error"]["code"] in {"INVALID_PENDING_CHANGE", "VALIDATION_FAILED"}
+        # Still no direct write.
+        assert not (vault_path / target).exists()
+    print("  Invalid change is listable, not acceptable, and never written to vault ✓")
 
 
 def test_p23_json_sorted_keys():

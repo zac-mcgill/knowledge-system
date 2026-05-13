@@ -405,6 +405,7 @@
                 <option value="pending">Pending</option>
                 <option value="accepted">Accepted</option>
                 <option value="rejected">Rejected</option>
+                <option value="invalid">Invalid</option>
                 <option value="all">All</option>
               </select>
             </div>
