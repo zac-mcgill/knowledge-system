@@ -98,6 +98,8 @@ Phase 31A (Release Candidate Verification) is release-candidate verification onl
 
 Phase 31B (App Header and Toolbar Normalisation Pass) is a focused UI polish and normalisation pass that sits on top of Phase 30 and Phase 31A. It normalises the `cve-toolbar` page header contract across all migrated /app routes so page title typography, the vault selector placement, status pills, Validation/Tasks/Refresh action ordering, and responsive wrapping behaviour are consistent. Phase 31B is a UI polish pass, not feature work: it makes no backend route, API contract, schema, or MCP changes, introduces no new runtime dependency, imports no external font, redesigns no page bodies, removes no routes, and adds no new write actions. Phase 31B does not start Phase 27 (Registry and Reuse Layer) and does not start Phase 28 (Optional Semantic Retrieval); both remain Deferred.
 
+Phase 31C (Release Candidate Visual QA and Defect Triage) is a QA and defect-triage pass, not feature work. Phase 31C records the result of attempting a release-candidate visual QA pass over the 15 migrated /app routes. The automated agent that executed Phase 31C did not open a browser, did not exercise live keyboard traversal, and did not run an assistive technology, so the manual browser visual QA, keyboard QA, and screen-reader QA rows in `RELEASE_CHECKLIST.md` remain manual and unchecked. Phase 31C performed automated source-level verification only (`py mcp/test_verify.py`, `py run.py validate`, `py run.py security`, `py run.py feedback`, `py run.py export --overwrite`, `cd ui && npm run build`) and adds deterministic guardrails that prevent later documentation from overclaiming that rendered visual QA was performed automatically. Phase 31C makes no backend route, API contract, schema, or MCP changes, introduces no new runtime dependency, imports no external font, redesigns no page bodies, removes no routes, and adds no new write actions. Phase 31C does not start Phase 27 (Registry and Reuse Layer) and does not start Phase 28 (Optional Semantic Retrieval); both remain Deferred.
+
 ## Phase Status Overview
 
 | Phase | Name                                    | Status   |
@@ -142,8 +144,9 @@ Phase 31B (App Header and Toolbar Normalisation Pass) is a focused UI polish and
 | 30E1  | Pending/Trust/Feedback governance polish| Complete |
 | 30E2  | Controller and Vault Setup polish       | Complete |
 | 30F   | Final QA, A11y, Responsive, Light Mode  | Complete |
-| 31A   | Release Candidate Verification          | Active   |
+| 31A   | Release Candidate Verification          | Complete |
 | 31B   | App Header and Toolbar Normalisation    | Complete |
+| 31C   | RC Visual QA and Defect Triage          | Complete |
 | 27    | Registry and Reuse Layer                | Deferred |
 | 28    | Optional Semantic Retrieval             | Deferred |
 
@@ -1257,7 +1260,7 @@ Phase 30 does not supersede or start Phase 27 (Registry and Reuse Layer) or Phas
 
 ### Phase 31A - Release Candidate Verification
 
-**Status:** Active (post-Phase-30 release-candidate preparation). Phase 30 is complete. Phase 31A is release-candidate verification only. Phase 27 (Registry and Reuse Layer) and Phase 28 (Optional Semantic Retrieval) remain Deferred and are not started by Phase 31A.
+**Status:** Complete (post-Phase-30 release-candidate preparation). Phase 30 is complete. Phase 31A is release-candidate verification only. Phase 27 (Registry and Reuse Layer) and Phase 28 (Optional Semantic Retrieval) remain Deferred and are not started by Phase 31A.
 
 **Purpose**
 
@@ -1291,6 +1294,52 @@ Phase 31A automates only the existence of the manual checklist and the deferred 
 
 ```
 docs(release): add Phase 31A release-candidate verification checklist
+```
+
+---
+
+### Phase 31C - Release Candidate Visual QA and Defect Triage
+
+**Status:** Complete (release-candidate visual QA execution attempt). Phase 30 is complete. Phase 31A is complete. Phase 31B is complete. Phase 27 (Registry and Reuse Layer) and Phase 28 (Optional Semantic Retrieval) remain Deferred and are not started by Phase 31C.
+
+**Purpose**
+
+Phase 31A captured the release-candidate verification checklist and Phase 31B normalised the toolbar/header system. Phase 31C is the QA and defect-triage step that records the outcome of attempting an actual release-candidate visual QA pass over the 15 migrated /app routes.
+
+**Scope**
+
+- Run the full automated verification command set (`py mcp/test_verify.py`, `py run.py validate`, `py run.py security`, `py run.py feedback`, `py run.py export --overwrite`, `cd ui && npm run build`) on a clean working tree.
+- Statically inspect `ui/src/layouts/AppLayout.astro`, `ui/src/styles/global.css`, every `ui/src/pages/*.astro`, and every `ui/src/components/*.svelte` for obvious source-level defects (raw dark palette literals, missing `cve-toolbar` headers, unbounded raw/diff/table containers, new runtime dependencies, external font imports, new icon/animation libraries).
+- Honestly record which QA passes were and were not performed. The automated agent that ran Phase 31C did not open a browser, did not perform live keyboard traversal, and did not run a screen reader. The browser visual QA, keyboard QA, and screen-reader QA rows in `RELEASE_CHECKLIST.md` therefore remain manual and unchecked.
+- Add deterministic Phase 31C guardrails in `mcp/test_verify.py` that:
+  - confirm Phase 31C is documented as a release-candidate visual QA/defect triage pass,
+  - confirm Phase 31C documentation does not falsely claim that browser, keyboard, or screen-reader QA was performed automatically,
+  - confirm Phase 27 and Phase 28 remain Deferred,
+  - confirm Phase 30, Phase 31A, and Phase 31B remain Complete,
+  - confirm no em dashes were introduced in Phase 31C-touched docs.
+
+**Out of scope**
+
+- No backend route changes, API contract changes, schema changes, or MCP changes.
+- No new runtime dependencies, no React, Vue, charting, animation, or icon library, no external font.
+- No UI redesign, no new feature work, no new write actions, no route removal, no page consolidation.
+- No registry layer, no semantic retrieval, no LLM/RAG/cloud/SaaS work.
+- Phase 27 and Phase 28 are not started, prepared, or implied.
+- No release tag, no GitHub release.
+- No claim that rendered visual QA, live keyboard QA, or screen-reader QA passed unless actually performed by a human with the appropriate environment.
+
+**Outcome**
+
+The static source review found no new defects beyond what Phase 30F and Phase 31B already address: every migrated /app component uses the `cve-toolbar` header contract, raw/diff/table containers remain bounded by Phase 30F max-height rules, the workbench narrow-viewport fallback at 900px and the slide-over fallback at 640px are in place, focus-visible coverage is present, and no raw Tailwind dark palette literals or external font imports were reintroduced. No source fixes were required by Phase 31C. The manual browser visual QA, keyboard QA, and screen-reader QA rows in `RELEASE_CHECKLIST.md` remain unchecked because they require a human to perform; Phase 31C does not tick them.
+
+**Honesty note**
+
+Phase 31C executed only automated source-level checks and a static source review. It did not open a browser, did not perform live keyboard traversal, and did not run NVDA, JAWS, VoiceOver, or Narrator. Anyone preparing a release tag must still perform the manual checklist rows in `RELEASE_CHECKLIST.md` and record the result themselves.
+
+**Suggested Commit**
+
+```
+docs(release): record Phase 31C visual QA and defect triage outcome
 ```
 
 ---

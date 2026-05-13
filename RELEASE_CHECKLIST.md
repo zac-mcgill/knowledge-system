@@ -111,7 +111,7 @@ State explicitly: this checklist has not been performed automatically by Phase 3
 
 ## Pre-release Verification
 
-- [ ] `python mcp/test_verify.py` passes, all 1021 tests green (no skips, no failures)
+- [ ] `python mcp/test_verify.py` passes, all 1028 tests green (no skips, no failures)
 - [ ] `python run.py validate` passes, all notes valid
 - [ ] `python run.py security` passes, status is `pass` or `warning` only (no `fail`)
 - [ ] `python run.py feedback` passes, exits 0, valid JSON
@@ -159,6 +159,16 @@ Manual visual check across all 15 /app routes (`/app/`, `/app/vault-setup`, `/ap
 - [ ] Refresh actions render as buttons, never as links
 - [ ] Toolbar wraps cleanly at 1366x768 and narrow tablet/mobile widths with no horizontal overflow
 - [ ] Header consistency verified in both dark and light themes
+
+---
+
+## Phase 31C - Release Candidate Visual QA and Defect Triage
+
+Phase 31C is the release-candidate visual QA and defect-triage pass. It is not feature work and introduces no backend route, API contract, schema, MCP, or runtime dependency changes; no UI redesign, no new write actions, no route removal, and no page consolidation. Phase 27 (Registry and Reuse Layer) and Phase 28 (Optional Semantic Retrieval) remain Deferred.
+
+The automated agent that executed Phase 31C performed only automated source-level verification (`py mcp/test_verify.py`, `py run.py validate`, `py run.py security`, `py run.py feedback`, `py run.py export --overwrite`, `cd ui && npm run build`) plus a static source review of `ui/src/layouts/AppLayout.astro`, `ui/src/styles/global.css`, every `ui/src/pages/*.astro`, and every `ui/src/components/*.svelte`. The agent did not open a browser, did not perform live keyboard traversal, and did not run a screen reader. The static review found no new defects beyond what Phase 30F and Phase 31B already address, and no source fixes were applied.
+
+The manual visual QA matrix (Section B), keyboard QA checklist (Section C), and screen-reader QA checklist (Section D) above remain manual. They must be performed by a human running a real browser and, where applicable, a real assistive technology before any release tag claims those passes. Phase 31C does not tick those rows.
 
 ---
 

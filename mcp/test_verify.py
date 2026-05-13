@@ -11914,6 +11914,15 @@ def main():
     test_p31b_21_testing_md_has_phase31b_family()
     test_p31b_22_no_em_dashes_in_phase31b_docs()
 
+    # Phase 31C - Release Candidate Visual QA and Defect Triage
+    test_p31c_1_roadmap_documents_phase31c()
+    test_p31c_2_roadmap_status_table_marks_phase31c_complete()
+    test_p31c_3_roadmap_keeps_prior_phases_complete()
+    test_p31c_4_ui_ux_audit_has_phase31c_note()
+    test_p31c_5_release_checklist_manual_rows_unchecked()
+    test_p31c_6_readme_does_not_overclaim_qa()
+    test_p31c_7_no_em_dashes_in_phase31c_docs()
+
     print()
     print("=" * 60)
     print("ALL VERIFICATION TESTS PASSED")
@@ -19528,9 +19537,9 @@ def _repo_root():
 
 
 def test_doc_drift_readme_test_count():
-    """DOC-DRIFT-1: README quotes the current 1021-test total, no stale counts."""
+    """DOC-DRIFT-1: README quotes the current 1028-test total, no stale counts."""
     readme = (_repo_root() / "README.md").read_text(encoding="utf-8")
-    assert "1021" in readme, "README.md must mention the current test count 1021"
+    assert "1028" in readme, "README.md must mention the current test count 1028"
     stale_phrases = [
         "553 deterministic tests",
         "548 deterministic tests",
@@ -19571,29 +19580,31 @@ def test_doc_drift_readme_test_count():
         "985 tests.",
         "999 deterministic tests",
         "999 tests.",
+        "1021 deterministic tests",
+        "1021 tests.",
     ]
     for phrase in stale_phrases:
         assert phrase not in readme, f"README.md still mentions stale phrase {phrase!r}"
-    print(f"  README mentions 1021 tests, no stale counts present ✓")
+    print(f"  README mentions 1028 tests, no stale counts present ✓")
 
 
 def test_doc_drift_testing_test_count():
-    """DOC-DRIFT-2: TESTING.md current total is 1021 and historical markers retained."""
+    """DOC-DRIFT-2: TESTING.md current total is 1028 and historical markers retained."""
     text = (_repo_root() / "TESTING.md").read_text(encoding="utf-8")
-    assert "1021 test functions" in text, "TESTING.md must state 1021 test functions"
-    for marker in ("429", "467", "507", "548", "564", "587", "607", "625", "650", "675", "695", "706", "721", "740", "763", "787", "800", "818", "842", "866", "890", "913", "937", "985", "999"):
+    assert "1028 test functions" in text, "TESTING.md must state 1028 test functions"
+    for marker in ("429", "467", "507", "548", "564", "587", "607", "625", "650", "675", "695", "706", "721", "740", "763", "787", "800", "818", "842", "866", "890", "913", "937", "985", "999", "1021"):
         assert marker in text, f"TESTING.md must retain historical test-count marker {marker}"
-    print(f"  TESTING.md states 1021 functions and keeps historical markers ✓")
+    print(f"  TESTING.md states 1028 functions and keeps historical markers ✓")
 
 
 def test_doc_drift_release_checklist_test_count():
-    """DOC-DRIFT-3: RELEASE_CHECKLIST references 1021 tests and required commands."""
+    """DOC-DRIFT-3: RELEASE_CHECKLIST references 1028 tests and required commands."""
     text = (_repo_root() / "RELEASE_CHECKLIST.md").read_text(encoding="utf-8")
-    assert "1021" in text, "RELEASE_CHECKLIST.md must reference the 1021-test target"
+    assert "1028" in text, "RELEASE_CHECKLIST.md must reference the 1028-test target"
     for req in ("test_verify.py", "run.py validate", "run.py security",
                 "run.py export", "GitHub Release"):
         assert req in text, f"RELEASE_CHECKLIST.md must contain {req!r}"
-    print(f"  RELEASE_CHECKLIST mentions 1021 tests and required commands ✓")
+    print(f"  RELEASE_CHECKLIST mentions 1028 tests and required commands ✓")
 
 
 def test_doc_drift_roadmap_active_phase():
@@ -20982,10 +20993,10 @@ def test_p29e_19_readme_states_phase29_complete():
 
 def test_p29e_20_release_checklist_test_count_updated():
     """P29E-20: RELEASE_CHECKLIST.md references the current test count.
-    Phase 31B bumped the total from 999 to 1021."""
+    Phase 31C bumped the total from 1021 to 1028."""
     print("\n=== Test P29E-20: RELEASE_CHECKLIST test count ===")
     text = (_repo_root() / "RELEASE_CHECKLIST.md").read_text(encoding="utf-8")
-    assert "1021" in text, "RELEASE_CHECKLIST.md must reference the current 1021-test target"
+    assert "1028" in text, "RELEASE_CHECKLIST.md must reference the current 1028-test target"
     # The previous counts must not linger in the checklist after this phase.
     assert "all 763 tests green" not in text, \
         "RELEASE_CHECKLIST.md must not still say 'all 763 tests green'"
@@ -21009,7 +21020,9 @@ def test_p29e_20_release_checklist_test_count_updated():
         "RELEASE_CHECKLIST.md must not still say 'all 985 tests green'"
     assert "all 999 tests green" not in text, \
         "RELEASE_CHECKLIST.md must not still say 'all 999 tests green'"
-    print("  RELEASE_CHECKLIST.md references 1021 tests \u2713")
+    assert "all 1021 tests green" not in text, \
+        "RELEASE_CHECKLIST.md must not still say 'all 1021 tests green'"
+    print("  RELEASE_CHECKLIST.md references 1028 tests \u2713")
 
 
 def test_p29e_21_ui_ux_audit_has_phase29e_note():
@@ -25128,6 +25141,146 @@ def test_p31b_22_no_em_dashes_in_phase31b_docs():
     assert not offenders, \
         f"Docs must not contain em dashes; offenders: {offenders}"
     print("  No em dashes in Phase 31B docs \u2713")
+
+
+# ============================================================
+# Phase 31C - Release Candidate Visual QA and Defect Triage
+# ============================================================
+#
+# Phase 31C is a QA and defect-triage pass. The agent that executed
+# Phase 31C did not open a browser, did not perform live keyboard
+# traversal, and did not run a screen reader. The tests below are
+# documentation-honesty guardrails that lock that fact in and keep
+# Phase 27 and Phase 28 explicitly Deferred. They do not, and must
+# not, assert that rendered visual QA or screen-reader QA has been
+# performed.
+
+
+_P31C_DOCS = ("ROADMAP.md", "TESTING.md", "README.md",
+              "RELEASE_CHECKLIST.md", "UI_UX_AUDIT.md")
+
+
+def test_p31c_1_roadmap_documents_phase31c():
+    """P31C-1: ROADMAP.md documents Phase 31C as a RC visual QA / defect triage pass."""
+    print("\n=== Test P31C-1: ROADMAP documents Phase 31C ===")
+    text = _read_text("ROADMAP.md")
+    assert "Phase 31C" in text, "ROADMAP.md must mention Phase 31C"
+    lower = text.lower()
+    assert "visual qa" in lower and "defect triage" in lower, \
+        "ROADMAP.md Phase 31C section must describe visual QA and defect triage"
+    print("  ROADMAP.md documents Phase 31C \u2713")
+
+
+def test_p31c_2_roadmap_status_table_marks_phase31c_complete():
+    """P31C-2: ROADMAP.md status table records Phase 31C as Complete and keeps 27/28 Deferred."""
+    print("\n=== Test P31C-2: ROADMAP status table records Phase 31C Complete ===")
+    text = _read_text("ROADMAP.md")
+    # The status table row uses pipe-delimited Markdown; require both
+    # the phase id and the Complete marker on the same line.
+    found_row = False
+    for line in text.splitlines():
+        if line.strip().startswith("| 31C") and "Complete" in line:
+            found_row = True
+            break
+    assert found_row, \
+        "ROADMAP.md status table must contain a Phase 31C row marked Complete"
+    # Phase 27 and Phase 28 must remain Deferred in the same table.
+    deferred_27 = any(line.strip().startswith("| 27") and "Deferred" in line
+                      for line in text.splitlines())
+    deferred_28 = any(line.strip().startswith("| 28") and "Deferred" in line
+                      for line in text.splitlines())
+    assert deferred_27, "ROADMAP.md status table must keep Phase 27 Deferred"
+    assert deferred_28, "ROADMAP.md status table must keep Phase 28 Deferred"
+    print("  Phase 31C Complete; 27 and 28 Deferred \u2713")
+
+
+def test_p31c_3_roadmap_keeps_prior_phases_complete():
+    """P31C-3: ROADMAP.md keeps Phase 30, Phase 31A, and Phase 31B Complete."""
+    print("\n=== Test P31C-3: prior phases remain Complete ===")
+    text = _read_text("ROADMAP.md")
+    lines = text.splitlines()
+    # Phase 30F should remain Complete.
+    assert any(line.strip().startswith("| 30F") and "Complete" in line
+               for line in lines), \
+        "ROADMAP.md must keep Phase 30F Complete"
+    assert any(line.strip().startswith("| 31A") and "Complete" in line
+               for line in lines), \
+        "ROADMAP.md must record Phase 31A as Complete after Phase 31C"
+    assert any(line.strip().startswith("| 31B") and "Complete" in line
+               for line in lines), \
+        "ROADMAP.md must keep Phase 31B Complete"
+    print("  Phase 30F, 31A, 31B remain Complete \u2713")
+
+
+def test_p31c_4_ui_ux_audit_has_phase31c_note():
+    """P31C-4: UI_UX_AUDIT.md contains a Phase 31C section."""
+    print("\n=== Test P31C-4: UI_UX_AUDIT Phase 31C note ===")
+    text = _read_text("UI_UX_AUDIT.md")
+    assert "Phase 31C" in text, "UI_UX_AUDIT.md must contain a Phase 31C section"
+    lower = text.lower()
+    # The honesty stance must be recorded in the audit document.
+    assert "did not open a browser" in lower, \
+        "UI_UX_AUDIT.md Phase 31C note must state the agent did not open a browser"
+    assert "screen reader" in lower or "screen-reader" in lower, \
+        "UI_UX_AUDIT.md Phase 31C note must mention screen-reader status"
+    print("  UI_UX_AUDIT.md contains Phase 31C note \u2713")
+
+
+def test_p31c_5_release_checklist_manual_rows_unchecked():
+    """P31C-5: RELEASE_CHECKLIST.md keeps the manual visual/keyboard/screen-reader
+    QA rows unchecked. Phase 31C did not tick them."""
+    print("\n=== Test P31C-5: manual QA rows remain unchecked ===")
+    text = _read_text("RELEASE_CHECKLIST.md")
+    # No `[x]` ticks should appear anywhere in the checklist body.
+    # We assert the absence of the lowercase tick form, which is what
+    # GitHub-flavoured Markdown uses for a ticked task box. Sections
+    # like "Phase 31B - Header Consistency Visual Check" and the
+    # Browser Visual QA Matrix, Keyboard QA Checklist, and
+    # Screen-reader QA Checklist must remain `- [ ]`.
+    assert "- [x]" not in text and "- [X]" not in text, \
+        "RELEASE_CHECKLIST.md must keep manual rows unticked after Phase 31C"
+    # The checklist must still contain the Phase 31C section recording
+    # that the agent did not perform rendered visual QA.
+    assert "Phase 31C" in text, \
+        "RELEASE_CHECKLIST.md must contain a Phase 31C section"
+    lower = text.lower()
+    assert "did not open a browser" in lower, \
+        "RELEASE_CHECKLIST.md Phase 31C section must state the agent did not open a browser"
+    print("  Manual rows unchecked; Phase 31C honesty recorded \u2713")
+
+
+def test_p31c_6_readme_does_not_overclaim_qa():
+    """P31C-6: README.md must not claim that browser visual QA or screen-reader QA
+    has been performed automatically by Phase 31C."""
+    print("\n=== Test P31C-6: README honest about Phase 31C QA ===")
+    text = _read_text("README.md").lower()
+    forbidden_claims = (
+        "browser visual qa performed",
+        "browser visual qa passed",
+        "screen-reader qa performed",
+        "screen reader qa performed",
+        "screen-reader qa passed",
+        "screen reader qa passed",
+        "phase 31c performed browser visual qa",
+        "phase 31c performed screen-reader qa",
+        "phase 31c performed screen reader qa",
+    )
+    offenders = [c for c in forbidden_claims if c in text]
+    assert not offenders, \
+        f"README.md must not claim automated QA passed; offenders: {offenders}"
+    print("  README does not overclaim Phase 31C QA \u2713")
+
+
+def test_p31c_7_no_em_dashes_in_phase31c_docs():
+    """P31C-7: Docs touched by Phase 31C contain no em dashes."""
+    print("\n=== Test P31C-7: no em dashes in Phase 31C docs ===")
+    offenders = []
+    for name in _P31C_DOCS:
+        if "\u2014" in _read_text(name):
+            offenders.append(name)
+    assert not offenders, \
+        f"Docs must not contain em dashes; offenders: {offenders}"
+    print("  No em dashes in Phase 31C docs \u2713")
 
 
 if __name__ == "__main__":

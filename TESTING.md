@@ -1,13 +1,13 @@
 # Context Vault Engine - Testing
 
-All tests live in `mcp/test_verify.py`. The suite currently has 1021 test functions, all of which are executed by the manual runner in `main()` at the bottom of that file. A passing run prints `ALL VERIFICATION TESTS PASSED`. Historical test counts from earlier phases (272, 382, 429, 467, 507, 548, 553, 564, 587, 607, 625, 650, 675, 695, 706, 721, 740, 763, 787, 800, 818, 842, 866, 890, 913, 937, 985, 999) appear later in this document as part of the phase changelog and are not the current total.
+All tests live in `mcp/test_verify.py`. The suite currently has 1028 test functions, all of which are executed by the manual runner in `main()` at the bottom of that file. A passing run prints `ALL VERIFICATION TESTS PASSED`. Historical test counts from earlier phases (272, 382, 429, 467, 507, 548, 553, 564, 587, 607, 625, 650, 675, 695, 706, 721, 740, 763, 787, 800, 818, 842, 866, 890, 913, 937, 985, 999, 1021) appear later in this document as part of the phase changelog and are not the current total.
 
 ## Current Verification Summary
 
 A full local verification consists of:
 
 ```bash
-py mcp/test_verify.py           # 1021 tests, all must pass
+py mcp/test_verify.py           # 1028 tests, all must pass
 py run.py validate              # vault schema-compliance
 py run.py security              # status: pass (or warning, never fail)
 py run.py feedback              # exits 0, valid JSON
@@ -2664,3 +2664,24 @@ The Phase 31B work adds 22 deterministic source-level guardrail tests in `mcp/te
 - No em dashes appear in Phase 31B-touched docs.
 
 Phase 31B does not perform browser visual verification or screen-reader traversal in the automated suite. A manual visual header consistency check across all 15 /app routes is tracked in `RELEASE_CHECKLIST.md`.
+
+## Phase 31C - Release Candidate Visual QA and Defect Triage
+
+Phase 31C is a release-candidate visual QA and defect-triage pass. It is not feature work. Phase 31C executed the full automated verification command set on a clean working tree and statically inspected every `/app` route source file. Phase 31C did not open a browser, did not perform live keyboard traversal, and did not run a screen reader; the automated source-level tests in `mcp/test_verify.py` are not equivalent to rendered visual QA. The browser visual QA matrix, keyboard QA checklist, and screen-reader QA checklist rows in `RELEASE_CHECKLIST.md` remain manual and unchecked.
+
+Phase 31C makes no backend route, API contract, schema, MCP, or runtime dependency changes; no UI redesign; no new write actions; no route removal; no page consolidation; and no external font imports or new charting/animation/icon libraries. Phase 27 (Registry and Reuse Layer) and Phase 28 (Optional Semantic Retrieval) remain Deferred and are not started, prepared, or implied by Phase 31C.
+
+### Phase 31C Test Family
+
+Phase 31C adds 7 deterministic source-level documentation-honesty guardrail tests in `mcp/test_verify.py` (P31C-1 through P31C-7), bringing the total from 1021 to 1028. The tests cover:
+
+- ROADMAP.md documents Phase 31C as a release-candidate visual QA and defect triage pass.
+- ROADMAP.md status table records Phase 31C as Complete and keeps Phase 27 and Phase 28 Deferred.
+- ROADMAP.md keeps Phase 30 Complete and Phase 31A and Phase 31B Complete.
+- UI_UX_AUDIT.md contains a Phase 31C section.
+- RELEASE_CHECKLIST.md keeps the manual visual, keyboard, and screen-reader QA rows unchecked.
+- README.md does not falsely claim automated visual or screen-reader QA passed.
+- No em dashes appear in Phase 31C-touched docs.
+
+Phase 31C explicitly does not assert that any rendered browser visual QA, live keyboard QA, or screen-reader QA has been performed. Any release tag that claims those passes must be backed by a human running them and ticking the corresponding rows in `RELEASE_CHECKLIST.md` manually.
+

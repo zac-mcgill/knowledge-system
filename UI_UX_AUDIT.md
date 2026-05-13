@@ -771,3 +771,30 @@ Phase 31B is a focused UI polish pass that normalises the `cve-toolbar` page hea
 - `mcp/test_verify.py` adds 22 deterministic Phase 31B guardrail tests (P31B-1 through P31B-22); total test count rises from 999 to 1021.
 - Phase 31B is Complete. Phase 27 and Phase 28 remain Deferred.
 - No new runtime dependencies, no external font imports, no charting/animation/icon libraries, and no em dashes in modified files.
+
+## 29. Phase 31C - Release Candidate Visual QA and Defect Triage (2026-05-13)
+
+Phase 31C is a QA and defect-triage pass executed after Phase 31B normalised the toolbar/header system. Phase 31C is not feature work and introduces no backend route, API contract, schema, MCP, or runtime dependency changes; no UI redesign, no new write actions, no route removal, no page consolidation, and no external font imports or charting/animation/icon libraries. Phase 27 (Registry and Reuse Layer) and Phase 28 (Optional Semantic Retrieval) remain Deferred and are not started, prepared, or implied by Phase 31C.
+
+**What Phase 31C did.**
+
+- Ran the full automated verification command set on a clean working tree: `py mcp/test_verify.py`, `py run.py validate`, `py run.py security`, `py run.py feedback`, `py run.py export --overwrite`, and `cd ui && npm run build`.
+- Statically inspected `ui/src/layouts/AppLayout.astro`, `ui/src/styles/global.css`, every `ui/src/pages/*.astro`, and every `ui/src/components/*.svelte` for source-level defects (raw Tailwind dark palette literals, missing toolbar headers, unbounded raw/diff/table containers, new runtime dependencies, external font imports, new charting/animation/icon libraries).
+- Recorded the routes inspected and the QA passes attempted in this section and in `RELEASE_CHECKLIST.md`.
+
+**What Phase 31C did NOT do.**
+
+- The automated agent that executed Phase 31C did not open a browser. No rendered visual QA was performed at any viewport.
+- The automated agent did not perform live keyboard traversal. No real Tab/Shift-Tab/Escape interaction was exercised.
+- The automated agent did not run NVDA, JAWS, VoiceOver, Narrator, or any other screen reader.
+- Therefore the browser visual QA matrix, keyboard QA checklist, and screen-reader QA checklist rows in `RELEASE_CHECKLIST.md` remain manual and unchecked.
+
+**Findings.**
+
+- The static source review found no new defects beyond what Phase 30F and Phase 31B already address. Every migrated /app component uses the `cve-toolbar` header contract; raw/diff/table containers remain bounded by Phase 30F max-height rules; the workbench narrow-viewport fallback at 900px and the slide-over fallback at 640px are in place; focus-visible coverage is present in both themes; no raw Tailwind dark palette literals or external font imports were reintroduced.
+- No source fixes were required by Phase 31C.
+
+**Tests added.**
+
+- `mcp/test_verify.py` gains Phase 31C documentation-honesty guardrails (P31C-1 through P31C-7) that lock in: Phase 31C is documented as a release-candidate visual QA/defect triage pass; the documentation does not falsely claim that browser, keyboard, or screen-reader QA was performed automatically; Phase 27 and Phase 28 remain Deferred; Phase 30, Phase 31A, and Phase 31B remain Complete; no em dashes were introduced in Phase 31C-touched docs.
+
