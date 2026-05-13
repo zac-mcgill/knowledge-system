@@ -1717,12 +1717,14 @@
     bottom: 0;
     z-index: 2;
     background-color: var(--cve-surface);
-    padding: var(--cve-space-3) 0 0;
+    padding: var(--cve-space-3) var(--cve-space-4);
     display: flex;
     flex-wrap: wrap;
     gap: var(--cve-space-2);
     align-items: center;
     margin-top: var(--cve-space-2);
+    border: 1px solid var(--cve-border-soft);
+    border-radius: var(--cve-radius);
   }
   .cve-p30d3-action-row {
     display: flex;
