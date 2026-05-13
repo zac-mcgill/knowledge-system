@@ -6,7 +6,7 @@ Use this checklist before tagging a release. All steps are local and determinist
 
 ## Pre-release Verification
 
-- [ ] `python mcp/test_verify.py` passes, all 937 tests green (no skips, no failures)
+- [ ] `python mcp/test_verify.py` passes, all 985 tests green (no skips, no failures)
 - [ ] `python run.py validate` passes, all notes valid
 - [ ] `python run.py security` passes, status is `pass` or `warning` only (no `fail`)
 - [ ] `python run.py feedback` passes, exits 0, valid JSON

@@ -686,3 +686,56 @@ Phase 30E2 closes out Phase 30E - Review, Governance, and Developer Polish. It r
 - New shared helper `ui/src/lib/phase30e2.ts` exposes `readinessPolarity`, `recommendationRoute`, `sortRecommendations`, `deleteConfirmPhrase`, `isDeleteConfirmed`, `VAULT_DELETE_PROTECTED`, and `VAULT_DELETE_SEMANTICS`; `buildRawDeepLink` is re-exported from `phase30e1`.
 - `ui/src/styles/global.css` gained a Phase 30E2 primitive block defining `cve-p30e2-*` helpers (page, pill, panel, controller-grid, form-grid, field, input, chip-list, validation-list, preview-list, mono). All declarations use `var(--cve-*)` tokens; no Tailwind dark palette literals were introduced.
 - `mcp/test_verify.py` adds 24 deterministic guardrail tests; total test count rises from 913 to 937. Phase 30E is now Complete; Phase 30F (final UI QA pass) remains Planned. Phase 27 and Phase 28 remain Deferred.
+
+### Phase 30F - Final QA, Light Mode, Accessibility, and Responsive Guardrails (2026-05-13)
+
+Phase 30F is the closing slice of Phase 30 (UI Release Quality Pass). It introduces the user-facing light/dark theme toggle, completes the `--cve-*` token sweep across both `html[data-theme="dark"]` and `html[data-theme="light"]`, tokenises the AppLayout chrome, and adds deterministic source-level guardrails covering accessibility, responsive layout, write-safety, and route integrity. It does not touch backend routes, schemas, MCP, or runtime dependencies.
+
+**Honesty note (manual versus automated QA).** Phase 30F automates only source-level, deterministic guardrails in `mcp/test_verify.py`. Browser visual verification across breakpoints, live keyboard traversal, and screen-reader announcements are manual checks recorded in `RELEASE_CHECKLIST.md`. This audit does not claim those manual checks were automated.
+
+**Theme and light mode (delivered).**
+
+- `ui/src/layouts/AppLayout.astro` exposes a user-facing light/dark theme toggle button on both the desktop and mobile top bars (`id="cve-theme-toggle"` and `id="cve-theme-toggle-mobile"`, both marked with `data-cve-theme-toggle`). The button declares an `aria-label`, `aria-pressed`, and a visible label sync hook (`data-cve-theme-label`) that stays in sync with the active theme.
+- An inline (non-hydrated) bootstrap script applies `data-theme` on `documentElement` before paint, defaulting to `dark` when no `cve-theme` localStorage preference is saved.
+- Preference persists under the `cve-theme` localStorage key. Toggling flips `readCurrent() === 'light' ? 'dark' : 'light'` and persists via `localStorage.setItem`.
+- The AppLayout chrome is fully tokenised through new `cve-app-chrome-bg`, `cve-app-chrome-border`, `cve-app-chrome-text-strong`, `cve-app-chrome-text-muted`, and `cve-app-chrome-text-faint` classes. No `bg-zinc-950`, `bg-zinc-900`, `text-zinc-100`, `text-zinc-500`, `text-zinc-400`, or `border-zinc-800` literal remains on chrome surfaces.
+- Every `--cve-*` token under `html[data-theme="dark"]` is also defined under `html[data-theme="light"]` (token parity). `color-scheme: dark light` is declared.
+
+**Responsive and large-list guardrails (source-level).**
+
+- `.cve-raw` now uses `var(--cve-raw-bg)` instead of a hard-coded hex and is vertically bounded with internal scroll. `.cve-diff` and `.cve-diff__body` declare `max-height` and `overflow-y`.
+- Tables use `cve-table-wrap` (or the Phase 30D3 `cve-p30d3-table-wrap` variant) with `overflow-x: auto` for horizontal scroll inside the container.
+- A new Phase 30F closure block in `ui/src/styles/global.css` adds a narrow-viewport workbench fallback at `@media (max-width: 900px)` that collapses `.cve-workbench` to a single column, and a full-width slide-over rule at `@media (max-width: 640px)`.
+- High-volume surfaces preserve bounded list/scroll contracts: FeedbackWorkflow and PendingChanges use the `cve-workbench__rail` + `cve-workbench__inspector` workbench; TrustEvidence and SecurityScan use table wraps; RawDeveloperExplorer uses `cve-raw`.
+
+**Accessibility guardrails (source-level).**
+
+- Form controls across migrated components have label coverage (`cve-label`, `<label>`, or `aria-label`).
+- Icon-only buttons across migrated components and AppLayout declare an accessible name via `aria-label` or `aria-labelledby`.
+- Status badges (`cve-badge`) carry text content - state is communicated by text, not by colour alone.
+- Slide-overs declare `role="dialog"`, `aria-modal="true"`, an accessible name (`aria-labelledby` or `aria-label`), and a visible Close control.
+- A `:focus-visible` rule applies to `.cve-btn`, `.cve-link`, `.cve-select`, `.cve-input`, `.cve-textarea`, and the new `.cve-theme-toggle`, with `outline: 2px solid var(--cve-focus); outline-offset: 2px;`.
+
+**Write-safety guardrails (reaffirmed).**
+
+- ExportPackage requires typed `OVERWRITE` confirmation and exposes a security gate contract.
+- ImportReview keeps the preview / write / confirm / stale separation; one preview required before any write.
+- VaultSetup keeps destructive delete behind a dedicated slide-over with typed `DELETE <vault>` confirmation, names the target vault, and protects `demo-vault`.
+- PendingChanges keeps typed Accept and Reject with provenance context.
+- FeedbackWorkflow Add Feedback routes through a `cve-slide-over` rather than an inline write.
+- SecurityScan defaults to full-vault scope and puts sampling/filter/max-notes under an Advanced scope disclosure.
+
+**Route integrity (source-level).**
+
+- Every static `/app/*` link in migrated UI resolves to an existing Astro route under `ui/src/pages/`.
+- No stale `/app/api` and no invented `/app/registry`, `/app/semantic`, `/app/search`, `/app/settings`, `/app/manage`, or `/app/admin` routes appear in migrated UI.
+
+**Outcome.**
+
+- `mcp/test_verify.py` adds 48 deterministic Phase 30F guardrail tests (P30F-1 through P30F-48); total test count rises from 937 to 985.
+- Phase 30F is Complete; parent Phase 30 (UI Release Quality Pass) is Complete. Phase 27 and Phase 28 remain Deferred.
+- No new runtime dependencies. No backend or schema changes. No new MCP tools. No em dashes in modified files.
+
+## 27. Phase 30 Closure Note (2026-05-13)
+
+Phase 30 (UI Release Quality Pass) is Complete. All sub-phases - 30A (screenshot-driven audit), 30B (app shell, theme, layout, and primitive foundation), 30C (Dashboard Redesign), 30D (Core Workflow Page Redesigns: 30D1 Validation/Tasks/Raw, 30D2 Notes/Graph, 30D3 Import/Bundles/Exports/Security), 30E (Review/Governance/Developer Polish: 30E1 Pending/Trust/Feedback, 30E2 Controller/Vault Setup), and 30F (Final QA, light mode, accessibility, responsive guardrails) - have shipped. Phase 27 (Registry and Reuse Layer) and Phase 28 (Optional Semantic Retrieval) remain explicitly Deferred and are not started, prepared, or implied by Phase 30 or any of its sub-phases. The audit's "No React needed" decision still stands; the local UI remained Astro + Svelte + Tailwind throughout, with no charting, animation, or icon library introduced.

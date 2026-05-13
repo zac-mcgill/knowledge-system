@@ -92,7 +92,7 @@ The backend is strong. The local UI has reached a usable application baseline. T
 
 ## Current Active Phase
 
-Phase 30 (UI Release Quality Pass). Phase 30A (screenshot-driven page-by-page UX audit consolidation) is complete. Phase 30B (app shell, theme, layout, and primitive foundation) is complete. Phase 30C (Dashboard Redesign) is complete. Phase 30D1 (Validation, Tasks, and Raw real implementations) is complete. Phase 30D2 (Notes and Graph workspace redesigns) is complete. Phase 30D3 (Import, Bundles, Exports, Security) is complete; the parent Phase 30D is therefore complete. Phases 0 to 26 and Phase 29 (UI/UX Quality and Design System) remain complete: Phase 29A (Roadmap formalisation and UI/UX audit), Phase 29B, Phase 29C, Phase 29D, and Phase 29E all shipped. Phase 27 (Registry and Reuse Layer) and Phase 28 (Optional Semantic Retrieval) remain explicitly deferred and are not started, prepared, or implied by Phase 30.
+Phase 30 (UI Release Quality Pass) is complete. Phase 29A (Roadmap formalisation and UI/UX audit), Phase 29B, Phase 29C, Phase 29D, and Phase 29E shipped earlier and remain complete. Phase 30A, 30B, 30C, 30D (30D1, 30D2, 30D3), 30E (30E1, 30E2), and 30F all shipped. Phase 30F delivered the user-facing light/dark theme toggle (persisted via the `cve-theme` localStorage key with a default-dark fallback), completed the `--cve-*` token sweep so every primitive has explicit dark and light values, tokenised the AppLayout chrome, added source-level accessibility and responsive guardrails (form labelling, icon-only button names, status-badge text, bounded raw/diff/table viewports, narrow-viewport workbench fallback), and reaffirmed write-safety contracts (typed `OVERWRITE`, typed `DELETE <vault>`, typed `ACCEPT` / `REJECT`, import preview/write separation). Parent Phase 30 is complete. Phase 27 (Registry and Reuse Layer) and Phase 28 (Optional Semantic Retrieval) remain explicitly deferred and are not started, prepared, or implied by Phase 30 or Phase 30F.
 
 ## Phase Status Overview
 
@@ -134,10 +134,10 @@ Phase 30 (UI Release Quality Pass). Phase 30A (screenshot-driven page-by-page UX
 | 30D1  | Validation, Tasks, Raw real impls       | Complete |
 | 30D2  | Notes and Graph workspace redesigns     | Complete |
 | 30D3  | Import, Bundles, Exports, Security      | Complete |
-| 30E   | Review/Governance/Developer Polish      | Complete (2026-05-13) |
+| 30E   | Review/Governance/Developer Polish      | Complete |
 | 30E1  | Pending/Trust/Feedback governance polish| Complete |
-| 30E2  | Controller and Vault Setup polish       | Complete (2026-05-13) |
-| 30F   | Final QA, A11y, Responsive, Light Mode  | Planned  |
+| 30E2  | Controller and Vault Setup polish       | Complete |
+| 30F   | Final QA, A11y, Responsive, Light Mode  | Complete |
 | 27    | Registry and Reuse Layer                | Deferred |
 | 28    | Optional Semantic Retrieval             | Deferred |
 
@@ -1205,7 +1205,23 @@ feat(ui): controller and vault setup polish (Phase 30E2)
 
 #### Phase 30F - Final QA, Accessibility, Responsive, Light Mode, and Guardrail Tests
 
-**Status:** Planned.
+**Status:** Complete (2026-05-13). Phase 30F is complete; parent Phase 30 (UI Release Quality Pass) is complete. Phase 27 and Phase 28 remain explicitly deferred.
+
+**Honesty note:** Phase 30F automated only source-level, deterministic guardrails in `mcp/test_verify.py`. Browser visual verification, screen-reader traversal, and live keyboard navigation are manual checks recorded in `RELEASE_CHECKLIST.md`. This roadmap does not claim those manual checks were automated.
+
+**Scope (delivered):**
+- User-facing light/dark theme toggle wired into `AppLayout.astro` for both desktop and mobile top bars. An inline (non-hydrated) bootstrap script applies `data-theme` on `documentElement` before paint, defaulting to `dark` when no preference is saved. Preference persists under the `cve-theme` localStorage key. The toggle declares `aria-label`, `aria-pressed`, and a visible text label that stay in sync with the active theme.
+- Token sweep: every `--cve-*` token defined under `html[data-theme="dark"]` is also defined under `html[data-theme="light"]`. Tokenised AppLayout chrome via `cve-app-chrome-bg`, `cve-app-chrome-border`, `cve-app-chrome-text-strong`, `cve-app-chrome-text-muted`, and `cve-app-chrome-text-faint` classes. Raw block now uses `var(--cve-raw-bg)` instead of a hard-coded hex.
+- Source-level accessibility guardrails: form controls across migrated components have label coverage (`cve-label`, `<label>`, or `aria-label`); icon-only buttons declare accessible names; status badges convey state with text, not colour alone; slide-overs declare `role="dialog"`, `aria-modal="true"`, an accessible name, and a Close control.
+- Responsive guardrails: `cve-raw` and `cve-diff` are bounded with internal vertical scroll; tables retain horizontal scroll inside `cve-table-wrap` (or the Phase 30D3 `cve-p30d3-table-wrap` variant); the workbench shell collapses to a single column at viewports under 900px; slide-overs collapse to full width under 640px.
+- Write-safety reaffirmed: ExportPackage requires typed `OVERWRITE`; ImportReview preserves the preview/write separation; VaultSetup keeps destructive delete behind a slide-over with typed `DELETE <vault>` confirmation and `demo-vault` protection; PendingChanges keeps typed Accept/Reject; FeedbackWorkflow Add Feedback routes through a slide-over.
+- Route integrity: every static `/app/*` link in migrated UI resolves to an existing Astro route. No stale `/app/api` or invented `/app/registry`, `/app/semantic`, `/app/search`, `/app/settings`, or admin routes appear in migrated UI.
+- Deterministic guardrail tests P30F-1 through P30F-48 added in `mcp/test_verify.py`.
+- No new runtime dependencies, no backend or schema changes, no new MCP tools, no em dashes in modified files.
+
+**Out of scope (explicitly):** Phase 27 (Registry and Reuse Layer) and Phase 28 (Optional Semantic Retrieval); any new feature; any backend route; LLM-driven UI behaviour; charting, animation, or icon libraries.
+
+**Original planned scope (now delivered):**
 
 **Scope:**
 - Light-mode toggle wired in once tokens cover every primitive across every migrated page.
@@ -1220,8 +1236,6 @@ feat(ui): controller and vault setup polish (Phase 30E2)
   - Destructive actions on Import, Exports, Security, Pending, and Vault Setup are visually separated and gated (banner, slide-over, typed confirmation, distinct button variant).
   - Deep-link contracts (raw inspection -> `/app/raw`, recommendations -> authoritative pages) resolve to real routes.
 - README, RELEASE_CHECKLIST, and TESTING updated to mark Phase 30 complete.
-
-**Out of scope:** Any new feature, any backend route, any deferred-phase work.
 
 **Suggested Commit**
 

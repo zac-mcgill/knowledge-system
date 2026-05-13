@@ -11839,6 +11839,41 @@ def main():
     test_p30f_14_no_em_dashes_in_30f_files()
     test_p30f_15_no_new_runtime_dependencies()
 
+    # Phase 30F — Final QA, light mode, accessibility, responsive guardrails
+    test_p30f_16_applayout_exposes_theme_toggle()
+    test_p30f_17_theme_toggle_has_accessible_name()
+    test_p30f_18_theme_toggle_persists_to_localstorage()
+    test_p30f_19_applayout_inline_theme_bootstrap()
+    test_p30f_20_default_theme_is_dark_when_no_preference()
+    test_p30f_21_theme_toggle_supports_dark_and_light()
+    test_p30f_22_global_css_token_parity_explicit()
+    test_p30f_23_color_scheme_dark_light_declared()
+    test_p30f_24_applayout_chrome_uses_tokens()
+    test_p30f_25_workflow_pages_layout_modes_match_contract()
+    test_p30f_26_validation_tasks_raw_not_placeholder()
+    test_p30f_27_raw_block_is_bounded()
+    test_p30f_28_workbench_scroll_contracts_in_workspace_pages()
+    test_p30f_29_table_and_diff_bounded_overflow_contracts()
+    test_p30f_30_form_controls_have_labels()
+    test_p30f_31_icon_only_buttons_have_accessible_names()
+    test_p30f_32_status_badges_carry_text()
+    test_p30f_33_destructive_actions_have_warning_wording()
+    test_p30f_34_slide_overs_have_accessible_names_and_close()
+    test_p30f_35_import_write_safety_contract_present()
+    test_p30f_36_export_overwrite_typed_confirmation_present()
+    test_p30f_37_security_full_vault_and_advanced_scope_present()
+    test_p30f_38_pending_typed_accept_reject_contract_present()
+    test_p30f_39_vault_setup_delete_management_separation_present()
+    test_p30f_40_feedback_add_action_visually_distinct()
+    test_p30f_41_static_app_links_resolve_across_migrated_ui()
+    test_p30f_42_no_stale_or_invented_app_routes()
+    test_p30f_43_large_list_guardrails_in_high_volume_pages()
+    test_p30f_44_phase27_28_still_deferred()
+    test_p30f_45_roadmap_30f_and_parent_30_complete()
+    test_p30f_46_docs_do_not_claim_browser_or_screen_reader_qa()
+    test_p30f_47_global_css_phase30f_closure_block_present()
+    test_p30f_48_workbench_narrow_viewport_fallback()
+
     print()
     print("=" * 60)
     print("ALL VERIFICATION TESTS PASSED")
@@ -19453,9 +19488,9 @@ def _repo_root():
 
 
 def test_doc_drift_readme_test_count():
-    """DOC-DRIFT-1: README quotes the current 937-test total, no stale counts."""
+    """DOC-DRIFT-1: README quotes the current 985-test total, no stale counts."""
     readme = (_repo_root() / "README.md").read_text(encoding="utf-8")
-    assert "937" in readme, "README.md must mention the current test count 937"
+    assert "985" in readme, "README.md must mention the current test count 985"
     stale_phrases = [
         "553 deterministic tests",
         "548 deterministic tests",
@@ -19490,29 +19525,31 @@ def test_doc_drift_readme_test_count():
         "890 tests.",
         "913 deterministic tests",
         "913 tests.",
+        "937 deterministic tests",
+        "937 tests.",
     ]
     for phrase in stale_phrases:
         assert phrase not in readme, f"README.md still mentions stale phrase {phrase!r}"
-    print(f"  README mentions 937 tests, no stale counts present ✓")
+    print(f"  README mentions 985 tests, no stale counts present ✓")
 
 
 def test_doc_drift_testing_test_count():
-    """DOC-DRIFT-2: TESTING.md current total is 937 and historical markers retained."""
+    """DOC-DRIFT-2: TESTING.md current total is 985 and historical markers retained."""
     text = (_repo_root() / "TESTING.md").read_text(encoding="utf-8")
-    assert "937 test functions" in text, "TESTING.md must state 937 test functions"
-    for marker in ("429", "467", "507", "548", "564", "587", "607", "625", "650", "675", "695", "706", "721", "740", "763", "787", "800", "818", "842", "866", "890", "913"):
+    assert "985 test functions" in text, "TESTING.md must state 985 test functions"
+    for marker in ("429", "467", "507", "548", "564", "587", "607", "625", "650", "675", "695", "706", "721", "740", "763", "787", "800", "818", "842", "866", "890", "913", "937"):
         assert marker in text, f"TESTING.md must retain historical test-count marker {marker}"
-    print(f"  TESTING.md states 937 functions and keeps historical markers ✓")
+    print(f"  TESTING.md states 985 functions and keeps historical markers ✓")
 
 
 def test_doc_drift_release_checklist_test_count():
-    """DOC-DRIFT-3: RELEASE_CHECKLIST references 937 tests and required commands."""
+    """DOC-DRIFT-3: RELEASE_CHECKLIST references 985 tests and required commands."""
     text = (_repo_root() / "RELEASE_CHECKLIST.md").read_text(encoding="utf-8")
-    assert "937" in text, "RELEASE_CHECKLIST.md must reference the 937-test target"
+    assert "985" in text, "RELEASE_CHECKLIST.md must reference the 985-test target"
     for req in ("test_verify.py", "run.py validate", "run.py security",
                 "run.py export", "GitHub Release"):
         assert req in text, f"RELEASE_CHECKLIST.md must contain {req!r}"
-    print(f"  RELEASE_CHECKLIST mentions 937 tests and required commands ✓")
+    print(f"  RELEASE_CHECKLIST mentions 985 tests and required commands ✓")
 
 
 def test_doc_drift_roadmap_active_phase():
@@ -20901,10 +20938,10 @@ def test_p29e_19_readme_states_phase29_complete():
 
 def test_p29e_20_release_checklist_test_count_updated():
     """P29E-20: RELEASE_CHECKLIST.md references the current test count.
-    Phase 30E2 bumped the total from 913 to 937."""
+    Phase 30F bumped the total from 937 to 985."""
     print("\n=== Test P29E-20: RELEASE_CHECKLIST test count ===")
     text = (_repo_root() / "RELEASE_CHECKLIST.md").read_text(encoding="utf-8")
-    assert "937" in text, "RELEASE_CHECKLIST.md must reference the current 937-test target"
+    assert "985" in text, "RELEASE_CHECKLIST.md must reference the current 985-test target"
     # The previous counts must not linger in the checklist after this phase.
     assert "all 763 tests green" not in text, \
         "RELEASE_CHECKLIST.md must not still say 'all 763 tests green'"
@@ -20922,7 +20959,9 @@ def test_p29e_20_release_checklist_test_count_updated():
         "RELEASE_CHECKLIST.md must not still say 'all 890 tests green'"
     assert "all 913 tests green" not in text, \
         "RELEASE_CHECKLIST.md must not still say 'all 913 tests green'"
-    print("  RELEASE_CHECKLIST.md references 937 tests ✓")
+    assert "all 937 tests green" not in text, \
+        "RELEASE_CHECKLIST.md must not still say 'all 937 tests green'"
+    print("  RELEASE_CHECKLIST.md references 985 tests ✓")
 
 
 def test_p29e_21_ui_ux_audit_has_phase29e_note():
@@ -21461,8 +21500,9 @@ def test_p30c_15_roadmap_phase30c_complete_others_planned():
             or "| 30E   | Review/Governance/Developer Polish      | In Progress" in text
             or "| 30E   | Review/Governance/Developer Polish      | Complete" in text), \
         "ROADMAP.md must mark Phase 30E Planned or In Progress"
-    assert "| 30F   | Final QA, A11y, Responsive, Light Mode  | Planned" in text, \
-        "ROADMAP.md must keep Phase 30F Planned"
+    assert ("| 30F   | Final QA, A11y, Responsive, Light Mode  | Planned" in text
+            or "| 30F   | Final QA, A11y, Responsive, Light Mode  | Complete" in text), \
+        "ROADMAP.md must keep Phase 30F Planned or mark it Complete"
     # Phase 27 and 28 stay deferred.
     assert "| 27" in text and "Deferred" in text, \
         "ROADMAP.md must keep Phase 27 deferred"
@@ -21835,16 +21875,17 @@ def test_p30d1_21_phase30d_not_marked_complete():
 
 
 def test_p30d1_22_phase30e_and_30f_planned():
-    """P30D1-22: Phase 30E and 30F remain Planned or 30E In Progress."""
-    print("\n=== Test P30D1-22: Phase 30E/30F planned ===")
+    """P30D1-22: Phase 30E and 30F tracked honestly (Planned, In Progress, or Complete)."""
+    print("\n=== Test P30D1-22: Phase 30E/30F tracked ===")
     text = _read_text("ROADMAP.md")
     assert ("| 30E   | Review/Governance/Developer Polish      | Planned" in text
             or "| 30E   | Review/Governance/Developer Polish      | In Progress" in text
             or "| 30E   | Review/Governance/Developer Polish      | Complete" in text), \
         "ROADMAP.md must mark Phase 30E Planned or In Progress"
-    assert "| 30F   | Final QA, A11y, Responsive, Light Mode  | Planned" in text, \
-        "ROADMAP.md must keep Phase 30F Planned"
-    print("  Phase 30E and 30F remain Planned ✓")
+    assert ("| 30F   | Final QA, A11y, Responsive, Light Mode  | Planned" in text
+            or "| 30F   | Final QA, A11y, Responsive, Light Mode  | Complete" in text), \
+        "ROADMAP.md must keep Phase 30F Planned or mark it Complete"
+    print("  Phase 30E and 30F tracked ✓")
 
 
 def test_p30d1_23_no_new_runtime_dependencies():
@@ -22204,16 +22245,17 @@ def test_p30d2_21_phase30d2_complete_and_30d_not_complete():
 
 
 def test_p30d2_22_phase30e_and_30f_planned():
-    """P30D2-22: Phase 30E and 30F remain Planned or 30E In Progress."""
-    print("\n=== Test P30D2-22: Phase 30E/30F planned ===")
+    """P30D2-22: Phase 30E and 30F tracked honestly (Planned, In Progress, or Complete)."""
+    print("\n=== Test P30D2-22: Phase 30E/30F tracked ===")
     text = _read_text("ROADMAP.md")
     assert ("| 30E   | Review/Governance/Developer Polish      | Planned" in text
             or "| 30E   | Review/Governance/Developer Polish      | In Progress" in text
             or "| 30E   | Review/Governance/Developer Polish      | Complete" in text), \
         "ROADMAP.md must mark Phase 30E Planned or In Progress"
-    assert "| 30F   | Final QA, A11y, Responsive, Light Mode  | Planned" in text, \
-        "ROADMAP.md must keep Phase 30F Planned"
-    print("  Phase 30E and 30F remain Planned ✓")
+    assert ("| 30F   | Final QA, A11y, Responsive, Light Mode  | Planned" in text
+            or "| 30F   | Final QA, A11y, Responsive, Light Mode  | Complete" in text), \
+        "ROADMAP.md must keep Phase 30F Planned or mark it Complete"
+    print("  Phase 30E and 30F tracked ✓")
 
 
 def test_p30d2_23_no_new_runtime_dependencies():
@@ -22621,13 +22663,13 @@ def test_p30d3_23_phase30d3_and_30d_complete():
             found_30d_complete = True
         if line.startswith("| 30E ") and ("Planned" in line or "In Progress" in line or "Complete" in line):
             found_30e_tracked = True
-        if line.startswith("| 30F") and "Planned" in line:
+        if line.startswith("| 30F") and ("Planned" in line or "Complete" in line):
             found_30f_planned = True
     assert found_30d3_complete, "ROADMAP.md must mark Phase 30D3 Complete"
     assert found_30d_complete, "ROADMAP.md must mark parent Phase 30D Complete"
     assert found_30e_tracked, "ROADMAP.md must keep Phase 30E Planned"
-    assert found_30f_planned, "ROADMAP.md must keep Phase 30F Planned"
-    print("  Phase 30D3 + parent 30D Complete; 30E tracked; 30F Planned ✓")
+    assert found_30f_planned, "ROADMAP.md must track Phase 30F (Planned or Complete)"
+    print("  Phase 30D3 + parent 30D Complete; 30E tracked; 30F tracked ✓")
 
 
 def test_p30d3_24_no_em_dashes_in_phase30d3_files():
@@ -23014,13 +23056,13 @@ def test_p30e1_22_phase30e1_complete_30e_in_progress():
             found_30e_tracked = True
         if line.startswith("| 30E2") and ("Planned" in line or "Complete" in line or "In Progress" in line):
             found_30e2_tracked = True
-        if line.startswith("| 30F") and "Planned" in line:
+        if line.startswith("| 30F") and ("Planned" in line or "Complete" in line):
             found_30f_planned = True
     assert found_30e1_complete, "ROADMAP must mark Phase 30E1 Complete"
     assert found_30e_tracked, "ROADMAP must mark parent Phase 30E In Progress"
     assert found_30e2_tracked, "ROADMAP must mark Phase 30E2 Planned"
-    assert found_30f_planned, "ROADMAP must keep Phase 30F Planned"
-    print("  ROADMAP: 30E1 Complete, 30E tracked, 30E2 tracked, 30F Planned ✓")
+    assert found_30f_planned, "ROADMAP must track Phase 30F (Planned or Complete)"
+    print("  ROADMAP: 30E1 Complete, 30E tracked, 30E2 tracked, 30F tracked ✓")
 
 
 def test_p30e1_23_no_em_dashes_and_no_new_deps():
@@ -23441,17 +23483,16 @@ def test_p30e2_21_roadmap_30e2_complete_parent_30e_complete():
             found_30e2 = True
         if line.startswith("| 30E ") and "Complete" in line:
             found_30e_parent = True
-        if line.startswith("| 30F") and "Planned" in line:
+        if line.startswith("| 30F") and ("Planned" in line or "Complete" in line):
             found_30f = True
         if line.startswith("| 30 ") and "Complete" in line:
             found_30_complete = True
     assert found_30e1, "ROADMAP must keep Phase 30E1 Complete"
     assert found_30e2, "ROADMAP must mark Phase 30E2 Complete"
     assert found_30e_parent, "ROADMAP must mark parent Phase 30E Complete"
-    assert found_30f, "ROADMAP must keep Phase 30F Planned"
-    assert not found_30_complete, \
-        "Phase 30 must NOT be marked Complete until Phase 30F lands"
-    print("  ROADMAP: 30E1+30E2+30E Complete, 30F Planned, 30 not Complete ✓")
+    assert found_30f, "ROADMAP must track Phase 30F (Planned or Complete)"
+    # Phase 30 may now be Complete because Phase 30F has landed.
+    print("  ROADMAP: 30E1+30E2+30E Complete, 30F tracked ✓")
 
 
 def test_p30e2_22_state_pills_present():
@@ -23753,6 +23794,614 @@ def test_p30f_15_no_new_runtime_dependencies():
     assert not sneaked_in, \
         f"ui/package.json must not introduce {sorted(sneaked_in)} in Phase 30F"
     print("  No new runtime dependencies introduced in Phase 30F ✓")
+
+
+# ============================================================
+# Phase 30F (continued) - Final QA, light mode, accessibility,
+# responsive guardrails, route integrity, and Phase 30 closure
+# ============================================================
+#
+# These tests are deterministic, source-level guardrails added during
+# the final Phase 30F pass. They do not perform browser, visual, or
+# screen-reader verification; the suite never claims those checks
+# were automated. Manual visual and screen-reader checks live in
+# RELEASE_CHECKLIST.md.
+
+
+_P30F_APP_LAYOUT = "ui/src/layouts/AppLayout.astro"
+_P30F_GLOBAL_CSS_PATH = "ui/src/styles/global.css"
+_P30F_MIGRATED_PAGES = (
+    "ui/src/pages/index.astro",
+    "ui/src/pages/notes.astro",
+    "ui/src/pages/graph.astro",
+    "ui/src/pages/import.astro",
+    "ui/src/pages/bundles.astro",
+    "ui/src/pages/exports.astro",
+    "ui/src/pages/security.astro",
+    "ui/src/pages/validation.astro",
+    "ui/src/pages/tasks.astro",
+    "ui/src/pages/feedback.astro",
+    "ui/src/pages/pending.astro",
+    "ui/src/pages/trust.astro",
+    "ui/src/pages/controller.astro",
+    "ui/src/pages/vault-setup.astro",
+    "ui/src/pages/raw.astro",
+)
+_P30F_MIGRATED_COMPONENTS = (
+    "ui/src/components/Dashboard.svelte",
+    "ui/src/components/NoteBrowser.svelte",
+    "ui/src/components/GraphExplorer.svelte",
+    "ui/src/components/ImportReview.svelte",
+    "ui/src/components/BundleBuilder.svelte",
+    "ui/src/components/ExportPackage.svelte",
+    "ui/src/components/SecurityScan.svelte",
+    "ui/src/components/ValidationReview.svelte",
+    "ui/src/components/TaskReview.svelte",
+    "ui/src/components/FeedbackWorkflow.svelte",
+    "ui/src/components/PendingChanges.svelte",
+    "ui/src/components/TrustEvidence.svelte",
+    "ui/src/components/ContextController.svelte",
+    "ui/src/components/VaultSetup.svelte",
+    "ui/src/components/RawDeveloperExplorer.svelte",
+)
+
+
+def test_p30f_16_applayout_exposes_theme_toggle():
+    """P30F-16: AppLayout exposes a user-facing theme toggle button."""
+    print("\n=== Test P30F-16: AppLayout exposes theme toggle ===")
+    text = _read_text(_P30F_APP_LAYOUT)
+    assert "data-cve-theme-toggle" in text, \
+        "AppLayout must include a button with data-cve-theme-toggle"
+    assert 'id="cve-theme-toggle"' in text, \
+        "AppLayout must include the desktop toggle id"
+    assert 'class="cve-theme-toggle"' in text, \
+        "AppLayout must use the cve-theme-toggle class on the button"
+    print("  AppLayout exposes a user-facing theme toggle button ✓")
+
+
+def test_p30f_17_theme_toggle_has_accessible_name():
+    """P30F-17: Theme toggle declares an accessible name and visible label."""
+    print("\n=== Test P30F-17: theme toggle accessibility ===")
+    text = _read_text(_P30F_APP_LAYOUT)
+    assert 'aria-label="Toggle colour theme' in text, \
+        "Theme toggle must declare an aria-label that describes the toggle"
+    assert "data-cve-theme-label" in text, \
+        "Theme toggle must include a visible label sync hook"
+    assert "currently dark" in text, \
+        "Theme toggle aria-label must communicate the current theme"
+    print("  Theme toggle has accessible name and visible label ✓")
+
+
+def test_p30f_18_theme_toggle_persists_to_localstorage():
+    """P30F-18: Theme toggle persists user preference to localStorage."""
+    print("\n=== Test P30F-18: theme toggle localStorage persistence ===")
+    text = _read_text(_P30F_APP_LAYOUT)
+    assert "'cve-theme'" in text or '"cve-theme"' in text, \
+        "Theme toggle must use the cve-theme localStorage key"
+    assert "localStorage.setItem" in text, \
+        "Theme toggle must persist with localStorage.setItem"
+    assert "localStorage.getItem" in text, \
+        "Theme bootstrap must read the saved preference"
+    print("  Theme toggle persists preference to localStorage ✓")
+
+
+def test_p30f_19_applayout_inline_theme_bootstrap():
+    """P30F-19: AppLayout includes an inline theme-bootstrap script."""
+    print("\n=== Test P30F-19: inline theme bootstrap ===")
+    text = _read_text(_P30F_APP_LAYOUT)
+    assert "is:inline" in text, \
+        "AppLayout must include an inline (non-hydrated) script tag"
+    assert "documentElement.setAttribute('data-theme'" in text, \
+        "Inline bootstrap must set data-theme on documentElement"
+    print("  Inline theme-bootstrap script present ✓")
+
+
+def test_p30f_20_default_theme_is_dark_when_no_preference():
+    """P30F-20: Default theme is dark when no localStorage preference."""
+    print("\n=== Test P30F-20: default-dark behaviour preserved ===")
+    text = _read_text(_P30F_APP_LAYOUT)
+    assert 'data-theme="dark"' in text, \
+        "AppLayout must render data-theme=\"dark\" by default"
+    assert "saved === 'light' ? 'light' : 'dark'" in text, \
+        "Inline bootstrap must fall back to dark when no saved preference"
+    print("  Default-dark behaviour preserved ✓")
+
+
+def test_p30f_21_theme_toggle_supports_dark_and_light():
+    """P30F-21: Toggle switches between light and dark data-theme values."""
+    print("\n=== Test P30F-21: theme toggle dark/light support ===")
+    text = _read_text(_P30F_APP_LAYOUT)
+    assert "'light'" in text and "'dark'" in text, \
+        "Theme toggle must reference both 'light' and 'dark' values"
+    assert "readCurrent() === 'light' ? 'dark' : 'light'" in text, \
+        "Theme toggle must flip between light and dark"
+    print("  Theme toggle supports both dark and light themes ✓")
+
+
+def test_p30f_22_global_css_token_parity_explicit():
+    """P30F-22: Every --cve-* token defined in dark is defined in light."""
+    print("\n=== Test P30F-22: explicit --cve-* token parity ===")
+    css = _read_text(_P30F_GLOBAL_CSS_PATH)
+    dark = _tokens_in_block(_theme_token_block(css, 'html[data-theme="dark"]'))
+    light = _tokens_in_block(_theme_token_block(css, 'html[data-theme="light"]'))
+    required = {
+        "--cve-bg", "--cve-surface", "--cve-surface-muted",
+        "--cve-border", "--cve-border-soft",
+        "--cve-text-strong", "--cve-text", "--cve-text-muted", "--cve-text-faint",
+        "--cve-accent", "--cve-accent-soft",
+        "--cve-success", "--cve-warning", "--cve-danger", "--cve-info",
+        "--cve-focus", "--cve-raw-bg",
+    }
+    missing_dark = required - dark
+    missing_light = required - light
+    assert not missing_dark, \
+        f"dark theme is missing tokens: {sorted(missing_dark)}"
+    assert not missing_light, \
+        f"light theme is missing tokens: {sorted(missing_light)}"
+    assert dark == light, \
+        f"dark and light token sets differ: only_dark={sorted(dark - light)} only_light={sorted(light - dark)}"
+    print(f"  {len(dark)} --cve-* tokens defined in both themes ✓")
+
+
+def test_p30f_23_color_scheme_dark_light_declared():
+    """P30F-23: color-scheme: dark light remains declared (CSS or html)."""
+    print("\n=== Test P30F-23: color-scheme: dark light declared ===")
+    css = _read_text(_P30F_GLOBAL_CSS_PATH)
+    layout = _read_text(_P30F_APP_LAYOUT)
+    assert "color-scheme: dark light" in css or "color-scheme: dark light" in layout, \
+        "color-scheme: dark light must remain declared"
+    print("  color-scheme: dark light declared ✓")
+
+
+def test_p30f_24_applayout_chrome_uses_tokens():
+    """P30F-24: AppLayout chrome uses tokenised classes, not dark-only literals."""
+    print("\n=== Test P30F-24: AppLayout chrome tokenised ===")
+    text = _read_text(_P30F_APP_LAYOUT)
+    required = (
+        "cve-app-chrome-bg",
+        "cve-app-chrome-border",
+        "cve-app-chrome-text-strong",
+        "cve-app-chrome-text-muted",
+        "cve-app-chrome-text-faint",
+    )
+    missing = [c for c in required if c not in text]
+    assert not missing, \
+        f"AppLayout chrome must use tokenised classes; missing: {missing}"
+    forbidden_chrome = (
+        "bg-zinc-950",
+        "bg-zinc-900",
+        "text-zinc-100",
+        "text-zinc-500",
+        "text-zinc-400",
+        "border-zinc-800",
+    )
+    offenders = [lit for lit in forbidden_chrome if lit in text]
+    assert not offenders, \
+        f"AppLayout chrome still uses dark-only literals: {offenders}"
+    print("  AppLayout chrome is fully tokenised ✓")
+
+
+def test_p30f_25_workflow_pages_layout_modes_match_contract():
+    """P30F-25: Each migrated page declares the expected layoutMode."""
+    print("\n=== Test P30F-25: workflow page layoutMode contract ===")
+    expected = {
+        "ui/src/pages/index.astro": "wide",
+        "ui/src/pages/notes.astro": "workspace",
+        "ui/src/pages/graph.astro": "workspace",
+        "ui/src/pages/import.astro": "wide",
+        "ui/src/pages/bundles.astro": "wide",
+        "ui/src/pages/exports.astro": "wide",
+        "ui/src/pages/security.astro": "wide",
+        "ui/src/pages/validation.astro": "wide",
+        "ui/src/pages/tasks.astro": "wide",
+        "ui/src/pages/feedback.astro": "workspace",
+        "ui/src/pages/pending.astro": "workspace",
+        "ui/src/pages/trust.astro": "wide",
+        "ui/src/pages/controller.astro": "wide",
+        "ui/src/pages/vault-setup.astro": "wide",
+        "ui/src/pages/raw.astro": "developer",
+    }
+    offenders = []
+    for path, mode in expected.items():
+        text = _read_text(path)
+        if f'layoutMode="{mode}"' not in text:
+            offenders.append((path, mode))
+    assert not offenders, \
+        f"Pages with unexpected layoutMode declarations: {offenders}"
+    print("  All migrated pages declare the expected layoutMode ✓")
+
+
+def test_p30f_26_validation_tasks_raw_not_placeholder():
+    """P30F-26: /app/validation, /app/tasks, /app/raw do not render PlaceholderPage."""
+    print("\n=== Test P30F-26: real components, not placeholders ===")
+    for path in (
+        "ui/src/pages/validation.astro",
+        "ui/src/pages/tasks.astro",
+        "ui/src/pages/raw.astro",
+    ):
+        text = _read_text(path)
+        assert "PlaceholderPage" not in text, \
+            f"{path} must not render PlaceholderPage"
+    print("  Validation, Tasks, and Raw render real components ✓")
+
+
+def test_p30f_27_raw_block_is_bounded():
+    """P30F-27: .cve-raw declares a bounded viewport (max-height and overflow)."""
+    print("\n=== Test P30F-27: raw block bounded viewport ===")
+    css = _read_text(_P30F_GLOBAL_CSS_PATH)
+    assert ".cve-raw" in css, "global.css must define .cve-raw"
+    assert "max-height" in css, \
+        "global.css must declare a max-height (Phase 30F closure adds bound on cve-raw)"
+    assert "overflow-y" in css, \
+        "cve-raw or its closure block must declare overflow-y for internal scroll"
+    print("  Raw block is vertically bounded with internal scroll ✓")
+
+
+def test_p30f_28_workbench_scroll_contracts_in_workspace_pages():
+    """P30F-28: Workspace pages preserve the workbench rail + inspector scroll contract."""
+    print("\n=== Test P30F-28: workspace scroll contracts ===")
+    workspace_components = (
+        "ui/src/components/NoteBrowser.svelte",
+        "ui/src/components/GraphExplorer.svelte",
+        "ui/src/components/FeedbackWorkflow.svelte",
+        "ui/src/components/PendingChanges.svelte",
+    )
+    offenders = []
+    for path in workspace_components:
+        text = _read_text(path)
+        if "cve-workbench" not in text:
+            offenders.append((path, "cve-workbench"))
+        if "cve-scroll-region" not in text and "cve-workbench__inspector" not in text:
+            offenders.append((path, "scroll/inspector"))
+    assert not offenders, \
+        f"Workspace components missing workbench/scroll contracts: {offenders}"
+    print("  Workspace pages preserve workbench scroll contracts ✓")
+
+
+def test_p30f_29_table_and_diff_bounded_overflow_contracts():
+    """P30F-29: Tables and diff blocks declare bounded overflow."""
+    print("\n=== Test P30F-29: table and diff bounded overflow ===")
+    css = _read_text(_P30F_GLOBAL_CSS_PATH)
+    table_idx = css.find(".cve-table-wrap")
+    assert table_idx >= 0, "global.css must define .cve-table-wrap"
+    table_block = css[table_idx:table_idx + 800]
+    assert "overflow-x: auto" in table_block, \
+        "cve-table-wrap must scroll horizontally inside the container"
+    assert ".cve-diff" in css, "global.css must define .cve-diff"
+    closure = css[css.find("Phase 30F - Final QA closure block"):]
+    assert "max-height" in closure and "overflow-y" in closure, \
+        "Phase 30F closure block must bound diff vertical overflow"
+    print("  Tables and diffs declare bounded overflow contracts ✓")
+
+
+def test_p30f_30_form_controls_have_labels():
+    """P30F-30: Form controls across migrated components have label coverage."""
+    print("\n=== Test P30F-30: form controls have labels/aria-label ===")
+    import re
+    tag_re = re.compile(r"<(input|select|textarea)\b([^>]*)>", re.IGNORECASE)
+    offenders = []
+    for path in _P30F_MIGRATED_COMPONENTS:
+        text = _read_text(path)
+        if "cve-label" in text or "<label" in text.lower() or "aria-label" in text:
+            continue
+        for m in tag_re.finditer(text):
+            attrs = m.group(2)
+            if 'type="hidden"' in attrs.lower():
+                continue
+            offenders.append((path, m.group(0)[:80]))
+            break
+    assert not offenders, \
+        f"Components with form controls lacking label coverage: {offenders[:5]}"
+    print("  Form controls across migrated components have label coverage ✓")
+
+
+def test_p30f_31_icon_only_buttons_have_accessible_names():
+    """P30F-31: Icon-only buttons declare aria-label."""
+    print("\n=== Test P30F-31: icon-only buttons have accessible names ===")
+    import re
+    button_re = re.compile(
+        r"<button\b([^>]*)>(.*?)</button>",
+        re.IGNORECASE | re.DOTALL,
+    )
+    svg_re = re.compile(r"<svg\b", re.IGNORECASE)
+    offenders = []
+    for path in _P30F_MIGRATED_COMPONENTS + (_P30F_APP_LAYOUT,):
+        text = _read_text(path)
+        for m in button_re.finditer(text):
+            attrs = m.group(1)
+            body = m.group(2)
+            stripped = re.sub(r"<svg\b.*?</svg>", "", body, flags=re.DOTALL | re.IGNORECASE)
+            stripped = re.sub(r"<[^>]+>", "", stripped).strip()
+            is_icon_only = svg_re.search(body) is not None and stripped == ""
+            if not is_icon_only:
+                continue
+            if "aria-label" in attrs or "aria-labelledby" in attrs:
+                continue
+            offenders.append((path, m.group(0)[:120]))
+    assert not offenders, \
+        f"Icon-only buttons without accessible names: {offenders[:3]}"
+    print("  Icon-only buttons have accessible names ✓")
+
+
+def test_p30f_32_status_badges_carry_text():
+    """P30F-32: Status badges/pills convey state with text, not colour alone."""
+    print("\n=== Test P30F-32: status badges include text ===")
+    import re
+    badge_re = re.compile(
+        r"<span\b[^>]*class=\"[^\"]*cve-badge[^\"]*\"[^>]*>(.*?)</span>",
+        re.IGNORECASE | re.DOTALL,
+    )
+    offenders = []
+    for path in _P30F_MIGRATED_COMPONENTS:
+        text = _read_text(path)
+        for m in badge_re.finditer(text):
+            body = m.group(1)
+            stripped = re.sub(r"<[^>]+>", "", body).strip()
+            if not stripped:
+                offenders.append((path, m.group(0)[:80]))
+    assert not offenders, \
+        f"Badges with no text content (colour-only): {offenders[:3]}"
+    print("  Status badges convey state with text, not colour only ✓")
+
+
+def test_p30f_33_destructive_actions_have_warning_wording():
+    """P30F-33: Write/destructive actions include explicit warning wording."""
+    print("\n=== Test P30F-33: destructive action wording ===")
+    contracts = {
+        "ui/src/components/ExportPackage.svelte": ("overwrite", "OVERWRITE"),
+        "ui/src/components/ImportReview.svelte": ("write", "preview"),
+        "ui/src/components/VaultSetup.svelte": ("DELETE", "permanently"),
+        "ui/src/components/PendingChanges.svelte": ("accept", "reject"),
+    }
+    offenders = []
+    for path, required_terms in contracts.items():
+        text = _read_text(path)
+        for term in required_terms:
+            if term not in text and term.lower() not in text.lower():
+                offenders.append((path, term))
+    assert not offenders, \
+        f"Destructive actions missing warning wording: {offenders}"
+    print("  Destructive actions include explicit warning wording ✓")
+
+
+def test_p30f_34_slide_overs_have_accessible_names_and_close():
+    """P30F-34: Slide-overs declare accessible names and a close control."""
+    print("\n=== Test P30F-34: slide-over accessibility ===")
+    slide_users = (
+        "ui/src/components/FeedbackWorkflow.svelte",
+        "ui/src/components/VaultSetup.svelte",
+    )
+    for path in slide_users:
+        text = _read_text(path)
+        assert "cve-slide-over" in text, f"{path} must use cve-slide-over"
+        assert 'role="dialog"' in text, \
+            f"{path} slide-over panel must declare role=dialog"
+        assert 'aria-modal="true"' in text, \
+            f"{path} slide-over panel must declare aria-modal"
+        assert "aria-labelledby=" in text or "aria-label=" in text, \
+            f"{path} slide-over must have an accessible name"
+        assert "Close" in text, \
+            f"{path} slide-over must include a Close control"
+    print("  Slide-overs declare accessible names and close controls ✓")
+
+
+def test_p30f_35_import_write_safety_contract_present():
+    """P30F-35: Import preview/write safety contract is present."""
+    print("\n=== Test P30F-35: import write-safety contract ===")
+    text_lower = _read_text("ui/src/components/ImportReview.svelte").lower()
+    for term in ("preview", "write", "confirm", "stale"):
+        assert term in text_lower, \
+            f"ImportReview must surface the {term!r} contract"
+    print("  Import write-safety contract present ✓")
+
+
+def test_p30f_36_export_overwrite_typed_confirmation_present():
+    """P30F-36: Export overwrite requires typed OVERWRITE confirmation."""
+    print("\n=== Test P30F-36: export overwrite typed confirmation ===")
+    text = _read_text("ui/src/components/ExportPackage.svelte")
+    assert "OVERWRITE" in text, \
+        "ExportPackage must require typed 'OVERWRITE' confirmation"
+    assert "security" in text.lower(), \
+        "ExportPackage must surface a security gate contract"
+    print("  Export overwrite typed-confirmation contract present ✓")
+
+
+def test_p30f_37_security_full_vault_and_advanced_scope_present():
+    """P30F-37: Security workflow uses full-vault default and Advanced scope."""
+    print("\n=== Test P30F-37: security full-vault + Advanced scope ===")
+    text = _read_text("ui/src/components/SecurityScan.svelte")
+    assert ("Full-vault" in text or "full vault" in text.lower()
+            or "FULL_VAULT_MAX_NOTES" in text), \
+        "SecurityScan must describe a full-vault default"
+    assert "Advanced scope" in text or "useAdvancedScope" in text, \
+        "SecurityScan must place sampling/filter/max-notes under Advanced scope"
+    print("  Security full-vault default and Advanced scope contract present ✓")
+
+
+def test_p30f_38_pending_typed_accept_reject_contract_present():
+    """P30F-38: Pending accept/reject requires typed confirmation."""
+    print("\n=== Test P30F-38: pending accept/reject contract ===")
+    text_lower = _read_text("ui/src/components/PendingChanges.svelte").lower()
+    assert "accept" in text_lower and "reject" in text_lower, \
+        "PendingChanges must expose both accept and reject paths"
+    assert "confirm" in text_lower, \
+        "PendingChanges must require explicit confirmation"
+    assert ("source" in text_lower or "target" in text_lower
+            or "path" in text_lower), \
+        "PendingChanges must surface source/target provenance"
+    print("  Pending typed accept/reject contract present ✓")
+
+
+def test_p30f_39_vault_setup_delete_management_separation_present():
+    """P30F-39: Vault Setup separates delete from onboarding and requires typed DELETE."""
+    print("\n=== Test P30F-39: vault setup delete contract ===")
+    text = _read_text("ui/src/components/VaultSetup.svelte")
+    assert "delete" in text.lower(), "VaultSetup must surface a delete action"
+    assert "DELETE" in text, "VaultSetup must require typed 'DELETE' confirmation"
+    assert "cve-slide-over" in text, \
+        "VaultSetup must locate delete inside a slide-over, not the onboarding form"
+    print("  Vault setup delete is gated and separated from onboarding ✓")
+
+
+def test_p30f_40_feedback_add_action_visually_distinct():
+    """P30F-40: Feedback Add action is a distinct, labelled button (not an accidental write)."""
+    print("\n=== Test P30F-40: feedback Add action distinct ===")
+    text = _read_text("ui/src/components/FeedbackWorkflow.svelte")
+    assert "Add Feedback" in text, \
+        "FeedbackWorkflow must surface a labelled 'Add Feedback' button"
+    assert "addOpen" in text or "cve-slide-over" in text, \
+        "FeedbackWorkflow Add must route through the slide-over"
+    print("  Feedback Add action is visually distinct ✓")
+
+
+def test_p30f_41_static_app_links_resolve_across_migrated_ui():
+    """P30F-41: Every static /app/* link in migrated UI resolves to an existing route."""
+    print("\n=== Test P30F-41: static /app/* links resolve ===")
+    import re
+    routes_dir = _repo_root() / "ui" / "src" / "pages"
+    existing = set()
+    for entry in routes_dir.iterdir():
+        if entry.suffix == ".astro":
+            existing.add("/app/" + entry.stem)
+    pattern = re.compile(r'href="(/app/[A-Za-z0-9_\-]+)(?:\?[^"]*)?"')
+    offenders = []
+    targets = list(_P30F_MIGRATED_COMPONENTS) + list(_P30F_MIGRATED_PAGES) + [_P30F_APP_LAYOUT]
+    for path in targets:
+        text = _read_text(path)
+        for m in pattern.finditer(text):
+            href = m.group(1)
+            if href not in existing:
+                offenders.append((path, href))
+    assert not offenders, \
+        f"Unresolved /app/* links in migrated UI: {offenders[:5]}"
+    print(f"  All static /app/* links resolve across {len(targets)} files ✓")
+
+
+def test_p30f_42_no_stale_or_invented_app_routes():
+    """P30F-42: No stale /app/api or invented deferred routes appear in migrated UI."""
+    print("\n=== Test P30F-42: no stale/invented /app routes ===")
+    forbidden = (
+        "/app/api",
+        "/app/registry",
+        "/app/semantic",
+        "/app/search",
+        "/app/settings",
+        "/app/manage",
+        "/app/admin",
+    )
+    offenders = []
+    for path in list(_P30F_MIGRATED_COMPONENTS) + list(_P30F_MIGRATED_PAGES) + [_P30F_APP_LAYOUT]:
+        text = _read_text(path)
+        for token in forbidden:
+            if token in text:
+                offenders.append((path, token))
+    assert not offenders, \
+        f"Stale or invented /app routes found: {offenders}"
+    print("  No stale or invented /app routes in migrated UI ✓")
+
+
+def test_p30f_43_large_list_guardrails_in_high_volume_pages():
+    """P30F-43: High-volume pages declare bounded list/scroll contracts."""
+    print("\n=== Test P30F-43: large-list guardrails ===")
+    surfaces = {
+        "ui/src/components/FeedbackWorkflow.svelte": ("cve-workbench__rail", "cve-workbench__inspector"),
+        "ui/src/components/PendingChanges.svelte": ("cve-workbench__rail",),
+        "ui/src/components/TrustEvidence.svelte": ("cve-table-wrap",),
+        "ui/src/components/RawDeveloperExplorer.svelte": ("cve-raw",),
+        "ui/src/components/SecurityScan.svelte": ("cve-table",),
+    }
+    offenders = []
+    for path, required in surfaces.items():
+        text = _read_text(path)
+        for token in required:
+            if token not in text:
+                offenders.append((path, token))
+    assert not offenders, \
+        f"Large-list guardrails missing: {offenders}"
+    print("  High-volume pages declare bounded list/scroll contracts ✓")
+
+
+def test_p30f_44_phase27_28_still_deferred():
+    """P30F-44: ROADMAP.md keeps Phase 27 and Phase 28 explicitly deferred."""
+    print("\n=== Test P30F-44: Phase 27/28 still deferred ===")
+    text = _read_text("ROADMAP.md")
+    assert "Phase 27" in text and "Phase 28" in text, \
+        "ROADMAP.md must mention Phase 27 and Phase 28"
+    assert "deferred" in text.lower(), \
+        "ROADMAP.md must explicitly note deferred phases"
+    for phrase in ("Phase 27 Complete", "Phase 28 Complete",
+                   "Phase 27 - Complete", "Phase 28 - Complete"):
+        assert phrase not in text, \
+            f"ROADMAP.md must not mark {phrase!r}"
+    print("  Phase 27 and Phase 28 remain deferred ✓")
+
+
+def test_p30f_45_roadmap_30f_and_parent_30_complete():
+    """P30F-45: ROADMAP marks Phase 30F and parent Phase 30 Complete."""
+    print("\n=== Test P30F-45: Phase 30F + parent 30 marked Complete ===")
+    text = _read_text("ROADMAP.md")
+    assert "Phase 30F" in text, "ROADMAP.md must mention Phase 30F"
+    lower = text.lower()
+    assert "phase 30f" in lower and "complete" in lower, \
+        "ROADMAP.md must mark Phase 30F as Complete"
+    assert ("phase 30 is complete" in lower
+            or "parent phase 30 is complete" in lower
+            or "phase 30 (ui release quality pass) is complete" in lower), \
+        "ROADMAP.md must mark parent Phase 30 Complete"
+    print("  ROADMAP marks Phase 30F and parent Phase 30 Complete ✓")
+
+
+def test_p30f_46_docs_do_not_claim_browser_or_screen_reader_qa():
+    """P30F-46: Phase 30 docs do not claim browser/screen-reader QA was performed."""
+    print("\n=== Test P30F-46: docs honest about manual QA ===")
+    forbidden_claims = (
+        "screen reader pass: verified",
+        "automated screen reader",
+        "browser visual qa performed",
+        "all keyboard traversal verified automatically",
+        "visual qa automated",
+    )
+    for doc in ("ROADMAP.md", "UI_UX_AUDIT.md", "TESTING.md",
+                "RELEASE_CHECKLIST.md", "README.md"):
+        text_lower = _read_text(doc).lower()
+        for claim in forbidden_claims:
+            assert claim not in text_lower, \
+                f"{doc} contains unsupported QA claim: {claim!r}"
+    print("  Docs do not claim browser or screen-reader QA was performed ✓")
+
+
+def test_p30f_47_global_css_phase30f_closure_block_present():
+    """P30F-47: global.css contains the Phase 30F closure block."""
+    print("\n=== Test P30F-47: Phase 30F closure block present ===")
+    css = _read_text(_P30F_GLOBAL_CSS_PATH)
+    assert "Phase 30F - Final QA closure block" in css, \
+        "global.css must include the Phase 30F closure block marker"
+    closure = css[css.find("Phase 30F - Final QA closure block"):]
+    assert "\u2014" not in closure, \
+        "Phase 30F closure block must not contain em dashes"
+    print("  Phase 30F closure block present ✓")
+
+
+def test_p30f_48_workbench_narrow_viewport_fallback():
+    """P30F-48: Workbench shell collapses to a single column on narrow viewports."""
+    print("\n=== Test P30F-48: workbench narrow viewport fallback ===")
+    css = _read_text(_P30F_GLOBAL_CSS_PATH)
+    closure = css[css.find("Phase 30F - Final QA closure block"):]
+    assert "@media (max-width: 900px)" in closure, \
+        "Phase 30F closure must declare a narrow-viewport workbench fallback"
+    assert ".cve-workbench" in closure, \
+        "Narrow-viewport fallback must target .cve-workbench"
+    assert "flex-direction: column" in closure, \
+        "Narrow-viewport fallback must collapse the workbench to a single column"
+    print("  Workbench narrow-viewport fallback declared ✓")
+
+
+def _tokens_in_block(block: str) -> set:
+    """Phase 30F helper: extract --cve-* token names from a CSS block.
+    Re-defined here in case the earlier Phase 30B helper is not in
+    scope at call time."""
+    import re
+    return set(re.findall(r"(--cve-[A-Za-z0-9_-]+)\s*:", block))
 
 
 if __name__ == "__main__":

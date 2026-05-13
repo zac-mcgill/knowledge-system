@@ -532,7 +532,7 @@
   /* Raw JSON / details block. Reused for the Developer raw view and
      any inline JSON or evidence inspector. */
   .cve-raw {
-    background-color: #0b0b0d;
+    background-color: var(--cve-raw-bg);
     border: 1px solid var(--cve-border-soft);
     border-radius: var(--cve-radius);
     padding: var(--cve-space-3);
@@ -3022,3 +3022,61 @@
     background-color: var(--cve-surface-muted);
   }
 }
+
+/* ------------------------------------------------------------------
+   Phase 30F - Final QA closure block
+   ------------------------------------------------------------------
+   Small responsive and accessibility guardrails layered on top of
+   the existing primitives. Adds bounded raw/diff containers, narrow
+   viewport fallbacks for the workbench and slide-over shells, and
+   focus-visible reinforcement for both themes. No new tokens are
+   introduced; everything composes existing --cve-* tokens so both
+   data-theme="dark" and data-theme="light" stay coherent.
+   ------------------------------------------------------------------ */
+@layer components {
+  /* Bounded raw/diff payloads: stop very large blocks from pushing
+     the workbench inspector out of view. The block already has
+     overflow-x; this adds a vertical bound. */
+  .cve-raw {
+    max-height: 70vh;
+  }
+  .cve-diff,
+  .cve-diff__body {
+    max-height: 70vh;
+    overflow-y: auto;
+  }
+  /* Narrow viewport fallback for the workbench shell: at small
+     widths the two-column rail+inspector collapses to a single
+     scrolling column so it stays usable. */
+  @media (max-width: 900px) {
+    .cve-workbench {
+      display: flex;
+      flex-direction: column;
+    }
+    .cve-workbench__rail,
+    .cve-workbench__inspector {
+      width: 100%;
+      max-width: 100%;
+      border-right: none;
+    }
+  }
+  /* Narrow viewport fallback for slide-overs: take full width on
+     small screens so the close control is reachable. */
+  @media (max-width: 640px) {
+    .cve-slide-over {
+      width: 100% !important;
+      max-width: 100%;
+    }
+  }
+  /* Focus-visible reinforcement for both themes. */
+  .cve-btn:focus-visible,
+  .cve-link:focus-visible,
+  .cve-select:focus-visible,
+  .cve-input:focus-visible,
+  .cve-textarea:focus-visible,
+  .cve-theme-toggle:focus-visible {
+    outline: 2px solid var(--cve-focus);
+    outline-offset: 2px;
+  }
+}
+

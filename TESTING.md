@@ -1,13 +1,13 @@
 # Context Vault Engine - Testing
 
-All tests live in `mcp/test_verify.py`. The suite currently has 937 test functions, all of which are executed by the manual runner in `main()` at the bottom of that file. A passing run prints `ALL VERIFICATION TESTS PASSED`. Historical test counts from earlier phases (272, 382, 429, 467, 507, 548, 553, 564, 587, 607, 625, 650, 675, 695, 706, 721, 740, 763, 787, 800, 818, 842, 866, 890, 913) appear later in this document as part of the phase changelog and are not the current total.
+All tests live in `mcp/test_verify.py`. The suite currently has 985 test functions, all of which are executed by the manual runner in `main()` at the bottom of that file. A passing run prints `ALL VERIFICATION TESTS PASSED`. Historical test counts from earlier phases (272, 382, 429, 467, 507, 548, 553, 564, 587, 607, 625, 650, 675, 695, 706, 721, 740, 763, 787, 800, 818, 842, 866, 890, 913, 937) appear later in this document as part of the phase changelog and are not the current total.
 
 ## Current Verification Summary
 
 A full local verification consists of:
 
 ```bash
-py mcp/test_verify.py           # 937 tests, all must pass
+py mcp/test_verify.py           # 985 tests, all must pass
 py run.py validate              # vault schema-compliance
 py run.py security              # status: pass (or warning, never fail)
 py run.py feedback              # exits 0, valid JSON
@@ -2563,3 +2563,42 @@ cd ui; npm run build             # builds without errors
 
 ---
 
+## Phase 30F - Final QA, Light Mode, Accessibility, and Responsive Guardrails
+
+Phase 30F is the closing slice of Phase 30 (UI Release Quality Pass). It delivers a user-facing light/dark theme toggle, completes the `--cve-*` token sweep across both `html[data-theme="dark"]` and `html[data-theme="light"]` so every primitive renders in either theme, tokenises the AppLayout chrome through new `cve-app-chrome-bg`, `cve-app-chrome-border`, `cve-app-chrome-text-strong`, `cve-app-chrome-text-muted`, and `cve-app-chrome-text-faint` classes, replaces the hard-coded raw block background with `var(--cve-raw-bg)`, and adds deterministic source-level guardrails covering accessibility (form labels, icon-only button names, status-badge text content, slide-over dialog wiring with role, modal flag, accessible name, and Close control), responsive layout (bounded `cve-raw` and `cve-diff` viewports, table overflow inside `cve-table-wrap` and `cve-p30d3-table-wrap`, narrow-viewport workbench fallback at under 900px, full-width slide-overs at under 640px), write-safety contracts on Import (preview/write separation), Export (typed `OVERWRITE`), Security (full-vault default + Advanced scope), Pending (typed Accept and Reject), Feedback (Add gated via slide-over), and Vault Setup (typed `DELETE <vault>` inside a dedicated slide-over with `demo-vault` protection), and route integrity (no stale `/app/api`, no invented `/app/registry`, `/app/semantic`, `/app/search`, `/app/settings`, `/app/manage`, or `/app/admin` routes anywhere in migrated UI).
+
+The user-facing light-mode toggle is wired in `AppLayout.astro` on both the desktop and mobile top bars. An inline (non-hydrated) bootstrap script applies `data-theme` on `documentElement` before paint, defaulting to `dark` when no preference is saved. The toggle persists user preference under the `cve-theme` localStorage key, exposes accessible name and pressed state via `aria-label` and `aria-pressed`, and keeps a visible text label that stays in sync with the active theme.
+
+Phase 30F does not perform browser visual verification or screen-reader traversal in the automated suite; those checks remain manual and are tracked in `RELEASE_CHECKLIST.md`. The Phase 30F work adds 48 deterministic guardrail tests (Phase 30F-1 through Phase 30F-48) in `mcp/test_verify.py`, bringing the total from 937 to 985. Phase 30F is Complete; parent Phase 30 (UI Release Quality Pass) is Complete. Phase 27 (Registry and Reuse Layer) and Phase 28 (Optional Semantic Retrieval) remain explicitly Deferred and are neither started nor implied.
+
+**Verification steps for Phase 30F:**
+
+```bash
+py mcp/test_verify.py            # 985 tests, all must pass
+py run.py validate               # vault still valid
+py run.py security               # status: pass
+py run.py feedback               # exits 0, valid JSON
+py run.py export --overwrite     # status: ok
+cd ui; npm run build             # builds without errors
+```
+
+---
+
+
+
+## Phase 30F - Final QA, Light Mode, Accessibility, and Responsive Guardrails
+
+Phase 30F is the closing slice of Phase 30 (UI Release Quality Pass). It delivers a user-facing light/dark theme toggle, completes the `--cve-*` token sweep across both `html[data-theme="dark"]` and `html[data-theme="light"]` so every primitive renders in either theme, tokenises the AppLayout chrome, and adds deterministic source-level guardrails covering accessibility (form labels, icon-only button names, status-badge text content, slide-over dialog wiring), responsive layout (bounded raw/diff viewports, table overflow wraps, narrow-viewport workbench fallback at under 900px, full-width slide-overs at under 640px), write-safety contracts on Import, Export, Security, Pending, Feedback, and Vault Setup, and route integrity (no stale `/app/api` and no invented `/app/registry`, `/app/semantic`, `/app/search`, `/app/settings`, `/app/manage`, or `/app/admin` routes). Phase 30F adds the user-facing light-mode toggle wired in `AppLayout.astro` with an inline pre-paint bootstrap script, persistence under the `cve-theme` localStorage key, accessible labelling that stays in sync with the active theme, and a default-dark fallback when no preference is saved. Phase 30F does not perform browser visual verification or screen-reader traversal in the automated suite; those checks remain manual and are tracked in `RELEASE_CHECKLIST.md`. The Phase 30F work adds 48 deterministic guardrail tests in `mcp/test_verify.py`, bringing the total from 937 to 985. Phase 30F is Complete; parent Phase 30 (UI Release Quality Pass) is Complete. Phase 27 (Registry and Reuse Layer) and Phase 28 (Optional Semantic Retrieval) remain explicitly Deferred and are neither started nor implied.
+
+**Verification steps for Phase 30F:**
+
+```bash
+py mcp/test_verify.py            # 985 tests, all must pass
+py run.py validate               # vault still valid
+py run.py security               # status: pass
+py run.py feedback               # exits 0, valid JSON
+py run.py export --overwrite     # status: ok
+cd ui; npm run build             # builds without errors
+```
+
+---
