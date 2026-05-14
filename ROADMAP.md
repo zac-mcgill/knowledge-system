@@ -132,6 +132,7 @@ The Phase Status Overview table in the next section is the single source of trut
 | 45    | Legacy Acronym Neutralisation (CVE)     | Planned  |
 | 46    | OpenAI-Compatible Context Gateway       | Planned  |
 | 47    | Runtime Mode Isolation and Local App Auth Recovery | Planned  |
+| 48    | Hierarchical Vault Navigation and Folder-Aware Note Browser | Planned  |
 | 27    | Registry and Reuse Layer                | Deferred |
 | 28    | Optional Semantic Retrieval             | Deferred |
 | 33    | Official Website and Public Docs        | Deferred |
@@ -144,6 +145,109 @@ The Phase Status Overview table in the next section is the single source of trut
 
 
 ### Phase 47 - Runtime Mode Isolation and Local App Auth Recovery
+
+### Phase 48 - Hierarchical Vault Navigation and Folder-Aware Note Browser
+
+**Status:** Planned.
+
+**Purpose**
+
+Make nested folders inside a single vault a first-class human navigation concept across the local web UI and supporting query surfaces, without changing Markdown as the source of truth or replacing the schema/graph model.
+
+**Background / Observed Issue**
+
+The architecture already treats a vault as a directory of Markdown files and supports vault-relative paths such as Fundamentals/Algorithms.md. This means subdirectories are compatible with the underlying model.
+
+However, human navigation through large vaults is easier when folders and breadcrumbs are visible. A flat notes list and semantic graph are not enough for day-to-day browsing once a vault grows beyond a small demo set.
+
+**Problem Statement**
+
+The current product model does not explicitly define folder-aware navigation as a planned capability. This risks a mismatch between backend path support and user-facing ergonomics.
+
+Users need to browse, filter, and understand vault content through nested filesystem structure while preserving the existing deterministic graph, schema, validation, import, backup, restore, and context-bundling behaviour.
+
+**Proposed Implementation Direction**
+
+- Add folder-tree navigation to /app/notes.
+- Add breadcrumbs for selected notes.
+- Preserve vault-relative POSIX paths as canonical note identifiers.
+- Add folder-aware filters or grouping to note browsing, query, context bundle selection, and export workflows where appropriate.
+- Keep filesystem hierarchy distinct from semantic graph hierarchy.
+- Optionally expose a read-only folder summary endpoint if implementation later determines it is useful.
+- Ensure imports preserve nested folder structure where already supported and surface that structure clearly in review.
+- Ensure backup and restore preserve nested paths and report them clearly.
+- Ensure pending changes and note-editing flows display full paths clearly to avoid writing to the wrong file.
+- Treat nested vaults inside another vault as unsupported unless a later phase explicitly designs safe exclusion and detection rules.
+
+**Deliverables**
+
+- Folder-aware note browser UX.
+- Folder tree or equivalent nested navigation component.
+- Breadcrumbs and full-path display in note detail views.
+- Folder filter/grouping support where useful.
+- Explicit handling of deeply nested vault-relative paths in tests.
+- Documentation explaining the distinction between:
+        - nested folders inside one vault;
+        - multiple registered vault roots;
+        - unsupported nested vault roots inside another vault.
+- Deterministic verification coverage across validation, notes listing, query, graph, context bundle, export, import, backup, restore, and pending-change path display.
+
+**Acceptance Criteria**
+
+- Nested folders inside a vault are visible and navigable in the UI.
+- Notes remain identified by stable vault-relative POSIX paths.
+- Folder hierarchy does not replace schema hierarchy or graph semantics.
+- Graph behaviour remains deterministic and based on schema/frontmatter relationships unless explicitly extended later.
+- Folder-aware browsing works for at least two nesting levels.
+- Deeply nested paths do not cause path traversal weaknesses.
+- Existing flat vaults and demo vaults continue to work unchanged.
+- No nested vault root support is claimed.
+- No semantic retrieval, embeddings, or LLM interpretation is introduced.
+- No autonomous note writing is introduced.
+
+**Non-goals**
+
+- No semantic retrieval.
+- No embeddings.
+- No LLM extraction.
+- No automatic note reorganisation.
+- No automatic folder restructuring.
+- No Obsidian replacement behaviour.
+- No nested vault roots inside another vault.
+- No change to Markdown as source of truth.
+- No change to the schema contract.
+- No graph rewrite.
+- No direct vault-write bypass.
+- No remote filesystem browser.
+
+**Safety Constraints**
+
+- Never allow folder filters, note paths, imports, backup, restore, or pending-change paths to bypass existing path traversal protections.
+- Do not infer trust from folder location.
+- Do not silently rewrite note paths.
+- Do not merge filesystem hierarchy with semantic graph hierarchy unless explicitly designed and tested.
+- Do not scan or import nested vault roots as ordinary child folders unless a later phase explicitly adds safe detection/exclusion.
+- Do not expose local absolute paths in normal UI where vault-relative paths are sufficient.
+
+**Suggested Verification Scope**
+
+Document future tests that should eventually prove:
+
+- nested note discovery works for folders within folders;
+- /notes and /query preserve full vault-relative paths;
+- graph generation remains deterministic with nested note paths;
+- context bundle and export include nested paths correctly;
+- import preview/write preserves or clearly maps nested source paths;
+- backup and restore preserve nested paths;
+- pending-change proposals display target paths unambiguously;
+- path traversal protections still reject unsafe .., absolute, null-byte, and backslash edge cases;
+- flat vaults remain unchanged.
+
+**Suggested Commit Message**
+
+```
+docs(roadmap): add hierarchical vault navigation phase
+```
 
 **Status:** Planned.
 
