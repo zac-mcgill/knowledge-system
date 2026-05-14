@@ -1,3 +1,17 @@
+## Unreleased - Phase 47 Runtime Mode Isolation Clarification
+
+Documentation-only update clarifying the findings from local Tailscale tunnel testing and refining the Phase 47 roadmap wording:
+
+- ROADMAP.md: Phase 47 section now clarifies that the observed 401 is not a backend auth bug or caused by Tailscale, but a mode-management and launcher UX issue due to inherited/private-cloud runtime state. Adds a mode matrix and explicit recovery/diagnostic guidance.
+- DEPLOYMENT.md: Adds a caution that Tailscale does not control Private Cloud Mode, and that tunnel/API testing should use deliberate Private Cloud configuration.
+- QUICKSTART.md: Adds a local recovery note for clearing inherited Private Cloud Mode environment variables.
+
+No runtime code, tests, API routes, UI changes, or artefacts are implemented in this phase.
+
+### Verification
+
+- Documentation-only; no runtime code, tests, or artefacts added.
+
 ## Unreleased - Phase 39A MCP Stdio Verification Batch Pass Documentation
 
 Documentation-only update recording the completion of Phase 39A (MCP Stdio Verification Batch Pass). A manual/copilot-assisted 12-batch verification pass validated the MCP stdio surface, catalogue, error handling, pending-change safety, documentation, UI build, boundary separation, artefact hygiene, and final release gate. No runtime code changes, no source modifications, and no commit were required by the verification itself. All verification, validation, security, feedback, export, smoke, and UI build commands passed from the repository root. Phase 42 (Context Health Recommendation Layer) is the next planned implementation phase. Phase 40 (Public Security Posture and Release Trust) and Phase 41 (Example Vaults and Demonstration Packs) are Deferred.

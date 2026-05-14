@@ -1,3 +1,19 @@
+---
+
+## Local App Launcher Recovery (if /app returns AUTH_REQUIRED)
+
+If you see a 401 AUTH_REQUIRED error after running `py run.py app`, you may have inherited Private Cloud Mode environment variables from a previous tunnel/API session. To recover, open a new terminal and run:
+
+```powershell
+Remove-Item Env:CVE_PRIVATE_CLOUD_ENABLED -ErrorAction SilentlyContinue
+Remove-Item Env:CVE_REQUIRE_AUTH -ErrorAction SilentlyContinue
+Remove-Item Env:CVE_REMOTE_READ_ONLY -ErrorAction SilentlyContinue
+Remove-Item Env:CVE_DEPLOYMENT_MODE -ErrorAction SilentlyContinue
+Remove-Item Env:CVE_AUTH_TOKEN -ErrorAction SilentlyContinue
+Remove-Item Env:CVE_PUBLIC_BASE_URL -ErrorAction SilentlyContinue
+```
+
+Then re-run `py run.py app` in a clean environment. This only affects the current terminal session unless variables were set persistently elsewhere.
 # Context Vault Engine - Quickstart
 
 This guide walks through an end-to-end session with Context Vault Engine: install, validate, analyse, generate a context bundle, export a package, run security scans, and use the API.

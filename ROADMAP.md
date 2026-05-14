@@ -142,6 +142,7 @@ The Phase Status Overview table in the next section is the single source of trut
 | 41    | Example Vaults and Demonstration Packs  | Deferred |
 
 
+
 ### Phase 47 - Runtime Mode Isolation and Local App Auth Recovery
 
 **Status:** Planned.
@@ -150,40 +151,72 @@ The Phase Status Overview table in the next section is the single source of trut
 
 Harden developer and user workflow around local app mode, private tunnel mode, and inherited environment variables. Prevent accidental mode leakage between local and private cloud/tunnel sessions, making transitions explicit, diagnosable, and difficult to misuse, without weakening authentication or exposing unauthenticated APIs.
 
-**Background / Observed Issue**
+**Clarified Findings from Local Tunnel Testing**
 
-Mobile private-tunnel testing (e.g. with Tailscale Serve and Private Cloud Mode) revealed that after closing the tunnel and returning to normal PC-local use, `py run.py app` can inherit `CVE_*` environment variables from the previous session:
+Recent mobile tunnel testing (Samsung S25 via Tailscale Serve to PC-hosted Context Vault Engine API) confirmed:
 
-- `CVE_PRIVATE_CLOUD_ENABLED=true`
-- `CVE_REQUIRE_AUTH=true`
-- `CVE_REMOTE_READ_ONLY=true`
-- `CVE_DEPLOYMENT_MODE=tunnel`
-- `CVE_AUTH_TOKEN=<set>`
+- Tailscale itself does **not** enable Private Cloud Mode; it only provides a private network path.
+- Private Cloud Mode is controlled by Context Vault Engine runtime configuration/environment state.
+- When Private Cloud Mode is active, `/app` and API routes require authentication, regardless of Tailscale status.
+- After disconnecting Tailscale and restarting in a clean environment, local app mode works as expected.
+- The observed issue is **not** a backend authentication bug and **not** caused by Tailscale. It is a mode-management and launcher UX issue caused by inherited/private-cloud runtime state.
 
-The server starts and `/health` passes, but the launcher opens `/app` without the required auth header, resulting in a 401 AUTH_REQUIRED error. The user must manually clear environment variables or restart the server. The behaviour is secure but the UX is poor and easy to misdiagnose.
+**Mode Matrix**
 
-**Problem Statement**
+| Tailscale | Private Cloud Mode | /app Access | API Auth | /health | /private/status | Risk/Notes |
+|-----------|--------------------|-------------|----------|---------|-----------------|------------|
+| Off       | Disabled           | Works       | None     | Pass    | Pass            | Normal local UI |
+| On        | Disabled           | Works       | None     | Pass    | Pass            | If Tailscale Serve is active, unauthenticated local app/API could be reachable inside tailnet |
+| On        | Enabled            | Auth req'd  | Auth req'd| Pass   | Pass            | Safer for tunnel/API testing |
+| Off       | Enabled            | Auth req'd  | Auth req'd| Pass   | Pass            | Unusual, but possible if env vars persist |
 
-Local app launches can silently inherit private-cloud/tunnel environment variables, causing `/app` to require authentication unexpectedly. This makes local recovery clumsy and error-prone, as users must manually clear environment variables. The current behaviour is technically secure but not user-friendly.
+**Clarification**
+
+- Tailscale does **not** control Private Cloud Mode.
+- Private Cloud Mode is enabled by Context Vault Engine environment/configuration.
+- A private tunnel plus active Private Cloud Mode is expected to protect `/app` and API routes.
+- A local app launch with inherited tunnel/private-cloud state can confuse the user: `/health` passes, but `/app` returns 401 AUTH_REQUIRED if browser auth is not configured.
+- This is **not** a backend authentication failure.
+- This is **not** a reason to weaken Private Cloud Mode.
+- This is a mode-isolation, diagnostics, and launcher UX hardening issue.
+
+**Refined Problem Statement**
+
+The problem is **not** that `/app` returns 401 in Private Cloud Mode (that is expected). The problem is that `py run.py app` does not warn before opening `/app` when the effective runtime mode makes browser access fail without an auth flow.
 
 **Proposed Implementation Direction**
 
-A future implementation phase should consider one or more of the following (final design to be determined during implementation):
+A future implementation should consider:
 
-- **Runtime mode preflight:**
-        - `py run.py app` should inspect effective private-cloud status before opening the browser.
-        - If auth is enabled and `/app` would return AUTH_REQUIRED, the launcher should stop before opening the browser and print a clear recovery message (identifying Private Cloud Mode is active, without printing the token).
-- **Explicit local mode launcher:**
-        - Consider adding an explicit local-app mode or flag (e.g. `py run.py app --local`, `py run.py app --ignore-private-cloud-env`, or another safer name chosen during implementation).
-        - This should deliberately disable private-cloud env influence for that launched local process only, without mutating the user’s global environment or weakening remote deployments.
-- **Explicit tunnel/private mode launcher:**
-        - Consider adding a clearer command/path for tunnel testing (e.g. `py run.py app --private-cloud`, `py run.py app --tunnel`, or documented environment presets) to avoid mixing normal local UI mode and remote tunnel mode.
-- **Safer diagnostics:**
-        - Add a CLI/app preflight message showing: private cloud enabled/disabled, require_auth true/false, remote_read_only true/false, deployment_mode, token_configured true/false (never print the token).
-        - Prefer actionable remediation: “Private Cloud Mode is active. Browser UI may require auth and fail at /app.”, “Unset CVE_PRIVATE_CLOUD_ENABLED or relaunch with local mode.”, “Use /private/status to inspect mode.”
-        - Include PowerShell cleanup examples in documentation if appropriate.
-- **UI auth recovery path (if later chosen):**
-        - Consider whether `/app` should remain auth-protected in private cloud mode or whether a browser-friendly auth flow is needed. If planned, it must not leak tokens, must not store secrets insecurely, and must not weaken the remote auth boundary. This is a possible design option, not an implementation claim.
+- **Local app launcher preflight**
+        - Before opening `/app`, inspect `/private/status`.
+        - If `enabled=true` and `require_auth=true`, warn that the browser UI may return AUTH_REQUIRED.
+        - Do not print or expose tokens.
+        - Either stop before opening the browser or require an explicit flag to continue.
+- **Mode-aware launcher messaging**
+        - Print a concise mode summary: private cloud enabled/disabled, deployment_mode, require_auth, remote_read_only, token_configured (never print the token).
+        - Explain that `/health` passing does not guarantee `/app` will be accessible without auth.
+- **Explicit local recovery path**
+        - Document a safe manual recovery path for returning to normal local UI mode.
+        - PowerShell cleanup commands (if appropriate):
+                - `Remove-Item Env:CVE_PRIVATE_CLOUD_ENABLED -ErrorAction SilentlyContinue`
+                - `Remove-Item Env:CVE_REQUIRE_AUTH -ErrorAction SilentlyContinue`
+                - `Remove-Item Env:CVE_REMOTE_READ_ONLY -ErrorAction SilentlyContinue`
+                - `Remove-Item Env:CVE_DEPLOYMENT_MODE -ErrorAction SilentlyContinue`
+                - `Remove-Item Env:CVE_AUTH_TOKEN -ErrorAction SilentlyContinue`
+                - `Remove-Item Env:CVE_PUBLIC_BASE_URL -ErrorAction SilentlyContinue`
+        - Diagnostic command: `curl.exe http://127.0.0.1:8000/private/status`
+        - Process check: `netstat -ano | findstr :8000`
+        - Make clear that cleanup affects only the current process/session unless variables were set persistently elsewhere.
+- **Explicit tunnel testing path**
+        - Document that tunnel/API testing should preferably be launched from a deliberate terminal/session configured for Private Cloud Mode.
+        - Normal local UI use should preferably start from a clean terminal/session.
+- **Do not weaken security**
+        - Do not make `/app` public in Private Cloud Mode.
+        - Do not disable auth merely because the request is from localhost.
+        - Do not infer safety from Tailscale being connected or disconnected.
+        - Do not pass tokens in query strings.
+        - Do not expose MCP over the network.
 
 **Deliverables**
 

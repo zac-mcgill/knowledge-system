@@ -39,9 +39,12 @@ The MCP stdio server (`python run.py mcp`) remains a local stdin/stdout process 
 
 Do not expose the API port directly on a public IP. Use one of:
 
+
 ### 1. Tailscale (recommended for personal use)
 
 Install [Tailscale](https://tailscale.com/) on both server and client. The server is only reachable via your private Tailscale network.
+
+> **Caution:** Tailscale only provides the private network path. It does **not** control or enable Private Cloud Mode. Private Cloud Mode is controlled by Context Vault Engine environment/configuration. For tunnel/API testing, always launch from a terminal/session with deliberate Private Cloud configuration. Do not assume Tailscale alone will protect unauthenticated APIs.
 
 ```bash
 # On the VPS
@@ -51,6 +54,9 @@ sudo tailscale up
 # Context Vault Engine listens on localhost only
 # Your Tailscale IP (e.g. 100.x.x.x) reaches it via Tailscale
 ```
+---
+
+> **Note:** Tailscale status does not affect Private Cloud Mode. Always verify the Context Vault Engine runtime mode using `/private/status` or by inspecting environment variables. Tunnel/API testing should use explicit Private Cloud configuration.
 
 ### 2. WireGuard
 
