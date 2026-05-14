@@ -68,7 +68,11 @@ Commands:
                  For use with MCP-compatible local clients
   mcp-smoke      Run deterministic local MCP stdio smoke test (Phase 39)
                  Spawns `mcp` as a subprocess and sends a minimal JSON-RPC
-                 sequence; exit 0 on pass, 1 on fail. Does not mutate vault."""
+                 sequence; exit 0 on pass, 1 on fail. Does not mutate vault.
+  diagnostics    Print a local, redacted diagnostics/support report as JSON
+                 to stdout (Phase 37).  Never includes note bodies, tokens,
+                 or other secret values.  No report file is written; the
+                 report is not uploaded anywhere."""
 
 
 def _init_vault(repo_root: Path) -> None:
@@ -169,6 +173,25 @@ def main():
         sys.path.insert(0, str(repo_root))
         from mcp.smoke import run_smoke
         raise SystemExit(run_smoke(repo_root=repo_root, python_cmd=sys.executable))
+
+    if command == "diagnostics":
+        import json
+        sys.path.insert(0, str(repo_root))
+        try:
+            from mcp.core.diagnostics import build_diagnostics_report
+
+            report = build_diagnostics_report()
+            print(json.dumps(report, indent=2, ensure_ascii=False, sort_keys=False))
+            raise SystemExit(0)
+        except SystemExit:
+            raise
+        except Exception as exc:
+            error_output = {
+                "status": "error",
+                "error": {"code": "DIAGNOSTICS_FAILED", "message": str(exc)},
+            }
+            print(json.dumps(error_output, indent=2, ensure_ascii=False))
+            raise SystemExit(1)
 
     if command == "app":
         from core.app_launcher import main as app_main

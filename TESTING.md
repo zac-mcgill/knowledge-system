@@ -1,13 +1,13 @@
 # Context Vault Engine - Testing
 
-All tests live in `mcp/test_verify.py`. The suite currently has 1081 test functions, all of which are executed by the manual runner in `main()` at the bottom of that file. A passing run prints `ALL VERIFICATION TESTS PASSED`. Historical test counts from earlier phases (272, 382, 429, 467, 507, 548, 553, 564, 587, 607, 625, 650, 675, 695, 706, 721, 740, 763, 787, 800, 818, 842, 866, 890, 913, 937, 985, 999, 1021, 1028, 1044, 1065) appear later in this document as part of the phase changelog and are not the current total.
+All tests live in `mcp/test_verify.py`. The suite currently has 1103 test functions, all of which are executed by the manual runner in `main()` at the bottom of that file. A passing run prints `ALL VERIFICATION TESTS PASSED`. Historical test counts from earlier phases (272, 382, 429, 467, 507, 548, 553, 564, 587, 607, 625, 650, 675, 695, 706, 721, 740, 763, 787, 800, 818, 842, 866, 890, 913, 937, 985, 999, 1021, 1028, 1044, 1065, 1081) appear later in this document as part of the phase changelog and are not the current total.
 
 ## Current Verification Summary
 
 A full local verification consists of:
 
 ```bash
-py mcp/test_verify.py           # 1081 tests, all must pass
+py mcp/test_verify.py           # 1103 tests, all must pass
 py run.py validate              # vault schema-compliance
 py run.py security              # status: pass (or warning, never fail)
 py run.py feedback              # exits 0, valid JSON
@@ -2745,7 +2745,36 @@ Phase 39 adds 16 deterministic tests in `mcp/test_verify.py` (P39-1 through P39-
 - `test_p39_mcp_discovery_remains_deterministic` - `tools/list`, `resources/list`, and `prompts/list` return the same shape on repeated invocations.
 - `test_p39_phase_27_28_remain_deferred` - `ROADMAP.md` keeps Phase 27 and Phase 28 explicitly Deferred.
 - `test_p39_no_semantic_or_new_write_path` - no semantic, embedding, or LLM dependency is loaded by `mcp.core` or `mcp.smoke`, and `mcp.smoke` does not import anything that would let it write vault notes.
-- `test_p39_test_count_updated` - `TESTING.md` and `README.md` advertise the post-Phase 39 test count of 1081.
+- `test_p39_test_count_updated` - `TESTING.md` and `README.md` advertise the post-Phase 37 test count of 1103.
 
 Phase 39 is a setup-and-verification phase. It does not change the MCP safety model, does not start Phase 27 (Registry and Reuse Layer) or Phase 28 (Optional Semantic Retrieval), does not add embeddings, does not add LLM calls, does not add a new direct vault-write path, and does not add autonomous mutation.
+
+### Phase 37 Test Family
+
+Phase 37 adds 22 deterministic tests in `mcp/test_verify.py` (`test_p37_01_*` through `test_p37_22_*`), bringing the total from 1081 to 1103. The tests lock the diagnostics report shape, the deterministic redaction helpers, the CLI exit contract, the HTTP envelope, the non-leakage of `CVE_AUTH_TOKEN`, the exclusion of demo-vault note bodies, the presence of the UI page/component and the `fetchDiagnostics` helper, the Developer-nav entry, the documentation guardrails, the Phase 27/28 deferral, and the no-new-dependency rule.
+
+- `test_p37_01_report_has_required_top_level_sections` - `build_diagnostics_report` returns the required `generated_at`, `app`, `runtime`, `ui`, `config`, `commands`, `private_cloud`, `environment`, `checks`, `recent_errors`, `redaction`, and `warnings` sections.
+- `test_p37_02_runtime_fields_present` - runtime exposes `python_version`, `platform`, and `os` as non-empty strings and labels its `cwd` with a `local_path` key.
+- `test_p37_03_ui_build_status_reported_safely` - the UI build collector reports `ui_dir_present`, `package_json_present`, `dist_present`, and `index_present` as booleans whether or not `ui/dist/` is materialised.
+- `test_p37_04_config_summary_reports_active_vault` - the config section reports `config_present`, `vault_count`, and at least one vault entry with `name`, `path_present`, `schema_present`, `note_count`, and `state_dir_present`.
+- `test_p37_05_vault_summary_contains_no_note_bodies` - the JSON payload does not contain known demo-vault body phrases and no vault entry exposes `body`, `content`, `text`, or `bodies` keys.
+- `test_p37_06_private_cloud_summary_never_leaks_token` - with `CVE_AUTH_TOKEN` set to a sentinel value, neither the diagnostics JSON nor the `environment.CVE_AUTH_TOKEN` entry contains the raw value; the entry is `{"set": true}` and `private_cloud.token_configured` is a boolean.
+- `test_p37_07_redaction_helper_redacts_sensitive_keys_ci` - `redact_value` redacts `token`, `API_KEY`, `ApiKey`, `user_password`, `auth`, `session`, `BearerToken`, `client_secret`, `private_key`, `refresh_token`, `access_token`, `Cookie`, and `admin_credential` to the stable `<redacted>` marker.
+- `test_p37_08_redaction_helper_does_not_redact_safe_keys` - safe keys such as `name`, `vault_count`, `schema_hash`, `dist_present`, `note_count`, `deployment_mode`, and `warnings`, plus boolean summaries like `token_configured: true` and `require_auth: false`, are not redacted.
+- `test_p37_09_cli_diagnostics_emits_valid_json_exit_zero` - `py run.py diagnostics` prints valid JSON containing `generated_at`, `app`, and `redaction` and exits 0.
+- `test_p37_10_http_diagnostics_returns_status_data_envelope` - `GET /diagnostics` returns HTTP 200 with the standard `{status: "ok", data: ...}` envelope and includes the `redaction` and `runtime` sections.
+- `test_p37_11_http_diagnostics_does_not_include_secret_env_value` - the HTTP response never echoes the raw `CVE_AUTH_TOKEN` value even when it is set in the environment.
+- `test_p37_12_no_known_demo_note_body_text_in_output` - the diagnostics JSON does not include demo-vault body phrases such as "Stack overflow on deep recursion".
+- `test_p37_13_local_absolute_paths_are_clearly_marked` - the repository root, working directory, and Python executable paths are exposed under `local_path` keys so consumers can identify them before sharing the report.
+- `test_p37_14_ui_diagnostics_component_and_page_exist` - `ui/src/pages/diagnostics.astro` and `ui/src/components/Diagnostics.svelte` are present and the component uses `fetchDiagnostics`.
+- `test_p37_15_ui_api_helper_fetch_diagnostics_exists` - `ui/src/lib/api.ts` exports `fetchDiagnostics`, the `DiagnosticsReport` type, and references the `/diagnostics` path.
+- `test_p37_16_navigation_includes_diagnostics` - `ui/src/layouts/AppLayout.astro` lists the `Diagnostics` entry pointing at `/app/diagnostics`.
+- `test_p37_17_docs_mention_phase37_diagnostics` - `README.md` mentions diagnostics, `QUICKSTART.md` documents `py run.py diagnostics`, and `API.md` documents `GET /diagnostics`.
+- `test_p37_18_roadmap_marks_phase37_complete_and_keeps_27_28_deferred` - the status table marks Phase 37 Complete, the Phase 37 section is present, and Phases 27 and 28 remain Deferred.
+- `test_p37_19_testing_md_documents_phase37_family` - `TESTING.md` describes the Phase 37 test family and references the `test_p37_` naming pattern.
+- `test_p37_20_no_new_runtime_dependencies` - `requirements.txt` and `ui/package.json` do not gain telemetry, crash-upload, or React dependencies.
+- `test_p37_21_full_verification_command_list_documented` - `TESTING.md` still documents the full verification command list (`py mcp/test_verify.py`, `py run.py validate`, `py run.py security`, `py run.py feedback`, `py run.py export --overwrite`, `npm run build`).
+- `test_p37_22_no_generated_artefacts_committed` - no diagnostics report file is committed and the diagnostics service does not write files.
+
+Phase 37 is a supportability phase. It does not start Phase 27 (Registry and Reuse Layer) or Phase 28 (Optional Semantic Retrieval); both remain Deferred. It does not add semantic retrieval, embeddings, LLM calls, autonomous note writing, registry/reuse, backup/restore, desktop packaging, onboarding workflow, MCP client setup work, remote telemetry, or automatic issue reporting.
 

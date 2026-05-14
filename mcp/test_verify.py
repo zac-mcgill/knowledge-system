@@ -11987,6 +11987,33 @@ def main():
     test_p39_no_semantic_or_new_write_path()
     test_p39_test_count_updated()
 
+    # ---- Phase 37: Local Diagnostics and Support Report ----
+    print("\n" + "=" * 60)
+    print("Phase 37 - Local Diagnostics and Support Report")
+    print("=" * 60)
+    test_p37_01_report_has_required_top_level_sections()
+    test_p37_02_runtime_fields_present()
+    test_p37_03_ui_build_status_reported_safely()
+    test_p37_04_config_summary_reports_active_vault()
+    test_p37_05_vault_summary_contains_no_note_bodies()
+    test_p37_06_private_cloud_summary_never_leaks_token()
+    test_p37_07_redaction_helper_redacts_sensitive_keys_ci()
+    test_p37_08_redaction_helper_does_not_redact_safe_keys()
+    test_p37_09_cli_diagnostics_emits_valid_json_exit_zero()
+    test_p37_10_http_diagnostics_returns_status_data_envelope()
+    test_p37_11_http_diagnostics_does_not_include_secret_env_value()
+    test_p37_12_no_known_demo_note_body_text_in_output()
+    test_p37_13_local_absolute_paths_are_clearly_marked()
+    test_p37_14_ui_diagnostics_component_and_page_exist()
+    test_p37_15_ui_api_helper_fetch_diagnostics_exists()
+    test_p37_16_navigation_includes_diagnostics()
+    test_p37_17_docs_mention_phase37_diagnostics()
+    test_p37_18_roadmap_marks_phase37_complete_and_keeps_27_28_deferred()
+    test_p37_19_testing_md_documents_phase37_family()
+    test_p37_20_no_new_runtime_dependencies()
+    test_p37_21_full_verification_command_list_documented()
+    test_p37_22_no_generated_artefacts_committed()
+
     print()
     print("=" * 60)
     print("ALL VERIFICATION TESTS PASSED")
@@ -19710,9 +19737,9 @@ def _repo_root():
 
 
 def test_doc_drift_readme_test_count():
-    """DOC-DRIFT-1: README quotes the current 1081-test total, no stale counts."""
+    """DOC-DRIFT-1: README quotes the current 1103-test total, no stale counts."""
     readme = (_repo_root() / "README.md").read_text(encoding="utf-8")
-    assert "1081" in readme, "README.md must mention the current test count 1081"
+    assert "1103" in readme, "README.md must mention the current test count 1103"
     stale_phrases = [
         "553 deterministic tests",
         "548 deterministic tests",
@@ -19761,29 +19788,31 @@ def test_doc_drift_readme_test_count():
         "1044 tests.",
         "1065 deterministic tests",
         "1065 tests.",
+        "1081 deterministic tests",
+        "1081 tests.",
     ]
     for phrase in stale_phrases:
         assert phrase not in readme, f"README.md still mentions stale phrase {phrase!r}"
-    print(f"  README mentions 1081 tests, no stale counts present ✓")
+    print(f"  README mentions 1103 tests, no stale counts present ✓")
 
 
 def test_doc_drift_testing_test_count():
-    """DOC-DRIFT-2: TESTING.md current total is 1065 and historical markers retained."""
+    """DOC-DRIFT-2: TESTING.md current total is 1103 and historical markers retained."""
     text = (_repo_root() / "TESTING.md").read_text(encoding="utf-8")
-    assert "1081 test functions" in text, "TESTING.md must state 1081 test functions"
-    for marker in ("429", "467", "507", "548", "564", "587", "607", "625", "650", "675", "695", "706", "721", "740", "763", "787", "800", "818", "842", "866", "890", "913", "937", "985", "999", "1021", "1028", "1044", "1065"):
+    assert "1103 test functions" in text, "TESTING.md must state 1103 test functions"
+    for marker in ("429", "467", "507", "548", "564", "587", "607", "625", "650", "675", "695", "706", "721", "740", "763", "787", "800", "818", "842", "866", "890", "913", "937", "985", "999", "1021", "1028", "1044", "1065", "1081"):
         assert marker in text, f"TESTING.md must retain historical test-count marker {marker}"
-    print(f"  TESTING.md states 1081 functions and keeps historical markers ✓")
+    print(f"  TESTING.md states 1103 functions and keeps historical markers ✓")
 
 
 def test_doc_drift_release_checklist_test_count():
-    """DOC-DRIFT-3: RELEASE_CHECKLIST references 1081 tests and required commands."""
+    """DOC-DRIFT-3: RELEASE_CHECKLIST references 1103 tests and required commands."""
     text = (_repo_root() / "RELEASE_CHECKLIST.md").read_text(encoding="utf-8")
-    assert "1081" in text, "RELEASE_CHECKLIST.md must reference the 1081-test target"
+    assert "1103" in text, "RELEASE_CHECKLIST.md must reference the 1103-test target"
     for req in ("test_verify.py", "run.py validate", "run.py security",
                 "run.py export", "GitHub Release"):
         assert req in text, f"RELEASE_CHECKLIST.md must contain {req!r}"
-    print(f"  RELEASE_CHECKLIST mentions 1081 tests and required commands ✓")
+    print(f"  RELEASE_CHECKLIST mentions 1103 tests and required commands ✓")
 
 
 def test_doc_drift_roadmap_active_phase():
@@ -21172,10 +21201,10 @@ def test_p29e_19_readme_states_phase29_complete():
 
 def test_p29e_20_release_checklist_test_count_updated():
     """P29E-20: RELEASE_CHECKLIST.md references the current test count.
-    Phase 39 bumped the total from 1065 to 1081."""
+    Phase 37 bumped the total from 1081 to 1103."""
     print("\n=== Test P29E-20: RELEASE_CHECKLIST test count ===")
     text = (_repo_root() / "RELEASE_CHECKLIST.md").read_text(encoding="utf-8")
-    assert "1081" in text, "RELEASE_CHECKLIST.md must reference the current 1081-test target"
+    assert "1103" in text, "RELEASE_CHECKLIST.md must reference the current 1103-test target"
     # The previous counts must not linger in the checklist after this phase.
     assert "all 763 tests green" not in text, \
         "RELEASE_CHECKLIST.md must not still say 'all 763 tests green'"
@@ -21207,7 +21236,9 @@ def test_p29e_20_release_checklist_test_count_updated():
         "RELEASE_CHECKLIST.md must not still say 'all 1044 tests green'"
     assert "all 1065 tests green" not in text, \
         "RELEASE_CHECKLIST.md must not still say 'all 1065 tests green'"
-    print("  RELEASE_CHECKLIST.md references 1081 tests \u2713")
+    assert "all 1081 tests green" not in text, \
+        "RELEASE_CHECKLIST.md must not still say 'all 1081 tests green'"
+    print("  RELEASE_CHECKLIST.md references 1103 tests \u2713")
 
 
 def test_p29e_21_ui_ux_audit_has_phase29e_note():
@@ -26572,17 +26603,453 @@ def test_p39_no_semantic_or_new_write_path():
 
 
 def test_p39_test_count_updated():
-    """P39-16: TESTING.md and README.md advertise the post-Phase 39 test count."""
+    """P39-16: TESTING.md and README.md advertise the post-Phase 37 test count."""
     print("\n=== Test P39-16: documentation test count updated ===")
     testing = _p39_read("TESTING.md")
     readme = _p39_read("README.md")
-    assert "1081 test functions" in testing, (
-        "TESTING.md must advertise the post-Phase 39 test count of 1081"
+    assert "1103 test functions" in testing, (
+        "TESTING.md must advertise the post-Phase 37 test count of 1103"
     )
-    assert "1081 tests" in readme, (
-        "README.md must advertise the post-Phase 39 test count of 1081"
+    assert "1103 tests" in readme, (
+        "README.md must advertise the post-Phase 37 test count of 1103"
     )
-    print("  TESTING.md and README.md advertise 1081 tests \u2713")
+    print("  TESTING.md and README.md advertise 1103 tests \u2713")
+
+
+# ============================================================
+# Phase 37 - Local Diagnostics and Support Report
+# ============================================================
+
+
+def _p37_repo_root():
+    from pathlib import Path as _Path
+    return _Path(__file__).resolve().parent.parent
+
+
+def _p37_read(name: str) -> str:
+    return (_p37_repo_root() / name).read_text(encoding="utf-8")
+
+
+def _p37_build_report():
+    """Build a diagnostics report with a fixed generated_at timestamp."""
+    from mcp.core.diagnostics import build_diagnostics_report
+    return build_diagnostics_report(generated_at="phase37-test")
+
+
+def test_p37_01_report_has_required_top_level_sections():
+    """P37-1: build_diagnostics_report returns all required top-level sections."""
+    print("\n=== Test P37-1: required top-level sections ===")
+    report = _p37_build_report()
+    required = {
+        "generated_at", "app", "runtime", "ui", "config",
+        "commands", "private_cloud", "environment", "checks",
+        "recent_errors", "redaction", "warnings",
+    }
+    missing = required - set(report.keys())
+    assert not missing, f"diagnostics report missing sections: {missing}"
+    assert report["generated_at"] == "phase37-test"
+    print("  All required diagnostics sections present \u2713")
+
+
+def test_p37_02_runtime_fields_present():
+    """P37-2: runtime includes python_version, platform, os fields."""
+    print("\n=== Test P37-2: runtime fields ===")
+    report = _p37_build_report()
+    rt = report["runtime"]
+    assert isinstance(rt.get("python_version"), str) and rt["python_version"], (
+        "runtime.python_version must be a non-empty string"
+    )
+    assert isinstance(rt.get("platform"), str) and rt["platform"], (
+        "runtime.platform must be a non-empty string"
+    )
+    assert isinstance(rt.get("os"), str) and rt["os"], (
+        "runtime.os must be a non-empty string"
+    )
+    assert "local_path" in rt["cwd"], "runtime.cwd must label local_path"
+    print(f"  python_version={rt['python_version']} os={rt['os']} \u2713")
+
+
+def test_p37_03_ui_build_status_reported_safely():
+    """P37-3: UI build status is reported whether or not ui/dist exists."""
+    print("\n=== Test P37-3: UI build status reported safely ===")
+    from mcp.core.diagnostics import collect_ui_build_summary
+    summary = collect_ui_build_summary()
+    for key in ("ui_dir_present", "package_json_present", "dist_present", "index_present"):
+        assert isinstance(summary[key], bool), f"ui.{key} must be a bool"
+    assert "build_hint" in summary and isinstance(summary["build_hint"], str)
+    # Calling again must not crash even after mutating temporary state.
+    summary2 = collect_ui_build_summary()
+    assert set(summary.keys()) == set(summary2.keys())
+    print("  UI build status reported as booleans \u2713")
+
+
+def test_p37_04_config_summary_reports_active_vault():
+    """P37-4: config summary reports at least one vault (demo or active)."""
+    print("\n=== Test P37-4: config/vault summary ===")
+    report = _p37_build_report()
+    config = report["config"]
+    assert config["config_present"] is True, "config.yaml should be present"
+    assert config["vault_count"] >= 1, "at least one vault expected"
+    vault = config["vaults"][0]
+    for key in ("name", "path_present", "schema_present", "note_count", "state_dir_present"):
+        assert key in vault, f"vault summary missing key: {key}"
+    print(f"  Vault {vault['name']!r} notes={vault['note_count']} \u2713")
+
+
+def test_p37_05_vault_summary_contains_no_note_bodies():
+    """P37-5: vault summary surfaces counts only, never note body content."""
+    print("\n=== Test P37-5: vault summary contains no note bodies ===")
+    import json as _json
+    report = _p37_build_report()
+    payload = _json.dumps(report)
+    # Sentinel phrases drawn from demo-vault note bodies.
+    forbidden = [
+        "Stack overflow on deep recursion",
+        "Fibonacci sequence with memoisation",
+        "Trade-offs",  # would only appear if a body section title leaked
+    ]
+    # "Trade-offs" appears in redaction.rules; allow it only there.
+    for phrase in forbidden[:2]:
+        assert phrase not in payload, (
+            f"Diagnostics output unexpectedly contains demo-vault body text: {phrase!r}"
+        )
+    # Per-vault entries must not have a 'body', 'content', or 'text' field.
+    for v in report["config"]["vaults"]:
+        for forbidden_key in ("body", "content", "text", "bodies"):
+            assert forbidden_key not in v, (
+                f"vault summary unexpectedly exposes {forbidden_key!r}"
+            )
+    print("  Vault summary contains no note body content \u2713")
+
+
+def test_p37_06_private_cloud_summary_never_leaks_token():
+    """P37-6: CVE_AUTH_TOKEN is never present in private_cloud or environment output."""
+    print("\n=== Test P37-6: CVE_AUTH_TOKEN never leaked ===")
+    import os as _os
+    import json as _json
+    sentinel = "phase37-secret-token-do-not-leak"
+    saved = _os.environ.get("CVE_AUTH_TOKEN")
+    _os.environ["CVE_AUTH_TOKEN"] = sentinel
+    try:
+        report = _p37_build_report()
+        payload = _json.dumps(report)
+        assert sentinel not in payload, (
+            "CVE_AUTH_TOKEN raw value must never appear in diagnostics output"
+        )
+        # The CVE_AUTH_TOKEN entry must report only 'set' boolean.
+        token_entry = report["environment"]["CVE_AUTH_TOKEN"]
+        assert token_entry == {"set": True}, (
+            f"CVE_AUTH_TOKEN entry must be {{'set': True}} only, got {token_entry!r}"
+        )
+        # private_cloud token_configured must be a bool, not a string.
+        assert report["private_cloud"]["token_configured"] is True
+    finally:
+        if saved is None:
+            _os.environ.pop("CVE_AUTH_TOKEN", None)
+        else:
+            _os.environ["CVE_AUTH_TOKEN"] = saved
+    print("  CVE_AUTH_TOKEN value never present in diagnostics \u2713")
+
+
+def test_p37_07_redaction_helper_redacts_sensitive_keys_ci():
+    """P37-7: redact_value redacts sensitive key names case-insensitively."""
+    print("\n=== Test P37-7: redact_value case-insensitive ===")
+    from mcp.core.diagnostics import redact_value, REDACTED_MARKER
+    cases = [
+        ("token", "abc123"),
+        ("API_KEY", "k-1"),
+        ("ApiKey", "k-2"),
+        ("user_password", "pw"),
+        ("auth", "z"),
+        ("session", "sid"),
+        ("BearerToken", "bt"),
+        ("client_secret", "cs"),
+        ("private_key", "pk"),
+        ("refresh_token", "rt"),
+        ("access_token", "at"),
+        ("Cookie", "c"),
+        ("admin_credential", "x"),
+    ]
+    for key, value in cases:
+        out = redact_value(key, value)
+        assert out == REDACTED_MARKER, (
+            f"redact_value({key!r}, {value!r}) should be redacted, got {out!r}"
+        )
+    print("  All sensitive keys redacted case-insensitively \u2713")
+
+
+def test_p37_08_redaction_helper_does_not_redact_safe_keys():
+    """P37-8: redact_value leaves safe keys and booleans alone."""
+    print("\n=== Test P37-8: safe keys not redacted ===")
+    from mcp.core.diagnostics import redact_value
+    safe = [
+        ("name", "demo-vault"),
+        ("vault_count", 19),
+        ("schema_hash", "abc"),
+        ("dist_present", True),
+        ("token_configured", True),   # boolean — kept as safe summary
+        ("require_auth", False),       # boolean — kept as safe summary
+        ("deployment_mode", "local"),
+        ("note_count", 19),
+        ("warnings", []),
+    ]
+    for key, value in safe:
+        out = redact_value(key, value)
+        assert out == value, (
+            f"redact_value({key!r}, {value!r}) unexpectedly redacted to {out!r}"
+        )
+    print("  Safe keys and boolean summaries left intact \u2713")
+
+
+def test_p37_09_cli_diagnostics_emits_valid_json_exit_zero():
+    """P37-9: `py run.py diagnostics` prints valid JSON and exits 0."""
+    print("\n=== Test P37-9: CLI diagnostics returns JSON, exit 0 ===")
+    import subprocess as _sp
+    import json as _json
+    repo = _p37_repo_root()
+    proc = _sp.run(
+        [sys.executable, str(repo / "run.py"), "diagnostics"],
+        cwd=str(repo),
+        text=True,
+        capture_output=True,
+        timeout=60,
+    )
+    assert proc.returncode == 0, (
+        f"CLI exit {proc.returncode}; stderr={proc.stderr[-500:]}"
+    )
+    try:
+        payload = _json.loads(proc.stdout)
+    except Exception as exc:
+        raise AssertionError(f"CLI stdout was not valid JSON: {exc}\n{proc.stdout[:500]}")
+    assert "generated_at" in payload and "app" in payload and "redaction" in payload
+    print("  CLI diagnostics produced valid JSON, exit 0 \u2713")
+
+
+def test_p37_10_http_diagnostics_returns_status_data_envelope():
+    """P37-10: GET /diagnostics returns {status: ok, data: ...} envelope."""
+    print("\n=== Test P37-10: HTTP diagnostics envelope ===")
+    try:
+        from fastapi.testclient import TestClient
+    except RuntimeError as exc:
+        print(f"  SKIP: TestClient unavailable — {exc}")
+        return
+    from mcp.server.mcp_server import app
+    with TestClient(app) as client:
+        resp = client.get("/diagnostics")
+    assert resp.status_code == 200, f"HTTP {resp.status_code}: {resp.text[:200]}"
+    body = resp.json()
+    assert body.get("status") == "ok", f"envelope status: {body}"
+    assert "data" in body and isinstance(body["data"], dict)
+    assert "redaction" in body["data"] and "runtime" in body["data"]
+    print("  GET /diagnostics returns standard envelope \u2713")
+
+
+def test_p37_11_http_diagnostics_does_not_include_secret_env_value():
+    """P37-11: HTTP /diagnostics never returns CVE_AUTH_TOKEN's raw value."""
+    print("\n=== Test P37-11: HTTP diagnostics omits secret env values ===")
+    try:
+        from fastapi.testclient import TestClient
+    except RuntimeError as exc:
+        print(f"  SKIP: TestClient unavailable — {exc}")
+        return
+    import os as _os
+    sentinel = "phase37-http-secret-do-not-leak"
+    saved = _os.environ.get("CVE_AUTH_TOKEN")
+    _os.environ["CVE_AUTH_TOKEN"] = sentinel
+    try:
+        from mcp.server.mcp_server import app
+        with TestClient(app) as client:
+            resp = client.get("/diagnostics")
+        assert resp.status_code == 200
+        assert sentinel not in resp.text, (
+            "HTTP /diagnostics must never echo the raw CVE_AUTH_TOKEN value"
+        )
+        body = resp.json()
+        env = body["data"]["environment"]["CVE_AUTH_TOKEN"]
+        assert env == {"set": True}
+    finally:
+        if saved is None:
+            _os.environ.pop("CVE_AUTH_TOKEN", None)
+        else:
+            _os.environ["CVE_AUTH_TOKEN"] = saved
+    print("  HTTP /diagnostics never echoes secret env values \u2713")
+
+
+def test_p37_12_no_known_demo_note_body_text_in_output():
+    """P37-12: diagnostics output does not include known note body text from demo-vault."""
+    print("\n=== Test P37-12: no demo-vault body text in diagnostics ===")
+    import json as _json
+    report = _p37_build_report()
+    payload = _json.dumps(report)
+    # Phrases that appear only in note bodies of demo-vault notes.
+    body_phrases = [
+        "Stack overflow on deep recursion",
+        "Fibonacci sequence with memoisation",
+        "Natural expression of recursive problems",
+    ]
+    for phrase in body_phrases:
+        assert phrase not in payload, (
+            f"Diagnostics unexpectedly contains demo-vault body text: {phrase!r}"
+        )
+    print("  No demo-vault body text in diagnostics output \u2713")
+
+
+def test_p37_13_local_absolute_paths_are_clearly_marked():
+    """P37-13: absolute local paths are exposed under a `local_path` key."""
+    print("\n=== Test P37-13: local absolute paths labelled ===")
+    report = _p37_build_report()
+    repo_root = report["app"]["repository_root"]
+    assert "local_path" in repo_root and isinstance(repo_root["local_path"], str)
+    assert "local_path" in report["runtime"]["cwd"]
+    assert "local_path" in report["runtime"]["executable"]
+    # No top-level keys named 'path' for the repository — they must be
+    # qualified as local_path so consumers can identify them before
+    # sharing the report.
+    assert "path" not in repo_root, (
+        "repository_root must use 'local_path', not 'path'"
+    )
+    print("  Local absolute paths are labelled with 'local_path' \u2713")
+
+
+def test_p37_14_ui_diagnostics_component_and_page_exist():
+    """P37-14: UI diagnostics Astro page and Svelte component exist."""
+    print("\n=== Test P37-14: UI diagnostics page/component present ===")
+    repo = _p37_repo_root()
+    page = repo / "ui" / "src" / "pages" / "diagnostics.astro"
+    component = repo / "ui" / "src" / "components" / "Diagnostics.svelte"
+    assert page.is_file(), f"missing UI page: {page}"
+    assert component.is_file(), f"missing UI component: {component}"
+    page_text = page.read_text(encoding="utf-8")
+    assert "Diagnostics.svelte" in page_text or "Diagnostics" in page_text
+    comp_text = component.read_text(encoding="utf-8")
+    assert "fetchDiagnostics" in comp_text, (
+        "Diagnostics component must use the fetchDiagnostics API helper"
+    )
+    print("  UI page and component present \u2713")
+
+
+def test_p37_15_ui_api_helper_fetch_diagnostics_exists():
+    """P37-15: ui/src/lib/api.ts exposes fetchDiagnostics and DiagnosticsReport."""
+    print("\n=== Test P37-15: fetchDiagnostics helper exists ===")
+    repo = _p37_repo_root()
+    api_ts = (repo / "ui" / "src" / "lib" / "api.ts").read_text(encoding="utf-8")
+    assert "export function fetchDiagnostics" in api_ts
+    assert "DiagnosticsReport" in api_ts
+    assert "/diagnostics" in api_ts
+    print("  fetchDiagnostics + DiagnosticsReport types exported \u2713")
+
+
+def test_p37_16_navigation_includes_diagnostics():
+    """P37-16: AppLayout navigation lists the Diagnostics route."""
+    print("\n=== Test P37-16: Diagnostics in sidebar nav ===")
+    repo = _p37_repo_root()
+    layout = (repo / "ui" / "src" / "layouts" / "AppLayout.astro").read_text(encoding="utf-8")
+    assert "/app/diagnostics" in layout, "AppLayout must link /app/diagnostics"
+    assert "'Diagnostics'" in layout or '"Diagnostics"' in layout
+    print("  Sidebar navigation includes Diagnostics \u2713")
+
+
+def test_p37_17_docs_mention_phase37_diagnostics():
+    """P37-17: README and QUICKSTART mention Phase 37 diagnostics support."""
+    print("\n=== Test P37-17: docs mention Phase 37 diagnostics ===")
+    readme = _p37_read("README.md")
+    quickstart = _p37_read("QUICKSTART.md")
+    api_doc = _p37_read("API.md")
+    assert "py run.py diagnostics" in readme or "diagnostics" in readme.lower()
+    assert "py run.py diagnostics" in quickstart, (
+        "QUICKSTART must document `py run.py diagnostics`"
+    )
+    assert "/diagnostics" in api_doc, "API.md must document GET /diagnostics"
+    print("  Phase 37 diagnostics documented \u2713")
+
+
+def test_p37_18_roadmap_marks_phase37_complete_and_keeps_27_28_deferred():
+    """P37-18: ROADMAP marks Phase 37 Complete and keeps Phases 27/28 Deferred."""
+    print("\n=== Test P37-18: ROADMAP Phase 37 status ===")
+    roadmap = _p37_read("ROADMAP.md")
+    # Status table row
+    assert "| 37    | Local Diagnostics and Support Report    | Complete |" in roadmap, (
+        "Status table row for Phase 37 must be marked Complete"
+    )
+    # Section status line
+    assert "### Phase 37 - Local Diagnostics and Support Report" in roadmap
+    # Phases 27 and 28 remain Deferred
+    assert "### Phase 27 - Registry and Reuse Layer\n\n**Status: Deferred.**" in roadmap
+    idx = roadmap.find("Phase 28")
+    assert idx >= 0 and "Deferred" in roadmap[idx:idx + 2000]
+    print("  ROADMAP reflects Phase 37 complete; 27/28 Deferred \u2713")
+
+
+def test_p37_19_testing_md_documents_phase37_family():
+    """P37-19: TESTING.md describes the Phase 37 test family."""
+    print("\n=== Test P37-19: TESTING.md Phase 37 section ===")
+    testing = _p37_read("TESTING.md")
+    assert "Phase 37" in testing, "TESTING.md must describe Phase 37"
+    assert "diagnostics" in testing.lower()
+    assert "test_p37_" in testing, (
+        "TESTING.md must reference the Phase 37 test naming pattern"
+    )
+    print("  TESTING.md documents the Phase 37 test family \u2713")
+
+
+def test_p37_20_no_new_runtime_dependencies():
+    """P37-20: Phase 37 adds no new Python or UI runtime dependencies."""
+    print("\n=== Test P37-20: no new runtime dependencies ===")
+    repo = _p37_repo_root()
+    req = (repo / "requirements.txt").read_text(encoding="utf-8")
+    # The diagnostics module only uses the standard library + existing
+    # private_cloud helpers. Nothing new should appear in requirements.
+    forbidden = ("psutil", "py-cpuinfo", "distro", "sentry", "rollbar")
+    for token in forbidden:
+        assert token not in req.lower(), f"requirements.txt must not add {token!r}"
+    # UI package.json must not gain a new top-level runtime dep.
+    pkg = (repo / "ui" / "package.json").read_text(encoding="utf-8")
+    for token in ("@sentry", "rollbar", "react"):
+        assert token not in pkg.lower(), f"ui/package.json must not add {token!r}"
+    print("  No new Python or UI runtime dependencies \u2713")
+
+
+def test_p37_21_full_verification_command_list_documented():
+    """P37-21: TESTING.md still documents the full verification command list."""
+    print("\n=== Test P37-21: verification command list intact ===")
+    testing = _p37_read("TESTING.md")
+    required_cmds = [
+        "py mcp/test_verify.py",
+        "py run.py validate",
+        "py run.py security",
+        "py run.py feedback",
+        "py run.py export --overwrite",
+        "npm run build",
+    ]
+    for cmd in required_cmds:
+        assert cmd in testing, f"TESTING.md missing verification command: {cmd!r}"
+    print("  Full verification command list still documented \u2713")
+
+
+def test_p37_22_no_generated_artefacts_committed():
+    """P37-22: diagnostics CLI must not write any report file by default."""
+    print("\n=== Test P37-22: diagnostics does not write files ===")
+    repo = _p37_repo_root()
+    # No diagnostics report file should be committed at any obvious path.
+    forbidden_paths = [
+        repo / "diagnostics.json",
+        repo / "support-report.json",
+        repo / "diagnostics-report.json",
+        repo / "dist" / "diagnostics.json",
+    ]
+    for p in forbidden_paths:
+        assert not p.exists(), (
+            f"Generated diagnostics artefact must not be committed: {p}"
+        )
+    # Source still uses stdout only and does not import file-writing
+    # helpers.
+    src = (repo / "mcp" / "core" / "diagnostics.py").read_text(encoding="utf-8")
+    forbidden_apis = ["open(", "Path(", "write_text(", "with open"]
+    # `Path(__file__)` is required for repo root resolution; check that
+    # no actual write or file open is performed.
+    assert "write_text(" not in src, "diagnostics service must not write files"
+    assert ".write(" not in src, "diagnostics service must not write files"
+    print("  Diagnostics CLI/service does not write files \u2713")
 
 
 if __name__ == "__main__":

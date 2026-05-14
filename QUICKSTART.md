@@ -1685,7 +1685,36 @@ Imported content still requires human review. There is no automatic trust promot
 
 ---
 
-## 31. Run Verification Tests (Optional)
+## 31. Local Diagnostics and Support Report (Phase 37)
+
+`py run.py diagnostics` prints a local, redacted diagnostics/support report to
+stdout as JSON. The report covers app and runtime versions, OS, UI build
+status, vault and configuration summary, command availability, private
+cloud status, and `CVE_*` environment presence. It is intended for support
+and debugging and is safe to share when reviewed:
+
+- Note bodies, prompt contents, and pending-change proposed content are
+  never included.
+- Tokens, API keys, passwords, bearer values, cookies, sessions, and other
+  secret environment values are redacted using a stable `<redacted>`
+  marker. `CVE_AUTH_TOKEN` is reported as a boolean (`{"set": true}`) only.
+- Local absolute paths are clearly labelled under `local_path` keys so
+  consumers can sanitise them before sharing.
+- Diagnostics are local-only. The CLI does not upload, post, or otherwise
+  transmit the report; you decide what (if anything) to share.
+
+```bash
+py run.py diagnostics            # print redacted JSON to stdout
+py run.py diagnostics > diag.json  # capture locally (your choice)
+```
+
+The same data is exposed read-only over HTTP as `GET /diagnostics` (see
+`API.md`) and rendered as a UI page at `/app/diagnostics` in the local web
+UI under the Developer nav group.
+
+---
+
+## 32. Run Verification Tests (Optional)
 
 Core tests (requires only `requirements.txt`):
 
@@ -1710,7 +1739,7 @@ ALL VERIFICATION TESTS PASSED
 
 ---
 
-## 32. Troubleshooting
+## 33. Troubleshooting
 
 **Package already exists error**
 

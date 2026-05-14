@@ -186,6 +186,85 @@ export function fetchVaults(): Promise<ApiResult<VaultsData>> {
   return get<VaultsData>('/vaults');
 }
 
+// ---------------------------------------------------------------------------
+// Diagnostics — GET /diagnostics (Phase 37)
+// ---------------------------------------------------------------------------
+
+/**
+ * Diagnostics report shape returned by GET /diagnostics.
+ *
+ * The report is local, redacted, and never contains note bodies,
+ * tokens, or other secret environment values.  See
+ * ``mcp/core/diagnostics.py`` for the authoritative definition.
+ */
+export interface DiagnosticsReport {
+  generated_at: string;
+  app: {
+    name: string;
+    version: string;
+    repository_root: { present: boolean; local_path: string };
+  };
+  runtime: {
+    python_version: string;
+    platform: string;
+    os: string;
+    cwd: { local_path: string };
+    executable: { local_path: string };
+  };
+  ui: {
+    ui_dir_present: boolean;
+    package_json_present: boolean;
+    dist_present: boolean;
+    index_present: boolean;
+    build_hint: string;
+  };
+  config: {
+    config_present: boolean;
+    vault_count: number;
+    vaults: Array<{
+      name: string;
+      path_present: boolean;
+      schema_present: boolean;
+      note_count: number | null;
+      state_dir_present: boolean;
+    }>;
+  };
+  commands: Record<string, { available: boolean }>;
+  private_cloud: {
+    enabled: boolean;
+    deployment_mode: string;
+    require_auth: boolean;
+    token_configured: boolean;
+    remote_read_only: boolean;
+    public_base_url: string | null;
+    warnings: string[];
+    protected_methods: string[];
+  };
+  environment: Record<string, { set: boolean; value?: string | null }>;
+  checks: {
+    validation_available: boolean;
+    security_available: boolean;
+    feedback_available: boolean;
+    export_available: boolean;
+  };
+  recent_errors: unknown[];
+  redaction: {
+    note_bodies_included: boolean;
+    secret_values_included: boolean;
+    content_included: boolean;
+    sensitive_key_tokens: string[];
+    bare_sensitive_segments: string[];
+    redaction_marker: string;
+    rules: string[];
+  };
+  warnings: string[];
+}
+
+/** GET /diagnostics — local, redacted support report. */
+export function fetchDiagnostics(): Promise<ApiResult<DiagnosticsReport>> {
+  return get<DiagnosticsReport>('/diagnostics');
+}
+
 /** GET /summary?vault=<vault> — vault completion summary. */
 export function fetchSummary(vault: string): Promise<ApiResult<SummaryData>> {
   return get<SummaryData>(`/summary?vault=${encodeURIComponent(vault)}`);

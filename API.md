@@ -66,6 +66,7 @@ See `DEPLOYMENT.md` for full deployment and VPS setup guidance.
 | `GET` | `/vaults` | List registered vault names |
 | `GET` | `/health` | Server health and request metrics |
 | `GET` | `/private/status` | Private cloud mode configuration status (Phase 21) |
+| `GET` | `/diagnostics` | Local, redacted diagnostics/support report (Phase 37) |
 | `GET` | `/contract` | System contract check |
 | `GET` | `/summary` | Vault-level completion summary |
 | `POST` | `/query` | Filtered note query |
@@ -224,6 +225,66 @@ Return private cloud mode configuration status. Always accessible without authen
   }
 }
 ```
+
+---
+
+### GET /diagnostics
+
+Return a local, redacted diagnostics/support report (Phase 37). Read-only.
+Subject to the same authentication rules as the rest of the API and allowed
+in private cloud read-only mode.
+
+**Response data (top-level keys):**
+- `generated_at` (str) - timestamp marker (`"local"` by default).
+- `app` (object) - app name, version, and repository root with `local_path`.
+- `runtime` (object) - Python version, platform, OS, working directory, and
+  executable path (paths labelled with `local_path`).
+- `ui` (object) - UI build status flags (`ui_dir_present`,
+  `package_json_present`, `dist_present`, `index_present`) and a
+  `build_hint` string.
+- `config` (object) - `config_present`, `vault_count`, and a `vaults` list
+  with per-vault `name`, `path_present`, `schema_present`, `note_count`,
+  and `state_dir_present`.
+- `commands` (object) - availability of `validate`, `security`, `feedback`,
+  `export`, `mcp`, `app`, and `diagnostics` CLI commands.
+- `private_cloud` (object) - private cloud configuration status with
+  secrets redacted; `token_configured` is a boolean only.
+- `environment` (object) - `CVE_*` environment variable summary.
+  `CVE_AUTH_TOKEN` is reported as `{"set": true|false}` only; its raw
+  value is never included.
+- `checks` (object) - mirrors of command availability for support triage.
+- `recent_errors` (list) - structured recent errors when available.
+- `redaction` (object) - the redaction rules, the redaction marker, and
+  the sensitive key tokens used to identify secrets.
+- `warnings` (list[str]) - non-fatal warnings observed while building the
+  report.
+
+**Safety guarantees:**
+
+- Note bodies, prompt contents, context bundle contents, and pending-change
+  proposed content are never included.
+- Auth tokens, API keys, passwords, bearer values, cookies, sessions, and
+  other secret environment values are redacted using a stable
+  `<redacted>` marker.
+- Local absolute paths are labelled under `local_path` so consumers can
+  sanitise them before sharing.
+- Diagnostics is read-only and is not uploaded by the server.
+
+**Example (truncated):**
+```json
+{
+  "status": "ok",
+  "data": {
+    "generated_at": "local",
+    "app": {"name": "Context Vault Engine", "version": "0.3.0"},
+    "runtime": {"python_version": "3.13.9", "platform": "..."},
+    "environment": {"CVE_AUTH_TOKEN": {"set": false}}
+  }
+}
+```
+
+The same data is available via `py run.py diagnostics` (stdout JSON) and
+in the UI at `/app/diagnostics`.
 
 ---
 

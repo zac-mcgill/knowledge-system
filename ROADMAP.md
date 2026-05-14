@@ -154,7 +154,7 @@ Phase 32 (Human Release QA and Evidence Capture) remains planned and remains man
 | 34    | Windows Desktop Distribution            | Planned  |
 | 35    | Deterministic In-App Guidance Assistant | Planned  |
 | 36    | First-Run Onboarding Workflow           | Planned  |
-| 37    | Local Diagnostics and Support Report    | Planned  |
+| 37    | Local Diagnostics and Support Report    | Complete |
 | 38    | Backup, Restore, and Migration Safety   | Planned  |
 | 39    | MCP Client Setup and Connection Testing | Planned  |
 | 40    | Public Security Posture and Release     | Planned  |
@@ -1574,33 +1574,51 @@ feat(ui): add first-run onboarding workflow
 
 ### Phase 37 - Local Diagnostics and Support Report
 
-**Status:** Planned.
+**Status:** Complete.
 
 **Purpose**
 
 Make local debugging and support practical without exposing private content.
 
-**Deliver**
+**Delivered**
 
-- Diagnostics UI page or CLI command.
-- Safe support report containing:
-  - app version,
-  - Python version,
-  - OS,
-  - UI build status,
-  - config/vault status,
-  - validation/security/feedback/export command availability,
-  - private cloud mode status without secrets,
-  - recent structured errors if available.
-- Redaction rules.
+- `mcp/core/diagnostics.py` service module exposing `build_diagnostics_report`,
+  `redact_value`, `redact_mapping`, and per-section collectors.
+- `py run.py diagnostics` CLI command that prints the redacted report as JSON
+  to stdout and exits 0 on success.
+- `GET /diagnostics` read-only HTTP endpoint returning the standard
+  `{status, data}` envelope.  Subject to the same authentication rules as
+  the rest of the API; allowed in private cloud read-only mode.
+- `/app/diagnostics` UI page (Astro + Svelte) with Runtime, UI build, Vault
+  and configuration, Commands, Private cloud, Environment, Redaction and
+  safety, Warnings, and Raw JSON sections.  A Diagnostics entry was added
+  to the Developer nav group.
+- 22 deterministic tests (`test_p37_01_*` through `test_p37_22_*`) covering
+  the report shape, redaction helpers, CLI exit code, HTTP envelope, token
+  non-leakage, demo-vault body exclusion, UI page/component presence, docs
+  guardrails, the Phase 27/28 deferral, and the no-new-dependency rule.
 
-**Acceptance**
+**Safety**
 
-- Must not include note bodies by default.
-- Must not include tokens, credentials, or secret environment values.
-- Must not leak full vault content.
-- Must clearly mark any local absolute paths if included.
-- Output is deterministic enough to test.
+- Note bodies, prompt contents, context bundle contents, and pending-change
+  proposed content are never included.
+- Auth tokens, API keys, passwords, bearer tokens, cookies, sessions, and
+  other secret environment values are redacted using a deterministic
+  marker (`<redacted>`).  `CVE_AUTH_TOKEN` is reported as a boolean only.
+- Local absolute paths are clearly labelled under `local_path` keys.
+- Diagnostics is read-only and is not uploaded anywhere; no remote
+  telemetry, no crash upload, no automatic issue reporting.
+
+**Non-goals**
+
+Phase 37 does not start Phase 27 (Registry and Reuse Layer) or Phase 28
+(Optional Semantic Retrieval); both remain Deferred.  It introduces no
+semantic retrieval, embeddings, LLM calls, autonomous note writing, SaaS
+positioning, multi-tenant behaviour, registry/reuse layer, backup/restore
+functionality, desktop packaging, onboarding workflow, MCP client setup
+work, new runtime dependency, new UI framework, React, external icon
+library, animation library, remote telemetry, crash upload service, or
+automatic issue reporting.
 
 **Suggested Commit**
 

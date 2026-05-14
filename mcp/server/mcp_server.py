@@ -1154,6 +1154,30 @@ def endpoint_health():
         return _error("HEALTH_FAILED", f"Health check failed: {exc}", 500)
 
 
+@app.get("/diagnostics")
+def endpoint_diagnostics():
+    """Return a local, redacted diagnostics/support report (Phase 37).
+
+    The report is read-only, allowed in private cloud read-only mode,
+    and is subject to the same authentication rules as the rest of the
+    API.  It never includes note bodies, prompt contents, context
+    bundle contents, pending-change proposed content, or the value of
+    ``CVE_AUTH_TOKEN`` or any other secret environment variable.
+
+    The report is generated locally and is not uploaded anywhere.
+
+    Response envelope:
+        {"status": "ok", "data": <diagnostics report>}
+    """
+    try:
+        from mcp.core.diagnostics import build_diagnostics_report
+
+        report = build_diagnostics_report()
+        return {"status": "ok", "data": report}
+    except Exception as exc:
+        return _error("DIAGNOSTICS_FAILED", f"Diagnostics failed: {exc}", 500)
+
+
 @app.get("/private/status")
 def endpoint_private_status():
     """Return private cloud mode configuration status.

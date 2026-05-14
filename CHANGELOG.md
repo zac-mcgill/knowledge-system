@@ -1,5 +1,30 @@
 # Changelog
 
+## Unreleased - Phase 37: Local Diagnostics and Support Report
+
+Add a local, redacted diagnostics and support report so users can debug and share triage information safely without leaking note bodies, tokens, or other secrets.
+
+### Added
+
+- `mcp/core/diagnostics.py` service exposing `build_diagnostics_report`, `redact_value`, `redact_mapping`, and per-section collectors. All data sourcing is local; nothing is uploaded.
+- `py run.py diagnostics` CLI command that prints the redacted report as JSON to stdout (exit 0 on success, exit 1 with a structured error envelope on failure).
+- `GET /diagnostics` read-only HTTP endpoint returning the standard `{status, data}` envelope. Subject to the same authentication rules as the rest of the API and allowed in private cloud read-only mode.
+- `/app/diagnostics` UI page (Astro + Svelte) under the Developer nav group with Runtime, UI build, Vault and configuration, Commands, Private cloud, Environment (CVE_*), Redaction and safety, Warnings, and Raw JSON sections, plus a "Copy JSON" button.
+- 22 deterministic Phase 37 tests (`test_p37_01_*` through `test_p37_22_*`), bringing the suite to 1103 tests.
+
+### Safety
+
+- Note bodies, prompt contents, context bundle contents, and pending-change proposed content are never included in diagnostics output.
+- Auth tokens, API keys, passwords, bearer values, cookies, sessions, and other secret environment values are redacted using a stable `<redacted>` marker; `CVE_AUTH_TOKEN` is reported as a boolean only.
+- Local absolute paths are labelled under `local_path` keys so consumers can sanitise them before sharing.
+- Diagnostics is read-only and is not uploaded; no telemetry, no crash upload, no automatic issue reporting was introduced.
+
+### Non-goals
+
+Phase 37 does not start Phase 27 (Registry and Reuse Layer) or Phase 28 (Optional Semantic Retrieval); both remain Deferred. No semantic retrieval, embeddings, LLM calls, autonomous note writing, registry/reuse, backup/restore, desktop packaging, onboarding workflow, MCP client setup work, new runtime dependency, new UI framework, React, external icon library, animation library, remote telemetry, crash upload service, or automatic issue reporting was added.
+
+---
+
 ## Unreleased - release-candidate documentation drift cleanup
 
 Documentation-only pass. No runtime, API, schema, MCP, UI behaviour, or dependency changes were made.
