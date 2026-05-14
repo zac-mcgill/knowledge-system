@@ -72,7 +72,25 @@ Commands:
   diagnostics    Print a local, redacted diagnostics/support report as JSON
                  to stdout (Phase 37).  Never includes note bodies, tokens,
                  or other secret values.  No report file is written; the
-                 report is not uploaded anywhere."""
+                 report is not uploaded anywhere.
+  backup         Plan or write a local backup of vaults, config, feedback,
+                 state, and templates (Phase 38).  Generated artefacts are
+                 excluded.  Output is a single zip under dist/backups/.
+                 Options:
+                   --preview        (default) print plan as JSON, no writes
+                   --write          create the zip archive
+                   --list           list existing local backups
+                   --vault NAME     restrict to a specific vault (repeatable)
+  restore        Preview or apply a restore from a local backup zip
+                 (Phase 38).  Preview-first; never overwrites without
+                 --overwrite and a matching --confirm phrase.
+                 Options:
+                   --backup ID|PATH    required: backup id or zip path
+                   --preview           (default) print restore plan as JSON
+                   --write             apply the restore (no-op without --confirm)
+                   --overwrite         allow overwriting existing files
+                   --restore-config    also restore config/config.yaml
+                   --confirm "RESTORE <id>"  required typed confirmation"""
 
 
 def _init_vault(repo_root: Path) -> None:
@@ -654,6 +672,147 @@ def main():
                 "error": {"code": "IMPORT_FAILED", "message": str(exc)},
             }
             print(json.dumps(error_output, indent=2, ensure_ascii=False))
+            raise SystemExit(1)
+
+    if command == "backup":
+        import json
+        sys.path.insert(0, str(repo_root))
+        args = sys.argv[2:]
+        mode = "preview"  # preview | write | list
+        vault_filter: list[str] | None = None
+        i = 0
+        try:
+            while i < len(args):
+                tok = args[i]
+                if tok == "--preview":
+                    mode = "preview"
+                    i += 1
+                elif tok == "--write":
+                    mode = "write"
+                    i += 1
+                elif tok == "--list":
+                    mode = "list"
+                    i += 1
+                elif tok == "--vault" and i + 1 < len(args):
+                    if vault_filter is None:
+                        vault_filter = []
+                    vault_filter.append(args[i + 1])
+                    i += 2
+                else:
+                    raise ValueError(f"unknown argument: {tok!r}")
+        except ValueError as exc:
+            print(json.dumps(
+                {"status": "error",
+                 "error": {"code": "INVALID_INPUT", "message": str(exc)}},
+                indent=2, ensure_ascii=False))
+            raise SystemExit(1)
+
+        try:
+            from mcp.core.backup_restore import (
+                build_backup_plan,
+                create_backup_archive,
+                list_backups,
+            )
+            if mode == "list":
+                data = list_backups(repo_root=repo_root)
+            elif mode == "write":
+                data = create_backup_archive(
+                    vault_names=vault_filter, repo_root=repo_root,
+                )
+            else:
+                data = build_backup_plan(
+                    vault_names=vault_filter, repo_root=repo_root,
+                )
+            print(json.dumps(
+                {"status": "ok", "data": data},
+                indent=2, ensure_ascii=False, sort_keys=False))
+            raise SystemExit(0)
+        except SystemExit:
+            raise
+        except Exception as exc:
+            print(json.dumps(
+                {"status": "error",
+                 "error": {"code": "BACKUP_FAILED", "message": str(exc)}},
+                indent=2, ensure_ascii=False))
+            raise SystemExit(1)
+
+    if command == "restore":
+        import json
+        sys.path.insert(0, str(repo_root))
+        args = sys.argv[2:]
+        backup_ref: str | None = None
+        mode = "preview"  # preview | write
+        overwrite = False
+        restore_config = False
+        confirm: str | None = None
+        i = 0
+        try:
+            while i < len(args):
+                tok = args[i]
+                if tok == "--backup" and i + 1 < len(args):
+                    backup_ref = args[i + 1]
+                    i += 2
+                elif tok == "--preview":
+                    mode = "preview"
+                    i += 1
+                elif tok == "--write":
+                    mode = "write"
+                    i += 1
+                elif tok == "--overwrite":
+                    overwrite = True
+                    i += 1
+                elif tok == "--restore-config":
+                    restore_config = True
+                    i += 1
+                elif tok == "--confirm" and i + 1 < len(args):
+                    confirm = args[i + 1]
+                    i += 2
+                else:
+                    raise ValueError(f"unknown argument: {tok!r}")
+            if not backup_ref:
+                raise ValueError("--backup <id|path> is required")
+        except ValueError as exc:
+            print(json.dumps(
+                {"status": "error",
+                 "error": {"code": "INVALID_INPUT", "message": str(exc)}},
+                indent=2, ensure_ascii=False))
+            raise SystemExit(1)
+
+        try:
+            from mcp.core.backup_restore import (
+                build_restore_preview,
+                apply_restore,
+            )
+            if mode == "write":
+                data = apply_restore(
+                    backup_ref,
+                    confirmation=confirm,
+                    overwrite=overwrite,
+                    restore_config=restore_config,
+                    repo_root=repo_root,
+                )
+            else:
+                data = build_restore_preview(backup_ref, repo_root=repo_root)
+            ok = bool(data.get("ok"))
+            print(json.dumps(
+                {"status": "ok" if ok else "error",
+                 "data": data}
+                if ok else
+                {"status": "error",
+                 "error": {
+                     "code": (data.get("errors") or [{"code": "RESTORE_FAILED"}])[0].get("code", "RESTORE_FAILED"),
+                     "message": (data.get("errors") or [{"message": "Restore failed"}])[0].get("message", "Restore failed"),
+                 },
+                 "data": data},
+                indent=2, ensure_ascii=False, sort_keys=False))
+            raise SystemExit(0 if ok else 1)
+        except SystemExit:
+            raise
+        except Exception as exc:
+            print(json.dumps(
+                {"status": "error",
+                 "error": {"code": "RESTORE_FAILED", "message": str(exc)}},
+                indent=2, ensure_ascii=False))
             raise SystemExit(1)
 
     if command not in COMMANDS:

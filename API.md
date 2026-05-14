@@ -67,6 +67,11 @@ See `DEPLOYMENT.md` for full deployment and VPS setup guidance.
 | `GET` | `/health` | Server health and request metrics |
 | `GET` | `/private/status` | Private cloud mode configuration status (Phase 21) |
 | `GET` | `/diagnostics` | Local, redacted diagnostics/support report (Phase 37) |
+| `GET` | `/backups` | List local backup archives (Phase 38) |
+| `POST` | `/backup/plan` | Plan a backup without writing files (Phase 38) |
+| `POST` | `/backup/create` | Create a local backup zip archive (Phase 38) |
+| `POST` | `/restore/preview` | Preview a restore from a backup (Phase 38) |
+| `POST` | `/restore/apply` | Apply a restore with typed confirmation (Phase 38) |
 | `GET` | `/contract` | System contract check |
 | `GET` | `/summary` | Vault-level completion summary |
 | `POST` | `/query` | Filtered note query |
@@ -285,6 +290,108 @@ in private cloud read-only mode.
 
 The same data is available via `py run.py diagnostics` (stdout JSON) and
 in the UI at `/app/diagnostics`.
+
+---
+
+### GET /backups
+
+List local backup archives discovered under `dist/backups/` (Phase 38).
+Read-only. The response contains only manifest metadata - paths, sizes,
+and counts - and never note bodies.
+
+**Response data:**
+- `backups` (list) - each item has `backup_id`, `archive_path`,
+  `archive_size`, `modified_at`, `manifest_present`, `format_version`,
+  `file_count`, `vaults`, and `warnings`.
+
+---
+
+### POST /backup/plan
+
+Plan a backup without writing any files (Phase 38). Read-only.
+
+**Request body:**
+- `vaults` (list[str] | null) - optional vault filter; null/empty means all
+  registered vaults.
+
+**Response data:**
+- `format_version` (str), `generated_at` (str), `file_count` (int),
+  `total_bytes` (int), `kind_counts` (dict), `vaults` (list of per-vault
+  summaries), `exclusions` (declared exclusion rules), `warnings` (list).
+
+Note bodies are never included; only paths, kinds, and sizes.
+
+---
+
+### POST /backup/create
+
+Create a backup zip archive under `dist/backups/` (Phase 38). Blocked in
+remote read-only mode.
+
+**Request body:**
+- `vaults` (list[str] | null) - optional vault filter.
+
+**Response data:**
+- `backup_id`, `archive_path`, `archive_absolute`, `archive_size`,
+  `manifest_hash`, `file_count`, `total_bytes`, `vaults`, `warnings`,
+  `generated_at`.
+
+The archive contains `backup-manifest.json` at its root, then
+`config/config.yaml` and `vaults/<name>/...` entries. Generated artefacts
+(`dist/`, `ui/dist/`, vault reports, caches, VCS metadata) are excluded by
+default.
+
+---
+
+### POST /restore/preview
+
+Plan a restore from a local backup without writing any files (Phase 38).
+Read-only. The backup must be located under `dist/backups/`; paths outside
+that directory are rejected.
+
+**Request body:**
+- `backup` (str) - backup id or zip path under `dist/backups/`.
+
+**Response data:**
+- `ok` (bool), `errors`, `warnings`, `backup_id`,
+  `confirmation_phrase` (the exact `RESTORE <backup_id>` phrase required by
+  `/restore/apply`), `entries` (list of files with `archive_path`,
+  `target_path`, `target_exists`, `would_overwrite`, `in_registry`),
+  `summary`, and `migration` (vault and config change analysis).
+
+Note bodies are never included.
+
+Blocking error codes include `MANIFEST_MISSING`, `HASH_MISMATCH`,
+`UNSAFE_ARCHIVE_PATH`, `UNSAFE_RESTORE_TARGET`, and
+`FORMAT_VERSION_UNSUPPORTED`. Warnings include `SCHEMA_VERSION_CHANGED`,
+`TARGET_EXISTS`, and `VAULT_NOT_REGISTERED`.
+
+---
+
+### POST /restore/apply
+
+Apply a restore from a local backup (Phase 38). Blocked in remote
+read-only mode. Will only write files when:
+
+1. The preview reports no blocking errors,
+2. `confirmation` exactly matches the preview's `confirmation_phrase`
+   (`RESTORE <backup_id>`),
+3. Existing files are skipped unless `overwrite=true`,
+4. `config/config.yaml` is only restored when `restore_config=true`.
+
+**Request body:**
+- `backup` (str) - backup id or zip path under `dist/backups/`.
+- `confirmation` (str) - the typed `RESTORE <backup_id>` phrase.
+- `overwrite` (bool, default `false`).
+- `restore_config` (bool, default `false`).
+
+**Response data:**
+- `ok` (bool), `backup_id`, `written` (files actually replaced),
+  `skipped` (files left alone, with reasons), `errors`, `warnings`.
+
+Restored files are staged into a temporary directory and hash-validated
+before any live target is replaced. If validation fails for any file, no
+files are written.
 
 ---
 

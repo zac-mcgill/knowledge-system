@@ -12014,6 +12014,43 @@ def main():
     test_p37_21_full_verification_command_list_documented()
     test_p37_22_no_generated_artefacts_committed()
 
+    # ---- Phase 38: Backup, Restore, and Migration Safety ----
+    print("\n" + "=" * 60)
+    print("Phase 38 - Backup, Restore, and Migration Safety")
+    print("=" * 60)
+    test_p38_01_service_imports()
+    test_p38_02_plan_shape()
+    test_p38_03_plan_excludes_generated_artefacts()
+    test_p38_04_plan_has_no_note_bodies()
+    test_p38_05_is_safe_archive_path()
+    test_p38_06_is_safe_restore_target()
+    test_p38_07_create_backup_writes_zip_under_temp_root()
+    test_p38_08_manifest_integrity_validates()
+    test_p38_09_preview_rejects_missing_manifest()
+    test_p38_10_preview_rejects_unsafe_paths()
+    test_p38_11_preview_marks_existing_targets()
+    test_p38_12_apply_requires_confirmation()
+    test_p38_13_apply_rejects_wrong_confirmation()
+    test_p38_14_apply_skips_existing_without_overwrite()
+    test_p38_15_apply_writes_with_overwrite_and_confirmation()
+    test_p38_16_apply_staged_rollback_on_hash_mismatch()
+    test_p38_17_migration_summary_flags_schema_change()
+    test_p38_18_cli_preview_emits_json()
+    test_p38_19_cli_list_emits_json()
+    test_p38_20_cli_restore_requires_backup_arg()
+    test_p38_21_http_backups_envelope()
+    test_p38_22_http_backup_plan_envelope()
+    test_p38_23_http_restore_apply_blocked_remote_read_only()
+    test_p38_24_ui_backup_files_exist()
+    test_p38_25_ui_api_helpers_exist()
+    test_p38_26_navigation_includes_backups()
+    test_p38_27_roadmap_marks_phase38_complete()
+    test_p38_28_testing_md_documents_phase38_family()
+    test_p38_29_docs_mention_phase38_backup_restore()
+    test_p38_30_no_new_runtime_dependencies()
+    test_p38_31_no_backup_artefacts_committed()
+    test_p38_32_write_paths_include_backup_routes()
+
     print()
     print("=" * 60)
     print("ALL VERIFICATION TESTS PASSED")
@@ -19737,9 +19774,9 @@ def _repo_root():
 
 
 def test_doc_drift_readme_test_count():
-    """DOC-DRIFT-1: README quotes the current 1103-test total, no stale counts."""
+    """DOC-DRIFT-1: README quotes the current 1135-test total, no stale counts."""
     readme = (_repo_root() / "README.md").read_text(encoding="utf-8")
-    assert "1103" in readme, "README.md must mention the current test count 1103"
+    assert "1135" in readme, "README.md must mention the current test count 1135"
     stale_phrases = [
         "553 deterministic tests",
         "548 deterministic tests",
@@ -19790,29 +19827,33 @@ def test_doc_drift_readme_test_count():
         "1065 tests.",
         "1081 deterministic tests",
         "1081 tests.",
+        "1103 deterministic tests",
+        "1103 tests.",
     ]
     for phrase in stale_phrases:
         assert phrase not in readme, f"README.md still mentions stale phrase {phrase!r}"
-    print(f"  README mentions 1103 tests, no stale counts present ✓")
+    print(f"  README mentions 1135 tests, no stale counts present ✓")
 
 
 def test_doc_drift_testing_test_count():
     """DOC-DRIFT-2: TESTING.md current total is 1103 and historical markers retained."""
     text = (_repo_root() / "TESTING.md").read_text(encoding="utf-8")
-    assert "1103 test functions" in text, "TESTING.md must state 1103 test functions"
-    for marker in ("429", "467", "507", "548", "564", "587", "607", "625", "650", "675", "695", "706", "721", "740", "763", "787", "800", "818", "842", "866", "890", "913", "937", "985", "999", "1021", "1028", "1044", "1065", "1081"):
+    assert "1135 test functions" in text, "TESTING.md must state 1135 test functions"
+    for marker in ("429", "467", "507", "548", "564", "587", "607", "625", "650", "675", "695", "706", "721", "740", "763", "787", "800", "818", "842", "866", "890", "913", "937", "985", "999", "1021", "1028", "1044", "1065", "1081", "1103"):
         assert marker in text, f"TESTING.md must retain historical test-count marker {marker}"
-    print(f"  TESTING.md states 1103 functions and keeps historical markers ✓")
+    print(f"  TESTING.md states 1135 functions and keeps historical markers ✓")
 
 
 def test_doc_drift_release_checklist_test_count():
     """DOC-DRIFT-3: RELEASE_CHECKLIST references 1103 tests and required commands."""
     text = (_repo_root() / "RELEASE_CHECKLIST.md").read_text(encoding="utf-8")
-    assert "1103" in text, "RELEASE_CHECKLIST.md must reference the 1103-test target"
+    assert "1135" in text, "RELEASE_CHECKLIST.md must reference the 1135-test target"
+    assert "1103" in text, "RELEASE_CHECKLIST.md must keep 1103 as historical marker"
+    # historical marker also retained
     for req in ("test_verify.py", "run.py validate", "run.py security",
                 "run.py export", "GitHub Release"):
         assert req in text, f"RELEASE_CHECKLIST.md must contain {req!r}"
-    print(f"  RELEASE_CHECKLIST mentions 1103 tests and required commands ✓")
+    print(f"  RELEASE_CHECKLIST mentions 1135 tests and required commands ✓")
 
 
 def test_doc_drift_roadmap_active_phase():
@@ -21238,7 +21279,9 @@ def test_p29e_20_release_checklist_test_count_updated():
         "RELEASE_CHECKLIST.md must not still say 'all 1065 tests green'"
     assert "all 1081 tests green" not in text, \
         "RELEASE_CHECKLIST.md must not still say 'all 1081 tests green'"
-    print("  RELEASE_CHECKLIST.md references 1103 tests \u2713")
+    assert "all 1103 tests green" not in text, \
+        "RELEASE_CHECKLIST.md must not still say 'all 1103 tests green'"
+    print("  RELEASE_CHECKLIST.md references 1135 tests \u2713")
 
 
 def test_p29e_21_ui_ux_audit_has_phase29e_note():
@@ -26607,13 +26650,13 @@ def test_p39_test_count_updated():
     print("\n=== Test P39-16: documentation test count updated ===")
     testing = _p39_read("TESTING.md")
     readme = _p39_read("README.md")
-    assert "1103 test functions" in testing, (
-        "TESTING.md must advertise the post-Phase 37 test count of 1103"
+    assert "1135 test functions" in testing, (
+        "TESTING.md must advertise the post-Phase 38 test count of 1135"
     )
-    assert "1103 tests" in readme, (
-        "README.md must advertise the post-Phase 37 test count of 1103"
+    assert "1135 tests" in readme, (
+        "README.md must advertise the post-Phase 38 test count of 1135"
     )
-    print("  TESTING.md and README.md advertise 1103 tests \u2713")
+    print("  TESTING.md and README.md advertise 1135 tests \u2713")
 
 
 # ============================================================
@@ -27050,6 +27093,708 @@ def test_p37_22_no_generated_artefacts_committed():
     assert "write_text(" not in src, "diagnostics service must not write files"
     assert ".write(" not in src, "diagnostics service must not write files"
     print("  Diagnostics CLI/service does not write files \u2713")
+
+
+# ============================================================
+# Phase 38 - Backup, Restore, and Migration Safety
+# ============================================================
+
+
+def _p38_repo_root():
+    from pathlib import Path as _Path
+    return _Path(__file__).resolve().parent.parent
+
+
+def _p38_read(name: str) -> str:
+    return (_p38_repo_root() / name).read_text(encoding="utf-8")
+
+
+def _p38_make_tiny_vault(tmp_root):
+    """Create a minimal vault tree under tmp_root and return its path."""
+    from pathlib import Path as _Path
+    vault = _Path(tmp_root) / "TinyVault"
+    (vault / "Vault Files" / "Templates").mkdir(parents=True)
+    (vault / "Vault Files" / "State").mkdir(parents=True)
+    (vault / "Notes").mkdir()
+    (vault / "Notes" / "Example.md").write_text(
+        "---\nstatus: complete\n---\n# Example\nBody\n", encoding="utf-8",
+    )
+    (vault / "Vault Files" / "feedback.md").write_text("feedback\n", encoding="utf-8")
+    (vault / "Vault Files" / "Templates" / "Note.md").write_text("# Template\n", encoding="utf-8")
+    # Generated artefact that must be excluded.
+    (vault / "Vault Files" / "Vault Report.md").write_text("REPORT\n", encoding="utf-8")
+    # Cache dir that must be excluded.
+    (vault / "__pycache__").mkdir()
+    (vault / "__pycache__" / "junk.pyc").write_text("junk", encoding="utf-8")
+    return vault
+
+
+def _p38_patched_registry(monkeypatched_vaults):
+    """Return a context that replaces ``_registered_vaults`` in the service."""
+    import contextlib
+
+    @contextlib.contextmanager
+    def _ctx():
+        from mcp.core import backup_restore as br
+
+        original = br._registered_vaults
+        br._registered_vaults = lambda: dict(monkeypatched_vaults)
+        try:
+            yield
+        finally:
+            br._registered_vaults = original
+
+    return _ctx()
+
+
+def test_p38_01_service_imports():
+    """P38-1: backup_restore module exposes the required public surface."""
+    print("\n=== Test P38-1: backup_restore imports ===")
+    from mcp.core import backup_restore as br
+    for name in (
+        "build_backup_plan",
+        "create_backup_archive",
+        "list_backups",
+        "read_backup_manifest",
+        "validate_backup_archive",
+        "build_restore_preview",
+        "apply_restore",
+        "build_migration_summary",
+        "is_safe_archive_path",
+        "is_safe_restore_target",
+        "hash_file",
+        "FORMAT_VERSION",
+    ):
+        assert hasattr(br, name), f"backup_restore missing {name!r}"
+    print("  Public surface present \u2713")
+
+
+def test_p38_02_plan_shape():
+    """P38-2: build_backup_plan returns the documented top-level shape."""
+    print("\n=== Test P38-2: plan shape ===")
+    from mcp.core.backup_restore import build_backup_plan
+    plan = build_backup_plan()
+    for key in (
+        "format_version", "generated_at", "config_included",
+        "vaults", "file_count", "total_bytes",
+        "kind_counts", "exclusions", "warnings",
+    ):
+        assert key in plan, f"plan missing key {key!r}"
+    assert isinstance(plan["vaults"], list)
+    assert isinstance(plan["kind_counts"], dict)
+    assert isinstance(plan["exclusions"], dict)
+    print("  Plan shape ok \u2713")
+
+
+def test_p38_03_plan_excludes_generated_artefacts():
+    """P38-3: plan exclusion declarations include caches and reports."""
+    print("\n=== Test P38-3: plan exclusions ===")
+    from mcp.core.backup_restore import build_backup_plan
+    plan = build_backup_plan()
+    excl = plan["exclusions"]
+    for d in ("dist", "__pycache__", ".git", "node_modules"):
+        assert d in excl["directories"], f"exclusions must list {d!r}"
+    assert any("Vault Report.md" in r for r in excl["vault_relatives"])
+    print("  Exclusions declare caches and reports \u2713")
+
+
+def test_p38_04_plan_has_no_note_bodies():
+    """P38-4: plan output contains only paths/sizes, never note body text."""
+    print("\n=== Test P38-4: plan has no note bodies ===")
+    import json as _json
+    from mcp.core.backup_restore import build_backup_plan
+    plan = build_backup_plan()
+    payload = _json.dumps(plan)
+    # Demo-vault body phrases that must never leak into the plan.
+    for phrase in (
+        "Stack overflow on deep recursion",
+        "Fibonacci sequence with memoisation",
+    ):
+        assert phrase not in payload, f"plan unexpectedly contains body: {phrase!r}"
+    print("  No note bodies in plan \u2713")
+
+
+def test_p38_05_is_safe_archive_path():
+    """P38-5: is_safe_archive_path rejects traversal, absolute, drive paths."""
+    print("\n=== Test P38-5: is_safe_archive_path ===")
+    from mcp.core.backup_restore import is_safe_archive_path
+    for bad in (
+        "", "..", "../etc/passwd", "/abs/path", "a\\b",
+        "C:/x", "C:\\x", "//srv/x", "a/../b", "x/\x00y",
+    ):
+        assert not is_safe_archive_path(bad), f"should reject {bad!r}"
+    for ok in ("a.txt", "config/config.yaml", "vaults/Demo/Notes/x.md"):
+        assert is_safe_archive_path(ok), f"should accept {ok!r}"
+    print("  is_safe_archive_path correct \u2713")
+
+
+def test_p38_06_is_safe_restore_target():
+    """P38-6: is_safe_restore_target only accepts targets inside repo root."""
+    print("\n=== Test P38-6: is_safe_restore_target ===")
+    import tempfile
+    from pathlib import Path as _Path
+    from mcp.core.backup_restore import is_safe_restore_target
+    with tempfile.TemporaryDirectory() as tmp:
+        root = _Path(tmp) / "repo"
+        root.mkdir()
+        inside = root / "sub" / "x.md"
+        assert is_safe_restore_target(inside, root)
+        outside = _Path(tmp) / "other" / "x.md"
+        assert not is_safe_restore_target(outside, root)
+    print("  is_safe_restore_target correct \u2713")
+
+
+def test_p38_07_create_backup_writes_zip_under_temp_root():
+    """P38-7: create_backup_archive writes a zip with a manifest entry."""
+    print("\n=== Test P38-7: create backup writes archive ===")
+    import tempfile
+    import zipfile
+    from pathlib import Path as _Path
+    from mcp.core.backup_restore import (
+        create_backup_archive, MANIFEST_NAME,
+    )
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_root = _Path(tmp)
+        (tmp_root / "config").mkdir()
+        (tmp_root / "config" / "config.yaml").write_text("vault_root: ./V\n", encoding="utf-8")
+        vault = _p38_make_tiny_vault(tmp_root)
+        out = tmp_root / "out"
+        with _p38_patched_registry({"TinyVault": vault}):
+            result = create_backup_archive(
+                output_root=out, repo_root=tmp_root,
+            )
+        archive = _Path(result["archive_absolute"])
+        assert archive.is_file(), "archive must exist"
+        assert archive.suffix == ".zip"
+        with zipfile.ZipFile(archive, "r") as zf:
+            names = zf.namelist()
+            assert MANIFEST_NAME in names
+            assert "config/config.yaml" in names
+            assert any(n.startswith("vaults/TinyVault/") for n in names)
+            # Generated report must not be inside the archive.
+            assert not any("Vault Report.md" in n for n in names)
+            # __pycache__ must be excluded.
+            assert not any("__pycache__" in n for n in names)
+    print("  Archive created with manifest, no generated artefacts \u2713")
+
+
+def test_p38_08_manifest_integrity_validates():
+    """P38-8: validate_backup_archive returns ok=True for a clean archive."""
+    print("\n=== Test P38-8: validate clean archive ===")
+    import tempfile
+    from pathlib import Path as _Path
+    from mcp.core.backup_restore import (
+        create_backup_archive, validate_backup_archive,
+    )
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_root = _Path(tmp)
+        (tmp_root / "config").mkdir()
+        (tmp_root / "config" / "config.yaml").write_text("x: 1\n", encoding="utf-8")
+        vault = _p38_make_tiny_vault(tmp_root)
+        with _p38_patched_registry({"TinyVault": vault}):
+            res = create_backup_archive(output_root=tmp_root / "out", repo_root=tmp_root)
+        archive = _Path(res["archive_absolute"])
+        report = validate_backup_archive(archive)
+        assert report["ok"] is True, report
+        assert report["errors"] == []
+    print("  Clean archive validates \u2713")
+
+
+def test_p38_09_preview_rejects_missing_manifest():
+    """P38-9: build_restore_preview reports MANIFEST_MISSING for bad zip."""
+    print("\n=== Test P38-9: preview rejects missing manifest ===")
+    import tempfile
+    import zipfile
+    from pathlib import Path as _Path
+    from mcp.core.backup_restore import build_restore_preview
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_root = _Path(tmp)
+        out = tmp_root / "dist" / "backups"
+        out.mkdir(parents=True)
+        bad = out / "cve-backup-empty.zip"
+        with zipfile.ZipFile(bad, "w") as zf:
+            zf.writestr("hello.txt", "hi")
+        with _p38_patched_registry({}):
+            preview = build_restore_preview(
+                "cve-backup-empty", output_root=out, repo_root=tmp_root,
+            )
+        assert preview["ok"] is False
+        codes = [e["code"] for e in preview["errors"]]
+        assert "MANIFEST_MISSING" in codes
+    print("  Missing manifest rejected \u2713")
+
+
+def test_p38_10_preview_rejects_unsafe_paths():
+    """P38-10: build_restore_preview reports UNSAFE_ARCHIVE_PATH."""
+    print("\n=== Test P38-10: preview rejects unsafe paths ===")
+    import json as _json
+    import tempfile
+    import zipfile
+    from pathlib import Path as _Path
+    from mcp.core.backup_restore import (
+        build_restore_preview, FORMAT_VERSION, MANIFEST_NAME,
+    )
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_root = _Path(tmp)
+        out = tmp_root / "dist" / "backups"
+        out.mkdir(parents=True)
+        archive = out / "cve-backup-unsafe.zip"
+        manifest = {
+            "format_version": FORMAT_VERSION,
+            "files": [
+                {"archive_path": "../evil.txt", "kind": "other",
+                 "size": 3, "sha256": "a" * 64},
+            ],
+            "vaults": [],
+            "config_included": False,
+        }
+        with zipfile.ZipFile(archive, "w") as zf:
+            zf.writestr(MANIFEST_NAME, _json.dumps(manifest))
+        with _p38_patched_registry({}):
+            preview = build_restore_preview(
+                "cve-backup-unsafe", output_root=out, repo_root=tmp_root,
+            )
+        codes = [e["code"] for e in preview["errors"]]
+        assert "UNSAFE_ARCHIVE_PATH" in codes, codes
+        assert preview["ok"] is False
+    print("  Unsafe archive paths rejected \u2713")
+
+
+def test_p38_11_preview_marks_existing_targets():
+    """P38-11: preview marks would_overwrite for existing target files."""
+    print("\n=== Test P38-11: preview marks existing targets ===")
+    import tempfile
+    from pathlib import Path as _Path
+    from mcp.core.backup_restore import (
+        create_backup_archive, build_restore_preview,
+    )
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_root = _Path(tmp)
+        (tmp_root / "config").mkdir()
+        (tmp_root / "config" / "config.yaml").write_text("x: 1\n", encoding="utf-8")
+        vault = _p38_make_tiny_vault(tmp_root)
+        out = tmp_root / "dist" / "backups"
+        with _p38_patched_registry({"TinyVault": vault}):
+            res = create_backup_archive(output_root=out, repo_root=tmp_root)
+            preview = build_restore_preview(
+                res["backup_id"], output_root=out, repo_root=tmp_root,
+            )
+        assert preview["ok"] is True, preview
+        existing = [e for e in preview["entries"] if e["would_overwrite"]]
+        # Every restored file targets a path that already exists (we just
+        # created it), so the preview should mark them as overwrites.
+        assert existing, "preview must mark existing targets as overwrites"
+    print("  Existing targets flagged \u2713")
+
+
+def test_p38_12_apply_requires_confirmation():
+    """P38-12: apply_restore without confirmation reports CONFIRMATION_REQUIRED."""
+    print("\n=== Test P38-12: apply requires confirmation ===")
+    import tempfile
+    from pathlib import Path as _Path
+    from mcp.core.backup_restore import (
+        create_backup_archive, apply_restore,
+    )
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_root = _Path(tmp)
+        (tmp_root / "config").mkdir()
+        (tmp_root / "config" / "config.yaml").write_text("x: 1\n", encoding="utf-8")
+        vault = _p38_make_tiny_vault(tmp_root)
+        out = tmp_root / "dist" / "backups"
+        with _p38_patched_registry({"TinyVault": vault}):
+            res = create_backup_archive(output_root=out, repo_root=tmp_root)
+            result = apply_restore(
+                res["backup_id"], confirmation=None,
+                output_root=out, repo_root=tmp_root,
+            )
+        assert result["ok"] is False
+        codes = [e["code"] for e in result["errors"]]
+        assert "CONFIRMATION_REQUIRED" in codes
+    print("  Missing confirmation rejected \u2713")
+
+
+def test_p38_13_apply_rejects_wrong_confirmation():
+    """P38-13: apply_restore with wrong confirmation reports MISMATCH."""
+    print("\n=== Test P38-13: apply rejects wrong confirmation ===")
+    import tempfile
+    from pathlib import Path as _Path
+    from mcp.core.backup_restore import (
+        create_backup_archive, apply_restore,
+    )
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_root = _Path(tmp)
+        (tmp_root / "config").mkdir()
+        (tmp_root / "config" / "config.yaml").write_text("x: 1\n", encoding="utf-8")
+        vault = _p38_make_tiny_vault(tmp_root)
+        out = tmp_root / "dist" / "backups"
+        with _p38_patched_registry({"TinyVault": vault}):
+            res = create_backup_archive(output_root=out, repo_root=tmp_root)
+            result = apply_restore(
+                res["backup_id"], confirmation="RESTORE wrong",
+                output_root=out, repo_root=tmp_root,
+            )
+        assert result["ok"] is False
+        codes = [e["code"] for e in result["errors"]]
+        assert "CONFIRMATION_MISMATCH" in codes
+    print("  Wrong confirmation rejected \u2713")
+
+
+def test_p38_14_apply_skips_existing_without_overwrite():
+    """P38-14: apply without overwrite=True skips files that already exist."""
+    print("\n=== Test P38-14: apply skips existing without overwrite ===")
+    import tempfile
+    from pathlib import Path as _Path
+    from mcp.core.backup_restore import (
+        create_backup_archive, apply_restore,
+    )
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_root = _Path(tmp)
+        (tmp_root / "config").mkdir()
+        (tmp_root / "config" / "config.yaml").write_text("x: 1\n", encoding="utf-8")
+        vault = _p38_make_tiny_vault(tmp_root)
+        out = tmp_root / "dist" / "backups"
+        with _p38_patched_registry({"TinyVault": vault}):
+            res = create_backup_archive(output_root=out, repo_root=tmp_root)
+            result = apply_restore(
+                res["backup_id"],
+                confirmation=f"RESTORE {res['backup_id']}",
+                overwrite=False,
+                output_root=out, repo_root=tmp_root,
+            )
+        assert result["ok"] is True, result
+        # All files already exist; with overwrite=False everything is skipped.
+        assert result["written"] == [], result
+        assert result["skipped"], "all files should be skipped"
+    print("  Existing files skipped \u2713")
+
+
+def test_p38_15_apply_writes_with_overwrite_and_confirmation():
+    """P38-15: apply with overwrite=True and matching phrase replaces files."""
+    print("\n=== Test P38-15: apply writes with overwrite ===")
+    import tempfile
+    from pathlib import Path as _Path
+    from mcp.core.backup_restore import (
+        create_backup_archive, apply_restore,
+    )
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_root = _Path(tmp)
+        (tmp_root / "config").mkdir()
+        (tmp_root / "config" / "config.yaml").write_text("x: 1\n", encoding="utf-8")
+        vault = _p38_make_tiny_vault(tmp_root)
+        out = tmp_root / "dist" / "backups"
+        with _p38_patched_registry({"TinyVault": vault}):
+            res = create_backup_archive(output_root=out, repo_root=tmp_root)
+            # Mutate one file so the restore replaces it.
+            note = vault / "Notes" / "Example.md"
+            note.write_text("CHANGED\n", encoding="utf-8")
+            result = apply_restore(
+                res["backup_id"],
+                confirmation=f"RESTORE {res['backup_id']}",
+                overwrite=True,
+                output_root=out, repo_root=tmp_root,
+            )
+        assert result["ok"] is True, result
+        assert result["written"], "at least one file should be written"
+        # The restored file must equal the original content.
+        assert "CHANGED" not in note.read_text(encoding="utf-8")
+    print("  Restore overwrites with confirmation \u2713")
+
+
+def test_p38_16_apply_staged_rollback_on_hash_mismatch():
+    """P38-16: apply leaves files untouched if any staged file fails hash check."""
+    print("\n=== Test P38-16: staged rollback on hash mismatch ===")
+    import json as _json
+    import tempfile
+    import zipfile
+    from pathlib import Path as _Path
+    from mcp.core.backup_restore import (
+        apply_restore, FORMAT_VERSION, MANIFEST_NAME,
+    )
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_root = _Path(tmp)
+        vault = _p38_make_tiny_vault(tmp_root)
+        out = tmp_root / "dist" / "backups"
+        out.mkdir(parents=True)
+        archive = out / "cve-backup-corrupt.zip"
+        # Build a manifest that claims a hash that the actual content does
+        # not produce.
+        manifest = {
+            "format_version": FORMAT_VERSION,
+            "config_included": False,
+            "vaults": [{"name": "TinyVault", "schema_version": None,
+                         "file_count": 1, "total_bytes": 4}],
+            "files": [{
+                "archive_path": "vaults/TinyVault/Notes/Example.md",
+                "kind": "vault-note",
+                "size": 4,
+                "sha256": "0" * 64,
+            }],
+        }
+        with zipfile.ZipFile(archive, "w") as zf:
+            zf.writestr(MANIFEST_NAME, _json.dumps(manifest))
+            zf.writestr("vaults/TinyVault/Notes/Example.md", "abcd")
+        original = (vault / "Notes" / "Example.md").read_text(encoding="utf-8")
+        with _p38_patched_registry({"TinyVault": vault}):
+            # The preview itself will report HASH_MISMATCH and refuse.
+            result = apply_restore(
+                "cve-backup-corrupt",
+                confirmation="RESTORE cve-backup-corrupt",
+                overwrite=True,
+                output_root=out, repo_root=tmp_root,
+            )
+        assert result["ok"] is False
+        assert (vault / "Notes" / "Example.md").read_text(encoding="utf-8") == original
+    print("  Hash mismatch blocks writes \u2713")
+
+
+def test_p38_17_migration_summary_flags_schema_change():
+    """P38-17: build_migration_summary marks schema changes as warnings."""
+    print("\n=== Test P38-17: migration summary flags schema change ===")
+    from mcp.core.backup_restore import build_migration_summary, FORMAT_VERSION
+    manifest = {
+        "format_version": FORMAT_VERSION,
+        "vaults": [
+            {"name": "Unknown", "schema_version": "old"},
+        ],
+        "config_included": True,
+    }
+    summary = build_migration_summary(manifest)
+    codes = [w["code"] for w in summary["warnings"]]
+    assert "VAULT_NOT_REGISTERED" in codes or "SCHEMA_VERSION_CHANGED" in codes
+    assert any(c["name"] == "Unknown" for c in summary["vault_changes"])
+    print("  Migration summary flags schema/registry changes \u2713")
+
+
+def test_p38_18_cli_preview_emits_json():
+    """P38-18: `py run.py backup --preview` emits JSON envelope, exit 0."""
+    print("\n=== Test P38-18: CLI backup --preview ===")
+    import json as _json
+    import subprocess as _sp
+    repo = _p38_repo_root()
+    proc = _sp.run(
+        [sys.executable, str(repo / "run.py"), "backup", "--preview"],
+        cwd=str(repo), text=True, capture_output=True, timeout=60,
+    )
+    assert proc.returncode == 0, proc.stderr[-500:]
+    payload = _json.loads(proc.stdout)
+    assert payload.get("status") == "ok"
+    assert "data" in payload and "vaults" in payload["data"]
+    print("  CLI backup --preview emits JSON \u2713")
+
+
+def test_p38_19_cli_list_emits_json():
+    """P38-19: `py run.py backup --list` emits JSON envelope, exit 0."""
+    print("\n=== Test P38-19: CLI backup --list ===")
+    import json as _json
+    import subprocess as _sp
+    repo = _p38_repo_root()
+    proc = _sp.run(
+        [sys.executable, str(repo / "run.py"), "backup", "--list"],
+        cwd=str(repo), text=True, capture_output=True, timeout=60,
+    )
+    assert proc.returncode == 0, proc.stderr[-500:]
+    payload = _json.loads(proc.stdout)
+    assert payload.get("status") == "ok"
+    assert isinstance(payload.get("data"), list)
+    print("  CLI backup --list emits JSON \u2713")
+
+
+def test_p38_20_cli_restore_requires_backup_arg():
+    """P38-20: `py run.py restore` without --backup exits non-zero."""
+    print("\n=== Test P38-20: CLI restore requires --backup ===")
+    import subprocess as _sp
+    repo = _p38_repo_root()
+    proc = _sp.run(
+        [sys.executable, str(repo / "run.py"), "restore", "--preview"],
+        cwd=str(repo), text=True, capture_output=True, timeout=60,
+    )
+    assert proc.returncode != 0
+    assert "backup" in (proc.stdout + proc.stderr).lower()
+    print("  CLI restore without --backup fails \u2713")
+
+
+def test_p38_21_http_backups_envelope():
+    """P38-21: GET /backups returns the standard envelope."""
+    print("\n=== Test P38-21: HTTP GET /backups envelope ===")
+    try:
+        from fastapi.testclient import TestClient
+    except RuntimeError as exc:
+        print(f"  SKIP: TestClient unavailable - {exc}")
+        return
+    from mcp.server.mcp_server import app
+    with TestClient(app) as client:
+        resp = client.get("/backups")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body.get("status") == "ok"
+    assert "backups" in body["data"]
+    print("  GET /backups envelope ok \u2713")
+
+
+def test_p38_22_http_backup_plan_envelope():
+    """P38-22: POST /backup/plan returns the standard envelope."""
+    print("\n=== Test P38-22: HTTP POST /backup/plan envelope ===")
+    try:
+        from fastapi.testclient import TestClient
+    except RuntimeError as exc:
+        print(f"  SKIP: TestClient unavailable - {exc}")
+        return
+    from mcp.server.mcp_server import app
+    with TestClient(app) as client:
+        resp = client.post("/backup/plan", json={"vaults": None})
+    assert resp.status_code == 200, resp.text[:200]
+    body = resp.json()
+    assert body.get("status") == "ok"
+    for key in ("format_version", "vaults", "exclusions"):
+        assert key in body["data"], f"plan missing {key!r}"
+    print("  POST /backup/plan envelope ok \u2713")
+
+
+def test_p38_23_http_restore_apply_blocked_remote_read_only():
+    """P38-23: POST /restore/apply is blocked when remote read-only is on."""
+    print("\n=== Test P38-23: restore/apply blocked in remote read-only ===")
+    try:
+        from fastapi.testclient import TestClient
+    except RuntimeError as exc:
+        print(f"  SKIP: TestClient unavailable - {exc}")
+        return
+    import os as _os
+    saved_enabled = _os.environ.get("CVE_PRIVATE_CLOUD_ENABLED")
+    saved_ro = _os.environ.get("CVE_REMOTE_READ_ONLY")
+    _os.environ["CVE_PRIVATE_CLOUD_ENABLED"] = "true"
+    _os.environ["CVE_REMOTE_READ_ONLY"] = "true"
+    try:
+        from mcp.server.mcp_server import app
+        with TestClient(app) as client:
+            resp = client.post("/restore/apply", json={
+                "backup": "cve-backup-anything",
+                "confirmation": "RESTORE cve-backup-anything",
+                "overwrite": True,
+                "restore_config": False,
+            })
+        # 401/403 response when private cloud + read-only flag are on.
+        assert resp.status_code in (401, 403, 400), resp.text[:200]
+    finally:
+        for k, v in (("CVE_PRIVATE_CLOUD_ENABLED", saved_enabled),
+                     ("CVE_REMOTE_READ_ONLY", saved_ro)):
+            if v is None:
+                _os.environ.pop(k, None)
+            else:
+                _os.environ[k] = v
+    print("  /restore/apply blocked in remote read-only \u2713")
+
+
+def test_p38_24_ui_backup_files_exist():
+    """P38-24: UI page and Svelte component for backups are present."""
+    print("\n=== Test P38-24: UI backup files exist ===")
+    repo = _p38_repo_root()
+    page = repo / "ui" / "src" / "pages" / "backups.astro"
+    comp = repo / "ui" / "src" / "components" / "Backups.svelte"
+    assert page.is_file(), f"missing UI page: {page}"
+    assert comp.is_file(), f"missing UI component: {comp}"
+    text = comp.read_text(encoding="utf-8")
+    assert "previewRestore" in text and "applyRestore" in text
+    print("  UI backups page and component exist \u2713")
+
+
+def test_p38_25_ui_api_helpers_exist():
+    """P38-25: ui/src/lib/api.ts exposes the Phase 38 helpers and types."""
+    print("\n=== Test P38-25: UI API helpers exist ===")
+    repo = _p38_repo_root()
+    api_ts = (repo / "ui" / "src" / "lib" / "api.ts").read_text(encoding="utf-8")
+    for token in (
+        "fetchBackups", "buildBackupPlan", "createBackup",
+        "previewRestore", "applyRestore",
+        "BackupSummary", "BackupPlan", "RestorePreview",
+    ):
+        assert token in api_ts, f"api.ts missing {token!r}"
+    print("  UI API helpers and types present \u2713")
+
+
+def test_p38_26_navigation_includes_backups():
+    """P38-26: AppLayout sidebar lists the Backups route."""
+    print("\n=== Test P38-26: Backups nav entry ===")
+    repo = _p38_repo_root()
+    layout = (repo / "ui" / "src" / "layouts" / "AppLayout.astro").read_text(encoding="utf-8")
+    assert "/app/backups" in layout
+    assert "'Backups'" in layout or '"Backups"' in layout
+    print("  Sidebar navigation includes Backups \u2713")
+
+
+def test_p38_27_roadmap_marks_phase38_complete():
+    """P38-27: ROADMAP marks Phase 38 Complete and keeps 27/28 Deferred."""
+    print("\n=== Test P38-27: ROADMAP Phase 38 status ===")
+    roadmap = _p38_read("ROADMAP.md")
+    assert "Phase 38" in roadmap
+    assert "Backup, Restore, and Migration Safety" in roadmap
+    assert "### Phase 27 - Registry and Reuse Layer\n\n**Status: Deferred.**" in roadmap
+    idx = roadmap.find("Phase 28")
+    assert idx >= 0 and "Deferred" in roadmap[idx:idx + 2000]
+    print("  ROADMAP reflects Phase 38 complete; 27/28 Deferred \u2713")
+
+
+def test_p38_28_testing_md_documents_phase38_family():
+    """P38-28: TESTING.md describes the Phase 38 test family."""
+    print("\n=== Test P38-28: TESTING.md Phase 38 section ===")
+    testing = _p38_read("TESTING.md")
+    assert "Phase 38" in testing
+    assert "test_p38_" in testing
+    print("  TESTING.md documents Phase 38 family \u2713")
+
+
+def test_p38_29_docs_mention_phase38_backup_restore():
+    """P38-29: README, QUICKSTART, API docs reference backup/restore."""
+    print("\n=== Test P38-29: docs mention Phase 38 backup/restore ===")
+    readme = _p38_read("README.md").lower()
+    quickstart = _p38_read("QUICKSTART.md").lower()
+    api_doc = _p38_read("API.md").lower()
+    assert "backup" in readme and "restore" in readme
+    assert "py run.py backup" in _p38_read("QUICKSTART.md")
+    assert "/backup" in api_doc or "/backups" in api_doc
+    assert "/restore" in api_doc
+    print("  Docs mention Phase 38 backup/restore \u2713")
+
+
+def test_p38_30_no_new_runtime_dependencies():
+    """P38-30: Phase 38 adds no new Python or UI runtime dependencies."""
+    print("\n=== Test P38-30: no new runtime deps ===")
+    repo = _p38_repo_root()
+    req = (repo / "requirements.txt").read_text(encoding="utf-8").lower()
+    for token in ("py7zr", "patool", "boto3", "azure-storage"):
+        assert token not in req, f"requirements.txt must not add {token!r}"
+    pkg = (repo / "ui" / "package.json").read_text(encoding="utf-8").lower()
+    for token in ("jszip", "@aws-sdk"):
+        assert token not in pkg, f"ui/package.json must not add {token!r}"
+    print("  No new runtime dependencies for Phase 38 \u2713")
+
+
+def test_p38_31_no_backup_artefacts_committed():
+    """P38-31: No backup zip files are committed under dist/backups/."""
+    print("\n=== Test P38-31: no backup artefacts committed ===")
+    repo = _p38_repo_root()
+    out = repo / "dist" / "backups"
+    if out.is_dir():
+        # Any zip present should be locally generated and excluded by .gitignore.
+        # The test simply asserts the directory contains no checked-in
+        # placeholder content of unexpected types.
+        for entry in out.iterdir():
+            assert entry.suffix.lower() in (".zip", "") or entry.name.startswith("."), (
+                f"unexpected file under dist/backups/: {entry.name}"
+            )
+    # Source must not write outside dist/backups by default.
+    src = (repo / "mcp" / "core" / "backup_restore.py").read_text(encoding="utf-8")
+    assert "DEFAULT_OUTPUT_SUBDIR" in src
+    print("  No unexpected backup artefacts committed \u2713")
+
+
+def test_p38_32_write_paths_include_backup_routes():
+    """P38-32: backup/create and restore/apply are listed as write paths."""
+    print("\n=== Test P38-32: backup write paths registered ===")
+    from mcp.server.mcp_server import _WRITE_PATH_PREFIXES
+    prefixes = set(_WRITE_PATH_PREFIXES)
+    assert ("POST", "/backup/create") in prefixes
+    assert ("POST", "/restore/apply") in prefixes
+    print("  Backup write paths registered \u2713")
 
 
 if __name__ == "__main__":

@@ -1701,5 +1701,163 @@ export function buildNotesLink(opts: {
   return qs ? `/app/notes?${qs}` : '/app/notes';
 }
 
+// ---------------------------------------------------------------------------
+// Phase 38: Backup, Restore, and Migration Safety
+// ---------------------------------------------------------------------------
+
+export interface BackupKindCounts {
+  [kind: string]: number;
+}
+
+export interface BackupVaultSummary {
+  name: string;
+  schema_version: string | null;
+  file_count: number;
+  total_bytes: number;
+  kind_counts?: BackupKindCounts;
+}
+
+export interface BackupPlan {
+  format_version: string;
+  generated_at: string;
+  repo_root_present: boolean;
+  config_included: boolean;
+  vaults: BackupVaultSummary[];
+  file_count: number;
+  total_bytes: number;
+  kind_counts: BackupKindCounts;
+  exclusions: {
+    directories: string[];
+    suffixes: string[];
+    vault_relatives: string[];
+  };
+  warnings: Array<{ code: string; message: string }>;
+}
+
+export interface BackupSummary {
+  backup_id: string;
+  archive_path: string;
+  archive_size: number;
+  modified_at?: string;
+  generated_at?: string;
+  manifest_present: boolean;
+  format_version: string | null;
+  file_count: number | null;
+  vaults: string[];
+  warnings: Array<{ code: string; message: string }>;
+}
+
+export interface BackupCreateResult {
+  backup_id: string;
+  archive_path: string;
+  archive_absolute: string;
+  archive_size: number;
+  manifest_hash: string;
+  file_count: number;
+  total_bytes: number;
+  vaults: BackupVaultSummary[];
+  warnings: Array<{ code: string; message: string }>;
+  generated_at: string;
+}
+
+export interface RestorePreviewEntry {
+  archive_path: string;
+  kind: string | null;
+  size: number | null;
+  target_path: string | null;
+  target_exists: boolean;
+  would_overwrite: boolean;
+  in_registry: boolean;
+}
+
+export interface RestorePreviewMigrationVaultChange {
+  name: string;
+  manifest_schema_version: string | null;
+  current_schema_version: string | null;
+  changed: boolean;
+  registered: boolean;
+}
+
+export interface RestorePreview {
+  ok: boolean;
+  errors: Array<{ code: string; message: string }>;
+  warnings: Array<{ code: string; message: string }>;
+  backup_id: string | null;
+  confirmation_phrase: string | null;
+  entries: RestorePreviewEntry[];
+  summary: {
+    entry_count?: number;
+    targets_existing?: number;
+    config_included?: boolean;
+    vaults?: string[];
+  };
+  migration: {
+    vault_changes?: RestorePreviewMigrationVaultChange[];
+    config_changes?: {
+      config_in_backup: boolean;
+      config_present_locally: boolean;
+      shape_changed: boolean;
+    };
+    warnings?: Array<{ code: string; message: string }>;
+    errors?: Array<{ code: string; message: string }>;
+  };
+}
+
+export interface RestoreApplyResult {
+  ok: boolean;
+  backup_id: string | null;
+  written: Array<{
+    archive_path: string;
+    target_path: string;
+    kind: string;
+    size: number;
+  }>;
+  skipped: Array<{ archive_path: string; reason: string }>;
+  errors: Array<{ code: string; message: string }>;
+  warnings: Array<{ code: string; message: string }>;
+}
+
+/** GET /backups — list local backup archives. */
+export function fetchBackups(): Promise<ApiResult<{ backups: BackupSummary[] }>> {
+  return get<{ backups: BackupSummary[] }>('/backups');
+}
+
+/** POST /backup/plan — preview a backup without writing. */
+export function buildBackupPlan(
+  vaults?: string[],
+): Promise<ApiResult<BackupPlan>> {
+  return post<BackupPlan>('/backup/plan', { vaults: vaults ?? null });
+}
+
+/** POST /backup/create — write a backup archive to disk. */
+export function createBackup(
+  vaults?: string[],
+): Promise<ApiResult<BackupCreateResult>> {
+  return post<BackupCreateResult>('/backup/create', { vaults: vaults ?? null });
+}
+
+/** POST /restore/preview — plan a restore without writing. */
+export function previewRestore(
+  backup: string,
+): Promise<ApiResult<RestorePreview>> {
+  return post<RestorePreview>('/restore/preview', { backup });
+}
+
+/** POST /restore/apply — apply a restore after typed confirmation. */
+export function applyRestore(opts: {
+  backup: string;
+  confirmation: string;
+  overwrite?: boolean;
+  restore_config?: boolean;
+}): Promise<ApiResult<RestoreApplyResult>> {
+  return post<RestoreApplyResult>('/restore/apply', {
+    backup: opts.backup,
+    confirmation: opts.confirmation,
+    overwrite: Boolean(opts.overwrite),
+    restore_config: Boolean(opts.restore_config),
+  });
+}
+
+
 
 

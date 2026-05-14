@@ -1,0 +1,7 @@
+---
+import AppLayout from '../layouts/AppLayout.astro';
+import BackupsView from '../components/Backups.svelte';
+---
+<AppLayout title="Backups" layoutMode="developer">
+  <BackupsView client:load />
+</AppLayout>

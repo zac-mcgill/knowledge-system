@@ -239,6 +239,29 @@ sudo ufw allow in on tailscale0
 
 ## Backup Guidance
 
+Phase 38 ships a first-class local backup and restore surface. The built-in
+backup is local-only, preview-first, and stdlib-only:
+
+- `py run.py backup --preview` prints a JSON plan (no files written).
+- `py run.py backup --write` writes a zip to
+  `dist/backups/cve-backup-<utc>-<id>.zip` with `backup-manifest.json` at
+  the root and SHA-256 per file. Generated artefacts (`dist/`,
+  `node_modules/`, caches, `.git/`, vault reports) are excluded.
+- `py run.py backup --list` lists existing local backups.
+- `py run.py restore --backup <id> --preview` shows every target with
+  `target_exists` / `would_overwrite` and any blocking errors or
+  migration warnings.
+- `py run.py restore --backup <id> --write --overwrite --confirm "RESTORE <id>"`
+  applies the restore. Existing files are never replaced without
+  `--overwrite` and a matching `--confirm` phrase. `config/config.yaml`
+  is only restored when `--restore-config` is also passed. Files are
+  hash-validated in a temporary directory before live targets are
+  replaced.
+
+The built-in backup never uploads anywhere. Treat
+`dist/backups/cve-backup-*.zip` as private artefacts and copy them
+off-host using your normal backup tooling if you need offsite copies.
+
 The persistent state that must be backed up:
 
 | Path | Contents |

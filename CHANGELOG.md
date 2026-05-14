@@ -1,5 +1,30 @@
 # Changelog
 
+## Unreleased - Phase 38: Backup, Restore, and Migration Safety
+
+Add a local, preview-first backup and restore surface so users can capture and recover their vaults, config, feedback, state, and templates without risking accidental data loss.
+
+### Added
+
+- `mcp/core/backup_restore.py` service exposing `build_backup_plan`, `create_backup_archive`, `list_backups`, `read_backup_manifest`, `validate_backup_archive`, `build_restore_preview`, `apply_restore`, `build_migration_summary`, and `FORMAT_VERSION="1"`. Standard-library only (`zipfile`, `hashlib`, `tempfile`, `shutil`).
+- Local zip backups written to `dist/backups/cve-backup-<utc>-<id>.zip` with `backup-manifest.json` at the archive root and SHA-256 per file. Generated artefacts (`dist/`, `node_modules/`, caches, `.git/`, vault reports) are excluded by default; note bodies are never embedded in the manifest.
+- `py run.py backup` CLI command (`--preview`, `--write`, `--list`, `--vault NAME`) and `py run.py restore` CLI command (`--backup`, `--preview`, `--write`, `--overwrite`, `--restore-config`, `--confirm`).
+- HTTP API: `GET /backups`, `POST /backup/plan`, `POST /backup/create`, `POST /restore/preview`, `POST /restore/apply`. Write routes are added to `_WRITE_PATH_PREFIXES` and are blocked in private cloud read-only mode.
+- `/app/backups` UI page under the Developer nav group, with an existing-backups table, a create-backup form, and a preview-first restore form with typed `RESTORE <backup_id>` confirmation gate, plus `overwrite` and `restore_config` opt-in checkboxes.
+- 32 deterministic Phase 38 tests (`test_p38_01_*` through `test_p38_32_*`), bringing the suite to 1135 tests.
+
+### Safety
+
+- Restore is **preview-first**. `build_restore_preview` reports every entry as `target_exists` / `would_overwrite` / `in_registry`, surfaces blocking errors (`MANIFEST_MISSING`, `HASH_MISMATCH`, `UNSAFE_ARCHIVE_PATH`, `UNSAFE_RESTORE_TARGET`, `FORMAT_VERSION_UNSUPPORTED`), and emits migration warnings (`SCHEMA_VERSION_CHANGED`, `CONFIG_SHAPE_CHANGED`, `TARGET_EXISTS`, `VAULT_NOT_REGISTERED`) before any write.
+- `apply_restore` requires a typed `RESTORE <backup_id>` confirmation that exactly matches the preview's `confirmation_phrase`, an explicit `overwrite=True` flag to replace existing files, and an explicit `restore_config=True` flag to touch `config/config.yaml`.
+- Restored files are staged into a temporary directory and hash-validated before any live target is replaced (atomic on validation failure - no partial restores).
+- Archive entries with absolute paths, `..` segments, or paths escaping the repository root are rejected with `UNSAFE_ARCHIVE_PATH` / `UNSAFE_RESTORE_TARGET`.
+- Backups are local-only inspectable zip files. Nothing is uploaded; no cloud backup target was introduced.
+
+### Non-goals
+
+Phase 38 does not start Phase 27 (Registry and Reuse Layer) or Phase 28 (Optional Semantic Retrieval); both remain Deferred. No semantic retrieval, embeddings, LLM calls, autonomous note writing, registry/reuse, desktop packaging, onboarding workflow, new runtime dependency, new UI framework, React, external icon library, animation library, remote telemetry, crash upload service, automatic issue reporting, or cloud backup target was added.
+
 ## Unreleased - Phase 37: Local Diagnostics and Support Report
 
 Add a local, redacted diagnostics and support report so users can debug and share triage information safely without leaking note bodies, tokens, or other secrets.

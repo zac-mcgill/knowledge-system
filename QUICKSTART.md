@@ -1714,6 +1714,41 @@ UI under the Developer nav group.
 
 ---
 
+## 31a. Local Backup and Restore (Phase 38)
+
+`py run.py backup` plans or writes a local backup of your vaults, config,
+feedback, state, and templates. Backups are plain ZIP archives written to
+`dist/backups/`. Generated artefacts (`dist/`, `ui/dist/`, vault reports,
+caches, VCS metadata) are excluded by default and note bodies never appear
+in the manifest.
+
+```bash
+py run.py backup --preview         # print the backup plan as JSON
+py run.py backup --write           # create dist/backups/cve-backup-...zip
+py run.py backup --list            # list existing local backups
+```
+
+Restore is **preview-first** and requires a typed confirmation phrase:
+
+```bash
+py run.py restore --backup <id> --preview
+py run.py restore --backup <id> --write --overwrite \
+  --confirm "RESTORE <id>"
+```
+
+The restore never overwrites existing files unless `--overwrite` is given
+**and** the typed `--confirm "RESTORE <backup_id>"` phrase matches **and**
+the preview reports no blocking errors. Restored files are staged into a
+temporary directory and hash-validated before replacing the live targets.
+Restoring `config/config.yaml` requires the additional `--restore-config`
+flag.
+
+The same operations are available over HTTP (`GET /backups`,
+`POST /backup/plan`, `POST /backup/create`, `POST /restore/preview`,
+`POST /restore/apply`; see `API.md`) and as a UI page at `/app/backups`.
+
+---
+
 ## 32. Run Verification Tests (Optional)
 
 Core tests (requires only `requirements.txt`):

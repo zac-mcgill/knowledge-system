@@ -1,13 +1,13 @@
 # Context Vault Engine - Testing
 
-All tests live in `mcp/test_verify.py`. The suite currently has 1103 test functions, all of which are executed by the manual runner in `main()` at the bottom of that file. A passing run prints `ALL VERIFICATION TESTS PASSED`. Historical test counts from earlier phases (272, 382, 429, 467, 507, 548, 553, 564, 587, 607, 625, 650, 675, 695, 706, 721, 740, 763, 787, 800, 818, 842, 866, 890, 913, 937, 985, 999, 1021, 1028, 1044, 1065, 1081) appear later in this document as part of the phase changelog and are not the current total.
+All tests live in `mcp/test_verify.py`. The suite currently has 1135 test functions, all of which are executed by the manual runner in `main()` at the bottom of that file. A passing run prints `ALL VERIFICATION TESTS PASSED`. Historical test counts from earlier phases (272, 382, 429, 467, 507, 548, 553, 564, 587, 607, 625, 650, 675, 695, 706, 721, 740, 763, 787, 800, 818, 842, 866, 890, 913, 937, 985, 999, 1021, 1028, 1044, 1065, 1081, 1103) appear later in this document as part of the phase changelog and are not the current total.
 
 ## Current Verification Summary
 
 A full local verification consists of:
 
 ```bash
-py mcp/test_verify.py           # 1103 tests, all must pass
+py mcp/test_verify.py           # 1135 tests, all must pass
 py run.py validate              # vault schema-compliance
 py run.py security              # status: pass (or warning, never fail)
 py run.py feedback              # exits 0, valid JSON
@@ -2745,7 +2745,7 @@ Phase 39 adds 16 deterministic tests in `mcp/test_verify.py` (P39-1 through P39-
 - `test_p39_mcp_discovery_remains_deterministic` - `tools/list`, `resources/list`, and `prompts/list` return the same shape on repeated invocations.
 - `test_p39_phase_27_28_remain_deferred` - `ROADMAP.md` keeps Phase 27 and Phase 28 explicitly Deferred.
 - `test_p39_no_semantic_or_new_write_path` - no semantic, embedding, or LLM dependency is loaded by `mcp.core` or `mcp.smoke`, and `mcp.smoke` does not import anything that would let it write vault notes.
-- `test_p39_test_count_updated` - `TESTING.md` and `README.md` advertise the post-Phase 37 test count of 1103.
+- `test_p39_test_count_updated` - `TESTING.md` and `README.md` advertise the post-Phase 38 test count of 1135.
 
 Phase 39 is a setup-and-verification phase. It does not change the MCP safety model, does not start Phase 27 (Registry and Reuse Layer) or Phase 28 (Optional Semantic Retrieval), does not add embeddings, does not add LLM calls, does not add a new direct vault-write path, and does not add autonomous mutation.
 
@@ -2777,4 +2777,43 @@ Phase 37 adds 22 deterministic tests in `mcp/test_verify.py` (`test_p37_01_*` th
 - `test_p37_22_no_generated_artefacts_committed` - no diagnostics report file is committed and the diagnostics service does not write files.
 
 Phase 37 is a supportability phase. It does not start Phase 27 (Registry and Reuse Layer) or Phase 28 (Optional Semantic Retrieval); both remain Deferred. It does not add semantic retrieval, embeddings, LLM calls, autonomous note writing, registry/reuse, backup/restore, desktop packaging, onboarding workflow, MCP client setup work, remote telemetry, or automatic issue reporting.
+
+### Phase 38 Test Family
+
+Phase 38 adds 32 deterministic tests in `mcp/test_verify.py` (`test_p38_01_*` through `test_p38_32_*`), bringing the total from 1103 to 1135. The tests lock the local Backup, Restore, and Migration Safety surface: the service module (`mcp/core/backup_restore.py`), the `backup`/`restore` CLI commands, the `/backups`, `/backup/plan`, `/backup/create`, `/restore/preview`, and `/restore/apply` HTTP routes, the UI page and component, the preview-first restore contract with typed `RESTORE <backup_id>` confirmation, hash validation, generated-artefact exclusions, format version handling, migration warnings, and documentation guardrails.
+
+- `test_p38_01_service_imports` - `mcp.core.backup_restore` exposes the public surface (`build_backup_plan`, `create_backup_archive`, `list_backups`, `read_backup_manifest`, `validate_backup_archive`, `build_restore_preview`, `apply_restore`, `build_migration_summary`, `FORMAT_VERSION`).
+- `test_p38_02_format_version_is_string` - `FORMAT_VERSION` is the non-empty string `"1"`.
+- `test_p38_03_backup_plan_excludes_generated_artefacts` - `build_backup_plan` excludes `dist/`, `node_modules/`, `__pycache__/`, caches, `.git/`, and vault reports.
+- `test_p38_04_backup_plan_includes_vault_notes_only_by_path` - the plan lists vault notes by relative path; no note bodies are embedded.
+- `test_p38_05_backup_plan_kind_counts` - `kind_counts` reports `vault-note`, `vault-schema`, `vault-template`, `config`, and other kinds as integers.
+- `test_p38_06_create_archive_writes_zip_with_manifest` - `create_backup_archive` writes a zip containing `backup-manifest.json` at root.
+- `test_p38_07_manifest_contains_sha256_hashes` - every file entry in the manifest has a 64-char lowercase hex `sha256` value.
+- `test_p38_08_manifest_has_format_version_and_generated_at` - the manifest has `format_version`, `generated_at`, and `app_name` fields.
+- `test_p38_09_archive_path_is_under_dist_backups` - new archives are written under `dist/backups/`.
+- `test_p38_10_list_backups_reads_only_under_output_root` - `list_backups` only reports archives located under `dist/backups/`.
+- `test_p38_11_validate_archive_detects_hash_mismatch` - tampering with an archived file is detected via `HASH_MISMATCH`.
+- `test_p38_12_validate_archive_detects_missing_manifest` - archives without `backup-manifest.json` return `MANIFEST_MISSING`.
+- `test_p38_13_validate_archive_rejects_unsafe_paths` - archives containing absolute or `..` entries return `UNSAFE_ARCHIVE_PATH`.
+- `test_p38_14_validate_archive_rejects_unsupported_format_version` - unsupported `format_version` returns `FORMAT_VERSION_UNSUPPORTED`.
+- `test_p38_15_restore_preview_is_dry_run` - `build_restore_preview` writes no files.
+- `test_p38_16_restore_preview_reports_overwrite_targets` - preview entries flag `target_exists` and `would_overwrite` correctly.
+- `test_p38_17_restore_preview_includes_confirmation_phrase` - preview exposes `confirmation_phrase` equal to `RESTORE <backup_id>`.
+- `test_p38_18_restore_preview_flags_unregistered_vaults` - vaults in the archive that are not registered locally produce a `VAULT_NOT_REGISTERED` warning.
+- `test_p38_19_restore_preview_flags_schema_changes` - migration analysis raises `SCHEMA_VERSION_CHANGED` when the archived schema differs from the live schema.
+- `test_p38_20_apply_restore_requires_confirmation` - `apply_restore` returns `CONFIRMATION_REQUIRED` when no confirmation is supplied.
+- `test_p38_21_apply_restore_rejects_wrong_confirmation` - mismatched confirmation phrases return `CONFIRMATION_MISMATCH`.
+- `test_p38_22_apply_restore_does_not_overwrite_without_flag` - existing files are not overwritten unless `overwrite=True`.
+- `test_p38_23_apply_restore_overwrites_when_flag_set` - with `overwrite=True` and a correct confirmation, target files are replaced.
+- `test_p38_24_apply_restore_atomic_on_validation_failure` - if any staged file fails hash validation, no live targets are replaced.
+- `test_p38_25_apply_restore_skips_config_without_flag` - `config/config.yaml` is skipped unless `restore_config=True`.
+- `test_p38_26_apply_restore_rejects_unsafe_target` - archives containing entries that would escape the repository root return `UNSAFE_RESTORE_TARGET`.
+- `test_p38_27_roadmap_marks_phase_38_complete` - `ROADMAP.md` marks Phase 38 as Complete and still defers Phase 27 and Phase 28.
+- `test_p38_28_testing_doc_describes_phase_38` - `TESTING.md` describes the Phase 38 test family and references `test_p38_`.
+- `test_p38_29_user_docs_describe_backup_and_restore` - `README.md`, `QUICKSTART.md`, and `API.md` mention `py run.py backup`, `/backup`, and `/restore`.
+- `test_p38_30_no_new_runtime_dependencies` - `requirements.txt` and `ui/package.json` are not modified.
+- `test_p38_31_cli_backup_preview_emits_json_exit_zero` - `py run.py backup --preview` prints valid JSON and exits 0.
+- `test_p38_32_write_paths_include_backup_routes` - `_WRITE_PATH_PREFIXES` includes `POST /backup/create` and `POST /restore/apply`.
+
+Phase 38 is a local-safety phase. It does not start Phase 27 (Registry and Reuse Layer) or Phase 28 (Optional Semantic Retrieval); both remain Deferred. It does not introduce any new runtime dependency, cloud upload, telemetry, or remote backup target.
 

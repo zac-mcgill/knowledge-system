@@ -329,6 +329,9 @@ _WRITE_PATH_PREFIXES: tuple[tuple[str, str], ...] = (
     ("POST", "/memory/suggest-note-update"),
     ("POST", "/memory/update-section-draft"),
     ("POST", "/memory/pending/"),  # covers /memory/pending/{id}/accept and /reject
+    # Phase 38: backup creation and restore application.
+    ("POST", "/backup/create"),
+    ("POST", "/restore/apply"),
 )
 
 # Paths always allowed without auth (even when CVE_REQUIRE_AUTH=true).
@@ -1176,6 +1179,108 @@ def endpoint_diagnostics():
         return {"status": "ok", "data": report}
     except Exception as exc:
         return _error("DIAGNOSTICS_FAILED", f"Diagnostics failed: {exc}", 500)
+
+
+# ---------------------------------------------------------------------------
+# Phase 38: Backup, Restore, and Migration Safety
+# ---------------------------------------------------------------------------
+
+
+class BackupPlanRequest(BaseModel):
+    vaults: list[str] | None = Field(
+        default=None,
+        description="Optional list of vault names to include; default is all registered vaults.",
+    )
+
+
+class BackupCreateRequest(BaseModel):
+    vaults: list[str] | None = Field(
+        default=None,
+        description="Optional list of vault names to include; default is all registered vaults.",
+    )
+
+
+class RestorePreviewRequest(BaseModel):
+    backup: str = Field(..., description="Backup id or zip path under dist/backups/")
+
+
+class RestoreApplyRequest(BaseModel):
+    backup: str = Field(..., description="Backup id or zip path under dist/backups/")
+    confirmation: str = Field(..., description="Typed phrase 'RESTORE <backup_id>'")
+    overwrite: bool = Field(default=False)
+    restore_config: bool = Field(default=False)
+
+
+@app.get("/backups")
+def endpoint_backups_list():
+    """List local backup archives (Phase 38). Read-only and local."""
+    try:
+        from mcp.core.backup_restore import list_backups
+
+        return {"status": "ok", "data": {"backups": list_backups()}}
+    except Exception as exc:
+        return _error("BACKUPS_FAILED", f"List backups failed: {exc}", 500)
+
+
+@app.post("/backup/plan")
+def endpoint_backup_plan(req: BackupPlanRequest):
+    """Plan a backup without writing files (Phase 38)."""
+    try:
+        from mcp.core.backup_restore import build_backup_plan
+
+        plan = build_backup_plan(vault_names=req.vaults)
+        return {"status": "ok", "data": plan}
+    except Exception as exc:
+        return _error("BACKUP_PLAN_FAILED", f"Backup plan failed: {exc}", 500)
+
+
+@app.post("/backup/create")
+def endpoint_backup_create(req: BackupCreateRequest):
+    """Create a backup archive (Phase 38). Blocked in remote read-only mode."""
+    try:
+        from mcp.core.backup_restore import create_backup_archive
+
+        result = create_backup_archive(vault_names=req.vaults)
+        return {"status": "ok", "data": result}
+    except Exception as exc:
+        return _error("BACKUP_CREATE_FAILED", f"Backup create failed: {exc}", 500)
+
+
+@app.post("/restore/preview")
+def endpoint_restore_preview(req: RestorePreviewRequest):
+    """Preview a restore without writing any files (Phase 38)."""
+    try:
+        from mcp.core.backup_restore import build_restore_preview
+
+        preview = build_restore_preview(req.backup)
+        return {"status": "ok", "data": preview}
+    except Exception as exc:
+        return _error("RESTORE_PREVIEW_FAILED", f"Restore preview failed: {exc}", 500)
+
+
+@app.post("/restore/apply")
+def endpoint_restore_apply(req: RestoreApplyRequest):
+    """Apply a restore (Phase 38). Requires preview-clean and typed confirmation."""
+    try:
+        from mcp.core.backup_restore import apply_restore
+
+        result = apply_restore(
+            req.backup,
+            confirmation=req.confirmation,
+            overwrite=req.overwrite,
+            restore_config=req.restore_config,
+        )
+        if not result.get("ok"):
+            errors = result.get("errors") or [{"code": "RESTORE_FAILED", "message": "Restore failed"}]
+            first = errors[0]
+            return _error(
+                first.get("code", "RESTORE_FAILED"),
+                first.get("message", "Restore failed"),
+                400,
+            )
+        return {"status": "ok", "data": result}
+    except Exception as exc:
+        return _error("RESTORE_APPLY_FAILED", f"Restore apply failed: {exc}", 500)
 
 
 @app.get("/private/status")

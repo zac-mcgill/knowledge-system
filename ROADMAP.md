@@ -155,7 +155,7 @@ Phase 32 (Human Release QA and Evidence Capture) remains planned and remains man
 | 35    | Deterministic In-App Guidance Assistant | Planned  |
 | 36    | First-Run Onboarding Workflow           | Planned  |
 | 37    | Local Diagnostics and Support Report    | Complete |
-| 38    | Backup, Restore, and Migration Safety   | Planned  |
+| 38    | Backup, Restore, and Migration Safety   | Complete |
 | 39    | MCP Client Setup and Connection Testing | Planned  |
 | 40    | Public Security Posture and Release     | Planned  |
 | 41    | Example Vaults and Demonstration Packs  | Planned  |
@@ -164,6 +164,7 @@ Phase 32 (Human Release QA and Evidence Capture) remains planned and remains man
 | 44    | Pending Change Lifecycle and Agent Draft Hardening | Planned  |
 | 44A   | Pending Change Lifecycle Investigation and Safety Contract | Complete |
 | 44B   | Pending Change Lifecycle Implementation and UI Visibility Hardening | Complete |
+| 45    | Legacy Acronym Neurtralisation (CVE)    | Planned  |
 | 27    | Registry and Reuse Layer                | Deferred |
 | 28    | Optional Semantic Retrieval             | Deferred |
 
@@ -1630,28 +1631,67 @@ feat(diagnostics): add local diagnostics and safe support report
 
 ### Phase 38 - Backup, Restore, and Migration Safety
 
-**Status:** Planned.
+**Status:** Complete.
 
 **Purpose**
 
 Protect real user vaults and config before the app is used seriously.
 
-**Deliver**
+**Delivered**
 
-- Backup plan for vaults, config, feedback, state, and relevant local metadata.
-- Restore workflow with preview.
-- Restore validation before write.
-- Migration checks for schema/config changes.
-- Clear overwrite warnings.
-- Generated artefacts excluded by default.
+- Backup service (`mcp/core/backup_restore.py`) producing zip archives at
+  `dist/backups/cve-backup-<utc>-<id>.zip` with a `backup-manifest.json`
+  at the root and SHA-256 per file. Stdlib-only (`zipfile`, `hashlib`,
+  `tempfile`, `shutil`).
+- Backup plan covers vaults (notes, schema, templates, feedback, state)
+  and `config/config.yaml`. Generated artefacts (`dist/`, `node_modules/`,
+  caches, `.git/`, vault reports) are excluded by default and note bodies
+  never appear in the manifest.
+- Restore workflow is preview-first. `build_restore_preview` reports
+  every entry as `target_exists` / `would_overwrite` / `in_registry`,
+  surfaces blocking errors (`MANIFEST_MISSING`, `HASH_MISMATCH`,
+  `UNSAFE_ARCHIVE_PATH`, `UNSAFE_RESTORE_TARGET`,
+  `FORMAT_VERSION_UNSUPPORTED`), and emits migration warnings
+  (`SCHEMA_VERSION_CHANGED`, `CONFIG_SHAPE_CHANGED`, `TARGET_EXISTS`,
+  `VAULT_NOT_REGISTERED`) before any write.
+- `apply_restore` requires a typed `RESTORE <backup_id>` confirmation
+  and an explicit `overwrite=True` flag to replace existing files. Files
+  are staged in a temporary directory and hash-validated; if any staged
+  file fails validation, no live targets are replaced. `config/config.yaml`
+  is only restored when `restore_config=True`.
+- CLI: `py run.py backup` (`--preview`, `--write`, `--list`,
+  `--vault NAME`) and `py run.py restore` (`--backup`, `--preview`,
+  `--write`, `--overwrite`, `--restore-config`, `--confirm`).
+- HTTP API: `GET /backups`, `POST /backup/plan`, `POST /backup/create`,
+  `POST /restore/preview`, `POST /restore/apply`. The write routes
+  (`/backup/create`, `/restore/apply`) are added to
+  `_WRITE_PATH_PREFIXES` and are blocked in remote read-only private
+  cloud mode.
+- UI: `/app/backups` Astro page with the `Backups.svelte` view under the
+  Developer nav group (existing backups table, create-backup form,
+  preview-first restore form with typed-confirmation gate).
+- Documentation: `README.md`, `QUICKSTART.md`, `API.md`, `TESTING.md`,
+  `RELEASE_CHECKLIST.md`, and `CHANGELOG.md` describe the new surface
+  and the safety contract.
 
 **Acceptance**
 
-- Restore must reject unsafe paths.
-- Restore must not overwrite without explicit confirmation.
-- Backup should be local and inspectable.
-- No cloud backup feature.
-- No registry implementation.
+- Restore rejects unsafe paths (absolute, `..`, escapes repo root).
+- Restore never writes without explicit `RESTORE <backup_id>` confirmation
+  matching the preview and an `overwrite` flag for existing targets.
+- Backups are local-only inspectable zip files; nothing is uploaded.
+- No registry implementation (Phase 27 remains Deferred).
+- No semantic retrieval (Phase 28 remains Deferred).
+- No new runtime dependency.
+
+**Tests**
+
+- 32 deterministic Phase 38 tests (`test_p38_01_*` through
+  `test_p38_32_*`) in `mcp/test_verify.py`, raising the suite total from
+  1103 to 1135.
+
+Phase 38 does not start Phase 27 (Registry and Reuse Layer) or Phase 28
+(Optional Semantic Retrieval); both remain Deferred.
 
 **Suggested Commit**
 
