@@ -1,13 +1,13 @@
 # Context Vault Engine - Testing
 
-All tests live in `mcp/test_verify.py`. The suite currently has 1065 test functions, all of which are executed by the manual runner in `main()` at the bottom of that file. A passing run prints `ALL VERIFICATION TESTS PASSED`. Historical test counts from earlier phases (272, 382, 429, 467, 507, 548, 553, 564, 587, 607, 625, 650, 675, 695, 706, 721, 740, 763, 787, 800, 818, 842, 866, 890, 913, 937, 985, 999, 1021, 1028, 1044) appear later in this document as part of the phase changelog and are not the current total.
+All tests live in `mcp/test_verify.py`. The suite currently has 1081 test functions, all of which are executed by the manual runner in `main()` at the bottom of that file. A passing run prints `ALL VERIFICATION TESTS PASSED`. Historical test counts from earlier phases (272, 382, 429, 467, 507, 548, 553, 564, 587, 607, 625, 650, 675, 695, 706, 721, 740, 763, 787, 800, 818, 842, 866, 890, 913, 937, 985, 999, 1021, 1028, 1044, 1065) appear later in this document as part of the phase changelog and are not the current total.
 
 ## Current Verification Summary
 
 A full local verification consists of:
 
 ```bash
-py mcp/test_verify.py           # 1065 tests, all must pass
+py mcp/test_verify.py           # 1081 tests, all must pass
 py run.py validate              # vault schema-compliance
 py run.py security              # status: pass (or warning, never fail)
 py run.py feedback              # exits 0, valid JSON
@@ -2725,4 +2725,27 @@ Phase 44B adds 21 deterministic tests in `mcp/test_verify.py` (P44B-1 through P4
 - `test_p44b_no_semantic_retrieval_or_new_write_path_added` - no semantic retrieval, embeddings, or LLM dependencies are imported by `mcp.core`, and no new write-like helper is added to `pending_changes` beyond `write_pending_change`.
 
 Phase 44B is the safe lifecycle implementation phase. It does not change accept semantics, does not bypass stale-hash protection, does not introduce semantic retrieval, and does not add a new direct vault-write path.
+
+### Phase 39 Test Family
+
+Phase 39 adds 16 deterministic tests in `mcp/test_verify.py` (P39-1 through P39-16), bringing the total from 1065 to 1081. The tests lock the MCP client setup documentation, the `.vscode/mcp.json` known-working configuration, the new `py run.py mcp-smoke` deterministic local connection test, the smoke helper's JSON-RPC parsing guardrails, and the Phase 39 safety claims. No backend route, no MCP protocol behaviour, no new write path, no semantic retrieval, and no LLM dependency is introduced by Phase 39.
+
+- `test_p39_docs_explain_stdio_model` - `QUICKSTART.md` and `API.md` describe the local stdin/stdout JSON-RPC 2.0 model and state that stdout is reserved for JSON-RPC.
+- `test_p39_docs_include_py_run_mcp` - `QUICKSTART.md`, `README.md`, and `API.md` include the Windows `py run.py mcp` start command.
+- `test_p39_docs_reference_vscode_mcp_json` - `QUICKSTART.md` references the `.vscode/mcp.json` configuration shape, the repository ships a valid `.vscode/mcp.json`, and the shipped configuration contains the documented `contextVaultEngine` stdio entry.
+- `test_p39_docs_warn_working_directory_repository_root` - `QUICKSTART.md` warns that clients should open the repository root as the workspace or otherwise set the working directory so `run.py` resolves.
+- `test_p39_docs_distinguish_mcp_stdio_from_http_and_web_ui` - `QUICKSTART.md` and `API.md` distinguish the MCP stdio server from the HTTP API server and the local web UI, and explain that the MCP stdio server does not require the web UI to be open.
+- `test_p39_docs_do_not_claim_mcp_verifies_rendered_ui` - the Phase 39 MCP setup documentation does not claim that MCP testing or `mcp-smoke` verifies the rendered web UI.
+- `test_p39_docs_do_not_claim_all_mcp_tools_read_only` - given that the current MCP tool catalogue includes `cve_create_note_draft`, `cve_update_note_section_draft`, `cve_suggest_note_update`, `cve_review_pending_change`, and `cve_revalidate_pending_change`, the Phase 39 documentation does not assert that all MCP tools are fully read-only.
+- `test_p39_docs_state_no_direct_write_path_and_no_autonomous_accept` - `QUICKSTART.md` and `API.md` state that there is no direct vault-note write path in the MCP layer and no autonomous accept.
+- `test_p39_mcp_smoke_command_documented` - `py run.py mcp-smoke` is documented in `QUICKSTART.md` and `README.md`.
+- `test_p39_mcp_smoke_command_in_run_py` - `run.py` advertises `mcp-smoke` in its usage banner and dispatches the command via `mcp.smoke.run_smoke`.
+- `test_p39_smoke_helper_parses_valid_jsonrpc` - `mcp.smoke.parse_jsonrpc_line` accepts a well-formed JSON-RPC 2.0 message line, and `check_stdout_clean` returns parsed messages for a clean transcript.
+- `test_p39_smoke_helper_rejects_non_json_stdout` - `mcp.smoke.check_stdout_clean` raises `SmokeError` on non-JSON contamination, on non-object payloads, and on messages missing `jsonrpc: "2.0"`.
+- `test_p39_mcp_discovery_remains_deterministic` - `tools/list`, `resources/list`, and `prompts/list` return the same shape on repeated invocations.
+- `test_p39_phase_27_28_remain_deferred` - `ROADMAP.md` keeps Phase 27 and Phase 28 explicitly Deferred.
+- `test_p39_no_semantic_or_new_write_path` - no semantic, embedding, or LLM dependency is loaded by `mcp.core` or `mcp.smoke`, and `mcp.smoke` does not import anything that would let it write vault notes.
+- `test_p39_test_count_updated` - `TESTING.md` and `README.md` advertise the post-Phase 39 test count of 1081.
+
+Phase 39 is a setup-and-verification phase. It does not change the MCP safety model, does not start Phase 27 (Registry and Reuse Layer) or Phase 28 (Optional Semantic Retrieval), does not add embeddings, does not add LLM calls, does not add a new direct vault-write path, and does not add autonomous mutation.
 

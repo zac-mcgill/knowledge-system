@@ -1025,19 +1025,91 @@ After editing, adding, or deleting a note file, the next API call automatically 
 
 ---
 
-## 24. MCP Stdio Server (Phase 20)
+## 24. MCP Stdio Server (Phase 20, setup hardened in Phase 39)
 
-Context Vault Engine exposes its vault capabilities as a **read-only MCP stdio server** for use with MCP-compatible local clients (e.g. Claude Desktop, Cursor, custom agent loops).
+Context Vault Engine exposes its vault capabilities as a **local MCP stdio server** for use with MCP-compatible local clients. The MCP layer is read-mostly: most tools are deterministic read-only queries (`cve_list_vaults`, `cve_query_notes`, `cve_get_note`, `cve_validate_vault`, `cve_get_tasks`, `cve_security_scan`, `cve_build_context_bundle`, and friends), and a small number of tools create or revalidate **pending change proposals** (`cve_create_note_draft`, `cve_update_note_section_draft`, `cve_suggest_note_update`, `cve_review_pending_change`, `cve_revalidate_pending_change`). Pending proposals are queued for human review and **never** written to vault notes without an explicit accept from the existing human-reviewed accept path. There is no direct vault-note write path in the MCP layer and no autonomous accept. There is no semantic retrieval, no embeddings, and no LLM call inside the engine.
 
-> The MCP server communicates entirely over **stdin/stdout** using newline-delimited JSON-RPC 2.0. All tool calls are deterministic and read-only - no notes are created, edited, or deleted.
+> The MCP server communicates entirely over **stdin/stdout** using newline-delimited JSON-RPC 2.0. Server logs go to stderr only; stdout is reserved for JSON-RPC messages. Any non-JSON text on stdout would break MCP clients.
+
+### Local transports at a glance
+
+The repository ships three distinct local surfaces. Do not confuse them:
+
+| Surface | Transport | Purpose | Start command |
+|---------|-----------|---------|---------------|
+| HTTP API server | TCP (FastAPI on `http://127.0.0.1:8000`) | Programmatic and UI access | `py mcp/server/mcp_server.py` |
+| Local web UI | Browser (served by the HTTP API) | Human review and governance | `py run.py app` |
+| MCP stdio server | stdin/stdout JSON-RPC 2.0 | MCP-compatible local agent clients | `py run.py mcp` |
+
+The MCP stdio server is **independent** of the HTTP API and the local web UI. You do not need the UI build, the FastAPI server, or a browser open to use the MCP stdio server. The MCP layer also does not verify the rendered web UI; UI visual QA is a separate manual workflow tracked in `RELEASE_CHECKLIST.md`.
 
 ### Start the MCP server
 
 ```bash
-py run.py mcp
+py run.py mcp        # Windows (Python launcher)
+python3 run.py mcp   # macOS/Linux equivalent
 ```
 
-The server reads JSON-RPC messages from stdin and writes responses to stdout. Log output goes to stderr. Press `Ctrl+C` or close stdin to exit.
+The server reads JSON-RPC messages from stdin and writes responses to stdout. Log output goes to stderr. Press `Ctrl+C` or close stdin to exit. The command must be run from the repository root so `run.py` resolves correctly, unless your MCP client supports a working-directory field and you set it to the repository root.
+
+### Connect a local MCP client
+
+The repository ships a known-working VS Code workspace configuration at `.vscode/mcp.json`:
+
+```json
+{
+  "servers": {
+    "contextVaultEngine": {
+      "type": "stdio",
+      "command": "py",
+      "args": ["run.py", "mcp"]
+    }
+  }
+}
+```
+
+Notes when adapting this snippet for your own MCP client:
+
+- Open the repository root as the workspace (or set the client's working-directory field to the repository root) so the relative `run.py` path resolves.
+- On macOS or Linux, replace `"command": "py"` with `"command": "python3"` (or your project's usual launcher).
+- Some clients require an absolute path to the Python interpreter; if so, point it at the same interpreter you use for `py run.py validate`.
+- Do not put secrets or absolute user-specific paths in the committed config.
+- Do not assume cross-client compatibility. The configuration above is verified for VS Code Copilot; other clients (Claude Desktop, Cursor, custom agent loops) follow similar shapes but each has its own config file and rules. Treat the snippet as a conservative example, not a guarantee.
+
+### Verify the connection (local smoke test)
+
+```bash
+py run.py mcp-smoke
+```
+
+`mcp-smoke` spawns the MCP stdio server as a subprocess and sends a deterministic JSON-RPC sequence:
+
+1. `initialize` returns a valid response with `protocolVersion`, `serverInfo`, and `capabilities`.
+2. `tools/list` returns the expected tool catalogue shape.
+3. `resources/list` returns resources.
+4. `prompts/list` returns prompts.
+5. A single safe tool call (`cve_list_vaults`) succeeds.
+6. Every line of stdout parses as a JSON-RPC 2.0 message; any non-JSON contamination fails the test.
+
+Exits `0` on pass and non-zero on fail with concise diagnostics on stderr. It does not require an external MCP client, does not write to any vault note, and does not exercise the pending-change proposal or accept paths.
+
+### Safe-use notice
+
+- Inspect every pending change before accepting; the MCP layer never auto-accepts.
+- Never instruct an agent to auto-accept pending changes.
+- Reject stale or invalid test proposals; revalidation (`cve_revalidate_pending_change`) refreshes validation state but does NOT accept and does NOT write.
+- Exported bundles and note writes remain governed by existing safety gates (schema validation, security scan, stale-hash protection, manual accept).
+- Do not expose the MCP stdio server over a network. It is a local-only transport.
+
+### Troubleshooting
+
+| Symptom | Likely cause | Fix |
+|---------|--------------|-----|
+| Client cannot start the server | Working directory is not the repository root | Open the repository root as the workspace or set the client's working-directory field |
+| `py: command not found` | The Python launcher is not on PATH | Use `python3 run.py mcp` on macOS/Linux, or an absolute interpreter path |
+| Client reports invalid JSON | A library you added prints to stdout | Route all library output to stderr; the MCP server reserves stdout for JSON-RPC |
+| `cve_list_vaults` returns an empty list | No vault configured in `config/config.yaml` | Run `py run.py init my-vault` or `py run.py bootstrap` |
+| `py run.py mcp-smoke` times out | Server cannot start or hangs on import | Run `py run.py validate` first to surface configuration issues |
 
 ### MCP Tools (10 tools, all prefixed `cve_`)
 

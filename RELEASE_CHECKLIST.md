@@ -111,12 +111,13 @@ State explicitly: this checklist has not been performed automatically by Phase 3
 
 ## Pre-release Verification
 
-- [ ] `python mcp/test_verify.py` passes, all 1065 tests green (no skips, no failures)
+- [ ] `python mcp/test_verify.py` passes, all 1081 tests green (no skips, no failures)
 - [ ] `python run.py validate` passes, all notes valid
 - [ ] `python run.py security` passes, status is `pass` or `warning` only (no `fail`)
 - [ ] `python run.py feedback` passes, exits 0, valid JSON
 - [ ] `python run.py export --overwrite` passes, package written to `dist/`
 - [ ] `cd ui; npm run build` passes (run if any UI files changed)
+- [ ] `python run.py mcp-smoke` passes (Phase 39 deterministic MCP stdio connection test; does not verify the rendered web UI and does not exercise pending-change accept paths)
 - [ ] Generated artefacts (`dist/`, `ui/dist/`) are not committed, confirm with `git status --short`
 - [ ] README reflects current capabilities, route summary, and test count
 - [ ] QUICKSTART is current

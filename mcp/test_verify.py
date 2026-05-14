@@ -11966,6 +11966,27 @@ def main():
     test_p44b_phase_27_28_remain_deferred()
     test_p44b_no_semantic_retrieval_or_new_write_path_added()
 
+    # ---- Phase 39: MCP Client Setup and Connection Testing ----
+    print("\n" + "=" * 60)
+    print("Phase 39 - MCP Client Setup and Connection Testing")
+    print("=" * 60)
+    test_p39_docs_explain_stdio_model()
+    test_p39_docs_include_py_run_mcp()
+    test_p39_docs_reference_vscode_mcp_json()
+    test_p39_docs_warn_working_directory_repository_root()
+    test_p39_docs_distinguish_mcp_stdio_from_http_and_web_ui()
+    test_p39_docs_do_not_claim_mcp_verifies_rendered_ui()
+    test_p39_docs_do_not_claim_all_mcp_tools_read_only()
+    test_p39_docs_state_no_direct_write_path_and_no_autonomous_accept()
+    test_p39_mcp_smoke_command_documented()
+    test_p39_mcp_smoke_command_in_run_py()
+    test_p39_smoke_helper_parses_valid_jsonrpc()
+    test_p39_smoke_helper_rejects_non_json_stdout()
+    test_p39_mcp_discovery_remains_deterministic()
+    test_p39_phase_27_28_remain_deferred()
+    test_p39_no_semantic_or_new_write_path()
+    test_p39_test_count_updated()
+
     print()
     print("=" * 60)
     print("ALL VERIFICATION TESTS PASSED")
@@ -19689,9 +19710,9 @@ def _repo_root():
 
 
 def test_doc_drift_readme_test_count():
-    """DOC-DRIFT-1: README quotes the current 1065-test total, no stale counts."""
+    """DOC-DRIFT-1: README quotes the current 1081-test total, no stale counts."""
     readme = (_repo_root() / "README.md").read_text(encoding="utf-8")
-    assert "1065" in readme, "README.md must mention the current test count 1065"
+    assert "1081" in readme, "README.md must mention the current test count 1081"
     stale_phrases = [
         "553 deterministic tests",
         "548 deterministic tests",
@@ -19738,29 +19759,31 @@ def test_doc_drift_readme_test_count():
         "1028 tests.",
         "1044 deterministic tests",
         "1044 tests.",
+        "1065 deterministic tests",
+        "1065 tests.",
     ]
     for phrase in stale_phrases:
         assert phrase not in readme, f"README.md still mentions stale phrase {phrase!r}"
-    print(f"  README mentions 1065 tests, no stale counts present ✓")
+    print(f"  README mentions 1081 tests, no stale counts present ✓")
 
 
 def test_doc_drift_testing_test_count():
     """DOC-DRIFT-2: TESTING.md current total is 1065 and historical markers retained."""
     text = (_repo_root() / "TESTING.md").read_text(encoding="utf-8")
-    assert "1065 test functions" in text, "TESTING.md must state 1065 test functions"
-    for marker in ("429", "467", "507", "548", "564", "587", "607", "625", "650", "675", "695", "706", "721", "740", "763", "787", "800", "818", "842", "866", "890", "913", "937", "985", "999", "1021", "1028", "1044"):
+    assert "1081 test functions" in text, "TESTING.md must state 1081 test functions"
+    for marker in ("429", "467", "507", "548", "564", "587", "607", "625", "650", "675", "695", "706", "721", "740", "763", "787", "800", "818", "842", "866", "890", "913", "937", "985", "999", "1021", "1028", "1044", "1065"):
         assert marker in text, f"TESTING.md must retain historical test-count marker {marker}"
-    print(f"  TESTING.md states 1065 functions and keeps historical markers ✓")
+    print(f"  TESTING.md states 1081 functions and keeps historical markers ✓")
 
 
 def test_doc_drift_release_checklist_test_count():
-    """DOC-DRIFT-3: RELEASE_CHECKLIST references 1065 tests and required commands."""
+    """DOC-DRIFT-3: RELEASE_CHECKLIST references 1081 tests and required commands."""
     text = (_repo_root() / "RELEASE_CHECKLIST.md").read_text(encoding="utf-8")
-    assert "1065" in text, "RELEASE_CHECKLIST.md must reference the 1065-test target"
+    assert "1081" in text, "RELEASE_CHECKLIST.md must reference the 1081-test target"
     for req in ("test_verify.py", "run.py validate", "run.py security",
                 "run.py export", "GitHub Release"):
         assert req in text, f"RELEASE_CHECKLIST.md must contain {req!r}"
-    print(f"  RELEASE_CHECKLIST mentions 1065 tests and required commands ✓")
+    print(f"  RELEASE_CHECKLIST mentions 1081 tests and required commands ✓")
 
 
 def test_doc_drift_roadmap_active_phase():
@@ -21149,10 +21172,10 @@ def test_p29e_19_readme_states_phase29_complete():
 
 def test_p29e_20_release_checklist_test_count_updated():
     """P29E-20: RELEASE_CHECKLIST.md references the current test count.
-    Phase 44B bumped the total from 1044 to 1065."""
+    Phase 39 bumped the total from 1065 to 1081."""
     print("\n=== Test P29E-20: RELEASE_CHECKLIST test count ===")
     text = (_repo_root() / "RELEASE_CHECKLIST.md").read_text(encoding="utf-8")
-    assert "1065" in text, "RELEASE_CHECKLIST.md must reference the current 1065-test target"
+    assert "1081" in text, "RELEASE_CHECKLIST.md must reference the current 1081-test target"
     # The previous counts must not linger in the checklist after this phase.
     assert "all 763 tests green" not in text, \
         "RELEASE_CHECKLIST.md must not still say 'all 763 tests green'"
@@ -21182,7 +21205,9 @@ def test_p29e_20_release_checklist_test_count_updated():
         "RELEASE_CHECKLIST.md must not still say 'all 1028 tests green'"
     assert "all 1044 tests green" not in text, \
         "RELEASE_CHECKLIST.md must not still say 'all 1044 tests green'"
-    print("  RELEASE_CHECKLIST.md references 1065 tests \u2713")
+    assert "all 1065 tests green" not in text, \
+        "RELEASE_CHECKLIST.md must not still say 'all 1065 tests green'"
+    print("  RELEASE_CHECKLIST.md references 1081 tests \u2713")
 
 
 def test_p29e_21_ui_ux_audit_has_phase29e_note():
@@ -26217,6 +26242,347 @@ def test_p44b_no_semantic_retrieval_or_new_write_path_added():
             f"Unexpected write-like helper: {n}. Phase 44B must not add new write paths."
         )
     print("  No semantic retrieval and no new write path added in 44B \u2713")
+
+
+# ============================================================
+# Phase 39 - MCP Client Setup and Connection Testing
+# ============================================================
+
+
+def _p39_repo_root():
+    from pathlib import Path as _Path
+    return _Path(__file__).resolve().parent.parent
+
+
+def _p39_read(name: str) -> str:
+    return (_p39_repo_root() / name).read_text(encoding="utf-8")
+
+
+def test_p39_docs_explain_stdio_model():
+    """P39-1: docs describe the local stdin/stdout JSON-RPC 2.0 model."""
+    print("\n=== Test P39-1: docs explain stdio model ===")
+    quickstart = _p39_read("QUICKSTART.md")
+    api = _p39_read("API.md")
+    for needle in ("stdin/stdout", "JSON-RPC 2.0"):
+        assert needle in quickstart, f"QUICKSTART.md missing {needle!r}"
+        assert needle in api, f"API.md missing {needle!r}"
+    assert "stdout is reserved for JSON-RPC" in quickstart, (
+        "QUICKSTART.md must state stdout is reserved for JSON-RPC"
+    )
+    assert "stdout is reserved for JSON-RPC" in api, (
+        "API.md must state stdout is reserved for JSON-RPC"
+    )
+    print("  Stdio model documented in QUICKSTART.md and API.md \u2713")
+
+
+def test_p39_docs_include_py_run_mcp():
+    """P39-2: docs include the `py run.py mcp` start command."""
+    print("\n=== Test P39-2: docs include `py run.py mcp` ===")
+    for fname in ("QUICKSTART.md", "README.md", "API.md"):
+        text = _p39_read(fname)
+        assert "py run.py mcp" in text, f"{fname} missing `py run.py mcp`"
+    print("  py run.py mcp documented in QUICKSTART.md, README.md, API.md \u2713")
+
+
+def test_p39_docs_reference_vscode_mcp_json():
+    """P39-3: docs reference `.vscode/mcp.json` and shipped file is valid JSON."""
+    print("\n=== Test P39-3: docs reference `.vscode/mcp.json` ===")
+    import json as _json
+    quickstart = _p39_read("QUICKSTART.md")
+    assert ".vscode/mcp.json" in quickstart, (
+        "QUICKSTART.md must reference `.vscode/mcp.json`"
+    )
+    assert "contextVaultEngine" in quickstart, (
+        "QUICKSTART.md must include the contextVaultEngine server name"
+    )
+    config_path = _p39_repo_root() / ".vscode" / "mcp.json"
+    assert config_path.is_file(), f"Missing config file: {config_path}"
+    cfg = _json.loads(config_path.read_text(encoding="utf-8"))
+    servers = cfg.get("servers")
+    assert isinstance(servers, dict) and "contextVaultEngine" in servers, (
+        f"Invalid .vscode/mcp.json: {cfg!r}"
+    )
+    entry = servers["contextVaultEngine"]
+    assert entry.get("type") == "stdio", f"Expected stdio type: {entry!r}"
+    assert entry.get("command") == "py", f"Expected `py` command: {entry!r}"
+    assert entry.get("args") == ["run.py", "mcp"], (
+        f"Expected args [run.py, mcp]: {entry!r}"
+    )
+    print("  .vscode/mcp.json valid and matches documented snippet \u2713")
+
+
+def test_p39_docs_warn_working_directory_repository_root():
+    """P39-4: docs warn clients should open the repository root as the working directory."""
+    print("\n=== Test P39-4: docs warn about working directory ===")
+    quickstart = _p39_read("QUICKSTART.md")
+    needles = ("repository root", "working-directory")
+    for needle in needles:
+        assert needle in quickstart, (
+            f"QUICKSTART.md must mention {needle!r} in the MCP setup section"
+        )
+    print("  Working-directory and repository-root warning present \u2713")
+
+
+def test_p39_docs_distinguish_mcp_stdio_from_http_and_web_ui():
+    """P39-5: docs distinguish MCP stdio, HTTP API, and local web UI."""
+    print("\n=== Test P39-5: docs distinguish MCP from HTTP and UI ===")
+    quickstart = _p39_read("QUICKSTART.md")
+    api = _p39_read("API.md")
+    for fname, text in (("QUICKSTART.md", quickstart), ("API.md", api)):
+        for needle in ("HTTP API", "web UI", "MCP stdio"):
+            assert needle in text, f"{fname} missing {needle!r}"
+    assert "do not need" in quickstart.lower() or "does not require" in quickstart.lower(), (
+        "QUICKSTART.md must state the MCP stdio server does not require the web UI"
+    )
+    print("  MCP stdio vs HTTP API vs web UI distinction documented \u2713")
+
+
+def test_p39_docs_do_not_claim_mcp_verifies_rendered_ui():
+    """P39-6: docs do not claim that MCP testing verifies the rendered UI."""
+    print("\n=== Test P39-6: docs do not claim MCP verifies rendered UI ===")
+    quickstart = _p39_read("QUICKSTART.md")
+    # Find the MCP setup section
+    start = quickstart.find("## 24. MCP Stdio Server")
+    end = quickstart.find("## 25.", start)
+    assert start > 0 and end > start, "Could not locate Phase 39 MCP setup section"
+    section = quickstart[start:end].lower()
+    forbidden_phrases = (
+        "verifies the rendered ui",
+        "verifies the web ui",
+        "verifies the rendered web ui",
+        "manual browser qa is complete",
+    )
+    for phrase in forbidden_phrases:
+        assert phrase not in section, (
+            f"Phase 39 MCP section must not claim {phrase!r}"
+        )
+    # Positive: section explicitly notes it does not verify the UI
+    assert "does not verify the rendered web ui" in section, (
+        "Phase 39 MCP section must explicitly state it does not verify the rendered web UI"
+    )
+    print("  Phase 39 docs do not claim MCP verifies the rendered UI \u2713")
+
+
+def test_p39_docs_do_not_claim_all_mcp_tools_read_only():
+    """P39-7: given pending proposal tools exist, docs do not claim all MCP tools are read-only."""
+    print("\n=== Test P39-7: docs do not claim all MCP tools are read-only ===")
+    # Confirm the catalogue still includes the safe pending proposal/revalidation tools.
+    from mcp.core.mcp_tools import TOOLS
+    tool_names = {t["name"] for t in TOOLS}
+    must_exist = {
+        "cve_create_note_draft",
+        "cve_update_note_section_draft",
+        "cve_suggest_note_update",
+        "cve_review_pending_change",
+        "cve_revalidate_pending_change",
+    }
+    missing = must_exist - tool_names
+    assert not missing, (
+        f"Pending-change tools not found: {missing}. Phase 39 safety claim depends on these tools."
+    )
+    quickstart = _p39_read("QUICKSTART.md")
+    api = _p39_read("API.md")
+    forbidden_claims = (
+        "all mcp tools are read-only",
+        "all tools are read-only",
+        "all mcp tools and prompts are read-only",
+        "all mcp tools and prompts are **read-only**",
+    )
+    for text_name, text in (("QUICKSTART.md", quickstart), ("API.md", api)):
+        lowered = text.lower()
+        for phrase in forbidden_claims:
+            assert phrase not in lowered, (
+                f"{text_name} must not claim {phrase!r} while pending-change tools exist"
+            )
+    print("  Docs do not over-claim read-only \u2713")
+
+
+def test_p39_docs_state_no_direct_write_path_and_no_autonomous_accept():
+    """P39-8: docs state there is no direct vault-note write path and no autonomous accept."""
+    print("\n=== Test P39-8: docs state no direct write path / no autonomous accept ===")
+    for fname in ("QUICKSTART.md", "API.md"):
+        text = _p39_read(fname).lower()
+        assert "no direct vault-note write path" in text, (
+            f"{fname} must state there is no direct vault-note write path"
+        )
+        assert "no autonomous accept" in text, (
+            f"{fname} must state there is no autonomous accept"
+        )
+    print("  Both docs state no direct write path and no autonomous accept \u2713")
+
+
+def test_p39_mcp_smoke_command_documented():
+    """P39-9: `py run.py mcp-smoke` is documented in QUICKSTART.md and README.md."""
+    print("\n=== Test P39-9: mcp-smoke documented ===")
+    for fname in ("QUICKSTART.md", "README.md"):
+        text = _p39_read(fname)
+        assert "py run.py mcp-smoke" in text, f"{fname} missing `py run.py mcp-smoke`"
+    print("  py run.py mcp-smoke documented \u2713")
+
+
+def test_p39_mcp_smoke_command_in_run_py():
+    """P39-10: run.py advertises and dispatches the mcp-smoke command."""
+    print("\n=== Test P39-10: mcp-smoke command exists in run.py ===")
+    run_py = _p39_read("run.py")
+    assert "mcp-smoke" in run_py, "run.py must mention `mcp-smoke`"
+    assert "from mcp.smoke import run_smoke" in run_py, (
+        "run.py must import run_smoke from mcp.smoke"
+    )
+    assert "if command == \"mcp-smoke\":" in run_py, (
+        "run.py must dispatch the `mcp-smoke` command"
+    )
+    print("  run.py advertises and dispatches `mcp-smoke` \u2713")
+
+
+def test_p39_smoke_helper_parses_valid_jsonrpc():
+    """P39-11: smoke helper accepts a well-formed JSON-RPC 2.0 transcript."""
+    print("\n=== Test P39-11: smoke helper parses valid JSON-RPC ===")
+    from mcp.smoke import parse_jsonrpc_line, check_stdout_clean
+    msg = parse_jsonrpc_line(
+        '{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2025-11-25"}}'
+    )
+    assert isinstance(msg, dict)
+    assert msg.get("jsonrpc") == "2.0"
+    assert msg.get("id") == 1
+    transcript = (
+        '{"jsonrpc":"2.0","id":1,"result":{"ok":true}}\n'
+        "\n"
+        '{"jsonrpc":"2.0","id":2,"result":{"tools":[]}}\n'
+    )
+    parsed = check_stdout_clean(transcript)
+    assert len(parsed) == 2, f"Expected 2 messages, got {len(parsed)}: {parsed!r}"
+    assert parsed[0]["id"] == 1 and parsed[1]["id"] == 2
+    print("  parse_jsonrpc_line / check_stdout_clean accept valid transcripts \u2713")
+
+
+def test_p39_smoke_helper_rejects_non_json_stdout():
+    """P39-12: smoke helper rejects non-JSON contamination on stdout."""
+    print("\n=== Test P39-12: smoke helper rejects non-JSON stdout ===")
+    from mcp.smoke import check_stdout_clean, parse_jsonrpc_line, SmokeError
+
+    # Non-JSON contamination
+    try:
+        check_stdout_clean(
+            '{"jsonrpc":"2.0","id":1,"result":{}}\nINFO: something logged\n'
+        )
+        raise AssertionError("Expected SmokeError for non-JSON line")
+    except SmokeError:
+        pass
+
+    # Non-object payload
+    try:
+        parse_jsonrpc_line('"hello"')
+        raise AssertionError("Expected SmokeError for non-object JSON")
+    except SmokeError:
+        pass
+
+    # Missing jsonrpc field
+    try:
+        parse_jsonrpc_line('{"id":1,"result":{}}')
+        raise AssertionError("Expected SmokeError for missing jsonrpc field")
+    except SmokeError:
+        pass
+
+    # Wrong jsonrpc version
+    try:
+        parse_jsonrpc_line('{"jsonrpc":"1.0","id":1,"result":{}}')
+        raise AssertionError("Expected SmokeError for wrong jsonrpc version")
+    except SmokeError:
+        pass
+
+    print("  Smoke helper rejects non-JSON / malformed JSON-RPC stdout \u2713")
+
+
+def test_p39_mcp_discovery_remains_deterministic():
+    """P39-13: tools/list, resources/list, prompts/list are deterministic on repeat."""
+    print("\n=== Test P39-13: MCP discovery remains deterministic ===")
+    from mcp.core.mcp_tools import TOOLS
+    from mcp.core.mcp_prompts import PROMPTS
+    from mcp.core.mcp_resources import list_resources
+
+    tool_names_1 = tuple(t["name"] for t in TOOLS)
+    tool_names_2 = tuple(t["name"] for t in TOOLS)
+    assert tool_names_1 == tool_names_2, "tools/list order changed between reads"
+    assert len(tool_names_1) == len(set(tool_names_1)), "duplicate tool names"
+
+    prompt_names_1 = tuple(p["name"] for p in PROMPTS)
+    prompt_names_2 = tuple(p["name"] for p in PROMPTS)
+    assert prompt_names_1 == prompt_names_2, "prompts/list order changed between reads"
+    assert len(prompt_names_1) == len(set(prompt_names_1)), "duplicate prompt names"
+
+    res_1 = list_resources()
+    res_2 = list_resources()
+    uris_1 = tuple(r.get("uri") for r in res_1)
+    uris_2 = tuple(r.get("uri") for r in res_2)
+    assert uris_1 == uris_2, "resources/list order changed between reads"
+    print(
+        "  Deterministic discovery: "
+        f"{len(tool_names_1)} tools, {len(prompt_names_1)} prompts, {len(uris_1)} resources \u2713"
+    )
+
+
+def test_p39_phase_27_28_remain_deferred():
+    """P39-14: ROADMAP keeps Phase 27 and Phase 28 explicitly Deferred."""
+    print("\n=== Test P39-14: phases 27 and 28 remain Deferred ===")
+    roadmap = _p39_read("ROADMAP.md")
+    assert "### Phase 27 - Registry and Reuse Layer\n\n**Status: Deferred.**" in roadmap, (
+        "Phase 27 must remain Deferred"
+    )
+    idx = roadmap.find("Phase 28")
+    assert idx >= 0
+    tail = roadmap[idx:idx + 2000]
+    assert "Deferred" in tail, "Phase 28 must remain Deferred"
+    print("  Phase 27 and Phase 28 remain Deferred \u2713")
+
+
+def test_p39_no_semantic_or_new_write_path():
+    """P39-15: no semantic/embedding/LLM dependency loaded; smoke has no write path."""
+    print("\n=== Test P39-15: no semantic retrieval or new write path ===")
+    import sys as _sys
+    forbidden = (
+        "sentence_transformers", "sentence-transformers",
+        "faiss", "chromadb", "pinecone", "weaviate",
+        "openai", "anthropic", "litellm", "ollama",
+        "embedding", "embeddings",
+    )
+    for mod_name in list(_sys.modules):
+        lowered = mod_name.lower()
+        if not (mod_name.startswith("mcp") or mod_name.startswith("core")):
+            continue
+        for bad in forbidden:
+            assert bad not in lowered, (
+                f"Forbidden dependency loaded inside mcp/core scope: {mod_name}"
+            )
+    from mcp import smoke as _smoke
+    write_like = [
+        n for n in dir(_smoke)
+        if n.startswith(("write_", "apply_", "commit_", "accept_"))
+        and callable(getattr(_smoke, n))
+    ]
+    assert not write_like, (
+        f"mcp.smoke must not expose write-like helpers; found: {write_like}"
+    )
+    # mcp.smoke must not import the note-writing modules
+    smoke_text = (_p39_repo_root() / "mcp" / "smoke.py").read_text(encoding="utf-8")
+    for forbidden_import in ("note_write", "pending_changes", "vault_delete"):
+        assert forbidden_import not in smoke_text, (
+            f"mcp/smoke.py must not import {forbidden_import!r}"
+        )
+    print("  No semantic retrieval and no new write path introduced by Phase 39 \u2713")
+
+
+def test_p39_test_count_updated():
+    """P39-16: TESTING.md and README.md advertise the post-Phase 39 test count."""
+    print("\n=== Test P39-16: documentation test count updated ===")
+    testing = _p39_read("TESTING.md")
+    readme = _p39_read("README.md")
+    assert "1081 test functions" in testing, (
+        "TESTING.md must advertise the post-Phase 39 test count of 1081"
+    )
+    assert "1081 tests" in readme, (
+        "README.md must advertise the post-Phase 39 test count of 1081"
+    )
+    print("  TESTING.md and README.md advertise 1081 tests \u2713")
 
 
 if __name__ == "__main__":

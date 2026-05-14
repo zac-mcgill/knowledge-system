@@ -2042,17 +2042,20 @@ Re-run schema validation for a single pending change against the current vault s
 
 ---
 
-## MCP Compatibility Layer (Phase 20)
+## MCP Compatibility Layer (Phase 20, setup hardened in Phase 39)
 
-Context Vault Engine also exposes its vault capabilities as a **read-only MCP stdio server**. This is separate from the HTTP REST API above.
+Context Vault Engine also exposes its vault capabilities as a **local MCP stdio server**. This is separate from the HTTP REST API above and from the local web UI. The MCP stdio server runs over stdin/stdout JSON-RPC 2.0; the HTTP API runs over TCP via FastAPI; the local web UI is a browser surface served by the HTTP API. You do not need the HTTP API or the web UI to use the MCP stdio server.
 
 ### Transport
 
-JSON-RPC 2.0 over stdin/stdout (newline-delimited). One request per line, one response per line. Log output goes to stderr.
+JSON-RPC 2.0 over stdin/stdout (newline-delimited). One request per line, one response per line. Log output goes to stderr only; stdout is reserved for JSON-RPC messages.
 
 ```bash
-py run.py mcp
+py run.py mcp        # Windows (Python launcher)
+python3 run.py mcp   # macOS/Linux equivalent
 ```
+
+The command must be run from the repository root so `run.py` resolves correctly. MCP clients that support a working-directory field should set it to the repository root. The repository ships a known-working VS Code workspace configuration at `.vscode/mcp.json`; adapt it for other MCP clients. See `QUICKSTART.md` section 24 for the full client setup, the `py run.py mcp-smoke` connection test, and the troubleshooting checklist.
 
 ### Protocol version
 
@@ -2065,12 +2068,14 @@ py run.py mcp
 | `initialize` | Handshake - returns `protocolVersion`, `serverInfo`, `capabilities` |
 | `notifications/initialized` | Client notification - no response |
 | `ping` | Liveness check - returns `{}` |
-| `tools/list` | List all 10 CVE tools |
+| `tools/list` | List the CVE tools advertised by the server |
 | `tools/call` | Call a named CVE tool |
 | `resources/list` | List all resource URIs |
 | `resources/read` | Read a resource by URI |
-| `prompts/list` | List all 4 CVE prompts |
+| `prompts/list` | List the CVE prompts advertised by the server |
 | `prompts/get` | Get a rendered prompt |
+
+Tool, resource, and prompt catalogues are deterministic for a given server build. Use `tools/list`, `resources/list`, and `prompts/list` at runtime to discover the current set rather than hard-coding catalogue sizes.
 
 ### JSON-RPC error codes
 
@@ -2084,4 +2089,6 @@ py run.py mcp
 
 ### Safety
 
-All MCP tools and prompts are **read-only**. No tool can create, edit, or delete notes, feedback entries, or export packages. Vault names in resource URIs are validated against the registry - path traversal attempts return `INVALID_VAULT` errors.
+The MCP layer is **not** an autonomous note-writing system. Most MCP tools are deterministic read-only queries (`cve_list_vaults`, `cve_query_notes`, `cve_get_note`, `cve_validate_vault`, `cve_get_tasks`, `cve_security_scan`, `cve_build_context_bundle`, and related discovery tools). A small number of tools create or revalidate **pending change proposals** (`cve_create_note_draft`, `cve_update_note_section_draft`, `cve_suggest_note_update`, `cve_review_pending_change`, `cve_revalidate_pending_change`). Pending proposals are queued for human review and are written to vault notes only through the existing human-reviewed accept path. There is no direct vault-note write path in the MCP layer and no autonomous accept. `cve_revalidate_pending_change` refreshes persisted validation state but does NOT accept and does NOT write.
+
+Vault names in resource URIs are validated against the registry; path-traversal attempts return `INVALID_VAULT` errors. The MCP layer does not perform semantic retrieval, does not load embeddings, and does not make LLM calls.

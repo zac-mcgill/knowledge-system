@@ -65,7 +65,10 @@ Commands:
   app            Start local server and open browser UI
                  Reuses an already-running server automatically
   mcp            Start MCP stdio server (JSON-RPC over stdin/stdout)
-                 For use with MCP-compatible local clients"""
+                 For use with MCP-compatible local clients
+  mcp-smoke      Run deterministic local MCP stdio smoke test (Phase 39)
+                 Spawns `mcp` as a subprocess and sends a minimal JSON-RPC
+                 sequence; exit 0 on pass, 1 on fail. Does not mutate vault."""
 
 
 def _init_vault(repo_root: Path) -> None:
@@ -161,6 +164,11 @@ def main():
         from mcp.server.mcp_stdio_server import run_server
         run_server()
         raise SystemExit(0)
+
+    if command == "mcp-smoke":
+        sys.path.insert(0, str(repo_root))
+        from mcp.smoke import run_smoke
+        raise SystemExit(run_smoke(repo_root=repo_root, python_cmd=sys.executable))
 
     if command == "app":
         from core.app_launcher import main as app_main

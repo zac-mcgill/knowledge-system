@@ -1645,32 +1645,32 @@ feat(backup): add backup, restore, and migration safety
 
 ### Phase 39 - MCP Client Setup and Connection Testing
 
-**Status:** Planned.
+**Status:** Complete.
 
 **Purpose**
 
-Make the MCP story usable by people who are not already familiar with MCP configuration.
+Make the MCP setup usable and verifiable for real agent clients without changing the core MCP safety model.
 
-**Deliver**
+**Delivered**
 
-- MCP setup guide in the UI or docs.
-- Copyable client configuration snippets.
-- Show correct command and working directory.
-- Explain the local stdio model.
-- Read-only safety notice.
-- Optional handshake/test command if feasible.
-- Troubleshooting checklist.
+- MCP client setup documentation in `QUICKSTART.md` section 24, including the local stdio model, the Windows `py run.py mcp` and macOS/Linux `python3 run.py mcp` commands, a `.vscode/mcp.json` known-working configuration snippet, a working-directory reminder, an explicit distinction between the MCP stdio server, the HTTP API server, and the local web UI, a safe-use notice that the MCP layer never auto-accepts pending changes, and a troubleshooting checklist.
+- `API.md` MCP section revised to remove the inaccurate "all tools are read-only" claim now that the catalogue includes safe pending-change proposal and revalidation tools, to state that there is no direct vault-note write path and no autonomous accept, and to confirm that no semantic retrieval, embeddings, or LLM calls are introduced.
+- Deterministic local smoke test command `py run.py mcp-smoke`. The command spawns the MCP stdio server as a subprocess, sends a minimal JSON-RPC sequence (`initialize`, `notifications/initialized`, `tools/list`, `resources/list`, `prompts/list`, a safe `cve_list_vaults` call), verifies that every stdout line parses as JSON-RPC 2.0, exits `0` on pass and non-zero on fail, prints concise diagnostics, and never mutates a vault note. Standard library only.
+- New `mcp/smoke.py` helper module exposing `parse_jsonrpc_line`, `check_stdout_clean`, and `run_smoke` so the smoke logic is independently testable.
+- `.vscode/mcp.json` retained as the documented known-working VS Code workspace configuration; no secrets and no absolute user-specific paths.
+- 16 deterministic Phase 39 tests (P39-1 through P39-16) in `mcp/test_verify.py`, raising the suite total from 1065 to 1081. `TESTING.md` records the Phase 39 test family.
 
 **Acceptance**
 
-- Do not claim compatibility with a specific MCP client unless tested.
-- Keep examples conservative and clearly marked.
-- MCP tools remain read-only unless a future explicit phase changes that.
+- Examples are conservative; the documented `.vscode/mcp.json` is described as a verified VS Code example, not a guarantee of compatibility with any other MCP client.
+- The MCP safety model is unchanged: no new direct vault-note write path, no autonomous accept, no semantic retrieval, no embeddings, no LLM calls.
+- Phase 27 (Registry and Reuse Layer) and Phase 28 (Optional Semantic Retrieval) remain Deferred.
+- No manual browser QA is claimed; Phase 39 does not verify the rendered web UI.
 
 **Suggested Commit**
 
 ```
-docs(mcp): add MCP client setup and connection testing guide
+docs(mcp): add MCP client setup and connection testing
 ```
 
 ---
