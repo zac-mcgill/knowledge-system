@@ -1,0 +1,9 @@
+{
+  "servers": {
+    "contextVaultEngine": {
+      "type": "stdio",
+      "command": "py",
+      "args": ["run.py", "mcp"]
+    }
+  }
+}

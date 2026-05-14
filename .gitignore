@@ -12,7 +12,8 @@ ENV/
 # OS + editor noise
 .DS_Store
 Thumbs.db
-.vscode/
+.vscode/*
+!.vscode/mcp.json
 *.code-workspace
 
 # Logs and temp files
