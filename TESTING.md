@@ -1,3 +1,31 @@
+## Phase 39A - MCP Stdio Verification Batch Pass
+
+Phase 39A documents the completion of a manual/copilot-assisted 12-batch verification pass for the MCP stdio surface. This pass validated the MCP stdio protocol, catalogue, error handling, pending-change safety, documentation, UI build, boundary separation, artefact hygiene, and final release gate. No runtime code changes, no source modifications, and no commit were required by the verification itself.
+
+**Batches executed:**
+1. Baseline verification: full repository verification gate, final git status clean, generated artefacts ignored.
+2. MCP smoke test: `py run.py mcp-smoke` passed, MCP stdio server startup verified.
+3. JSON-RPC stdio cleanliness: stdout reserved for newline-delimited JSON-RPC 2.0 only, logs/diagnostics kept off stdout.
+4. MCP catalogue audit: 29 tools, 23 resources, 7 prompts observed; catalogue stable and deterministic; no direct vault-note write tool; no autonomous accept path; no blanket "all tools are read-only" overclaim.
+5. MCP read-only tool execution: representative read-only tools executed through stdio; structured JSON-RPC responses confirmed; invalid inputs returned structured errors; no vault mutation.
+6. MCP error handling: malformed JSON, non-JSON-RPC JSON, unknown methods, missing params, invalid vaults, unsafe paths, invalid filters, and wrong parameter types returned structured JSON-RPC errors; server did not crash; stdout remained JSON-only.
+7. Pending-change safety: pending list/get/revalidate paths checked where safe; no accept path exercised; no vault notes mutated; pending changes remain human-reviewed.
+8. MCP documentation consistency: README, QUICKSTART, API, ARCHITECTURE, DEPLOYMENT, `.vscode/mcp.json`, and MCP setup UI wording checked; no drift found.
+9. UI MCP setup page build check: `/app/mcp` route built successfully; page surfaces `py run.py mcp` and `py run.py mcp-smoke`; no browser visual QA claimed.
+10. Remote/private-cloud boundary check: MCP stdio confirmed local-only; MCP stdio not confused with private-cloud HTTP API; no remote MCP transport introduced.
+11. Generated artefact hygiene: `dist/`, `ui/dist/`, context bundle exports, and generated outputs remain ignored; final git status clean.
+12. Final release gate: corrective rerun from repository root passed; all verification, validation, security, feedback, export, smoke, and UI build commands passed; final git status clean.
+
+**Verification:**
+- All 12 MCP verification batches completed and documented.
+- All verification, validation, security, feedback, export, smoke, and UI build commands passed from the repository root.
+- No source changes and no commit were required.
+
+**Limitations:**
+- This was a manual/copilot-assisted verification pass, not new runtime implementation.
+- Did not perform Phase 32 manual browser visual QA, keyboard QA, or screen-reader QA.
+- Does not replace Phase 32 Human Release QA.
+
 # Context Vault Engine - Testing
 
 All tests live in `mcp/test_verify.py`. The suite currently has 1166 test functions, all of which are executed by the manual runner in `main()` at the bottom of that file. A passing run prints `ALL VERIFICATION TESTS PASSED`. Historical test counts from earlier phases (272, 382, 429, 467, 507, 548, 553, 564, 587, 607, 625, 650, 675, 695, 706, 721, 740, 763, 787, 800, 818, 842, 866, 890, 913, 937, 985, 999, 1021, 1028, 1044, 1065, 1081, 1103, 1135, 1143, 1152) appear later in this document as part of the phase changelog and are not the current total.

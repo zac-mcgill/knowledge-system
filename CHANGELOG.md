@@ -1,3 +1,7 @@
+## Unreleased - Phase 39A MCP Stdio Verification Batch Pass Documentation
+
+Documentation-only update recording the completion of Phase 39A (MCP Stdio Verification Batch Pass). A manual/copilot-assisted 12-batch verification pass validated the MCP stdio surface, catalogue, error handling, pending-change safety, documentation, UI build, boundary separation, artefact hygiene, and final release gate. No runtime code changes, no source modifications, and no commit were required by the verification itself. All verification, validation, security, feedback, export, smoke, and UI build commands passed from the repository root. Phase 40 remains the next planned implementation phase.
+
 # Changelog
 
 ## Unreleased - ROADMAP deep normalisation

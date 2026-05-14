@@ -59,7 +59,8 @@ The deterministic backend, the local web application, the MCP stdio surface, the
 - Phases 0 to 26F are complete.
 - Phases 29A to 31C are complete.
 - Phase 32 (Human Release QA and Evidence Capture) remains planned and manual.
-- Phases 37, 38, and 39 are complete.
+- Phases 37, 38, 39, and 39A are complete.
+- Phase 39A (MCP Stdio Verification Batch Pass) is complete: a manual/copilot-assisted 12-batch verification pass validated the MCP stdio surface, catalogue, error handling, pending-change safety, documentation, UI build, boundary separation, artefact hygiene, and final release gate. No runtime code changes, no source modifications, and no commit were required by the verification itself.
 - Phase 40 (Public Security Posture and Release Trust) is the next planned implementation phase.
 - Phases 41, 42, 43, and 45 remain planned.
 - Phase 44 is complete as a grouped lifecycle track because Phase 44A and Phase 44B are both complete.
@@ -124,6 +125,7 @@ The Phase Status Overview table in the next section is the single source of trut
 | 37    | Local Diagnostics and Support Report    | Complete |
 | 38    | Backup, Restore, and Migration Safety   | Complete |
 | 39    | MCP Client Setup and Connection Testing | Complete |
+| 39A   | MCP Stdio Verification Batch Pass       | Complete |
 | 40    | Public Security Posture & Release Trust | Planned  |
 | 41    | Example Vaults and Demonstration Packs  | Planned  |
 | 42    | Context Health Recommendation Layer     | Planned  |
@@ -296,6 +298,47 @@ A full UI/UX quality and design system pass (Phase 29), a release quality pass c
 - Phase 38 tests pass as part of the full suite.
 
 ### Phase 39 - MCP Client Setup and Connection Testing
+
+### Phase 39A - MCP Stdio Verification Batch Pass
+
+**Status:** Complete.
+
+**Purpose**
+- Document the manual/copilot-assisted MCP verification cycle completed after Phase 39. This pass validated the MCP stdio surface, catalogue, error handling, pending-change safety, documentation, UI build, boundary separation, artefact hygiene, and final release gate, beyond the existing deterministic `mcp-smoke` command, without changing runtime behaviour.
+
+**Delivered**
+- 12-batch MCP stdio verification pass, including:
+        1. Baseline verification: full repository verification gate, final git status clean, generated artefacts ignored.
+        2. MCP smoke test: `py run.py mcp-smoke` passed, MCP stdio server startup verified.
+        3. JSON-RPC stdio cleanliness: stdout reserved for newline-delimited JSON-RPC 2.0 only, logs/diagnostics kept off stdout.
+        4. MCP catalogue audit: 29 tools, 23 resources, 7 prompts observed; catalogue stable and deterministic; no direct vault-note write tool; no autonomous accept path; no blanket "all tools are read-only" overclaim.
+        5. MCP read-only tool execution: representative read-only tools executed through stdio; structured JSON-RPC responses confirmed; invalid inputs returned structured errors; no vault mutation.
+        6. MCP error handling: malformed JSON, non-JSON-RPC JSON, unknown methods, missing params, invalid vaults, unsafe paths, invalid filters, and wrong parameter types returned structured JSON-RPC errors; server did not crash; stdout remained JSON-only.
+        7. Pending-change safety: pending list/get/revalidate paths checked where safe; no accept path exercised; no vault notes mutated; pending changes remain human-reviewed.
+        8. MCP documentation consistency: README, QUICKSTART, API, ARCHITECTURE, DEPLOYMENT, `.vscode/mcp.json`, and MCP setup UI wording checked; no drift found.
+        9. UI MCP setup page build check: `/app/mcp` route built successfully; page surfaces `py run.py mcp` and `py run.py mcp-smoke`; no browser visual QA claimed.
+        10. Remote/private-cloud boundary check: MCP stdio confirmed local-only; MCP stdio not confused with private-cloud HTTP API; no remote MCP transport introduced.
+        11. Generated artefact hygiene: `dist/`, `ui/dist/`, context bundle exports, and generated outputs remain ignored; final git status clean.
+        12. Final release gate: corrective rerun from repository root passed; all verification, validation, security, feedback, export, smoke, and UI build commands passed; final git status clean.
+
+**Safety / Non-goals**
+- Documentation-only phase; no runtime code changes, no source modifications, and no commit required by the verification itself.
+- Did not perform Phase 32 manual browser visual QA, keyboard QA, or screen-reader QA.
+- Did not change MCP tool names, resource URI patterns, prompt names, commands, routes, API contracts, or public behaviours.
+- Did not add semantic retrieval, embeddings, LLM calls, new dependencies, or autonomous vault-note writes.
+- Did not start Phase 27 or Phase 28.
+- Did not alter Phase 40 planning except to keep it as the next planned implementation phase after the completed Phase 39A documentation entry.
+
+**Verification**
+- All 12 MCP verification batches completed and documented.
+- All verification, validation, security, feedback, export, smoke, and UI build commands passed from the repository root.
+- No source changes and no commit were required.
+
+**Limitations**
+- This was a manual/copilot-assisted verification pass, not new runtime implementation.
+- Did not perform Phase 32 manual browser visual QA, keyboard QA, or screen-reader QA.
+- Does not replace Phase 32 Human Release QA.
+
 
 **Status:** Complete.
 
