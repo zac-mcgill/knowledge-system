@@ -1,13 +1,13 @@
 # Context Vault Engine - Testing
 
-All tests live in `mcp/test_verify.py`. The suite currently has 1143 test functions, all of which are executed by the manual runner in `main()` at the bottom of that file. A passing run prints `ALL VERIFICATION TESTS PASSED`. Historical test counts from earlier phases (272, 382, 429, 467, 507, 548, 553, 564, 587, 607, 625, 650, 675, 695, 706, 721, 740, 763, 787, 800, 818, 842, 866, 890, 913, 937, 985, 999, 1021, 1028, 1044, 1065, 1081, 1103, 1135) appear later in this document as part of the phase changelog and are not the current total.
+All tests live in `mcp/test_verify.py`. The suite currently has 1166 test functions, all of which are executed by the manual runner in `main()` at the bottom of that file. A passing run prints `ALL VERIFICATION TESTS PASSED`. Historical test counts from earlier phases (272, 382, 429, 467, 507, 548, 553, 564, 587, 607, 625, 650, 675, 695, 706, 721, 740, 763, 787, 800, 818, 842, 866, 890, 913, 937, 985, 999, 1021, 1028, 1044, 1065, 1081, 1103, 1135, 1143, 1152) appear later in this document as part of the phase changelog and are not the current total.
 
 ## Current Verification Summary
 
 A full local verification consists of:
 
 ```bash
-py mcp/test_verify.py           # 1143 tests, all must pass
+py mcp/test_verify.py           # 1166 tests, all must pass
 py run.py validate              # vault schema-compliance
 py run.py security              # status: pass (or warning, never fail)
 py run.py feedback              # exits 0, valid JSON
@@ -2745,7 +2745,7 @@ Phase 39 adds 16 deterministic tests in `mcp/test_verify.py` (P39-1 through P39-
 - `test_p39_mcp_discovery_remains_deterministic` - `tools/list`, `resources/list`, and `prompts/list` return the same shape on repeated invocations.
 - `test_p39_phase_27_28_remain_deferred` - `ROADMAP.md` keeps Phase 27 and Phase 28 explicitly Deferred.
 - `test_p39_no_semantic_or_new_write_path` - no semantic, embedding, or LLM dependency is loaded by `mcp.core` or `mcp.smoke`, and `mcp.smoke` does not import anything that would let it write vault notes.
-- `test_p39_test_count_updated` - `TESTING.md` and `README.md` advertise the post-Phase 39 UI test count of 1143.
+- `test_p39_test_count_updated` - `TESTING.md` and `README.md` advertise the post-Phase 39 UI test count of 1166.
 - `test_p39_17_ui_page_exists` - `ui/src/pages/mcp.astro` exists and mounts the `McpSetup` Svelte component.
 - `test_p39_18_ui_component_exists` - `ui/src/components/McpSetup.svelte` exists and uses the `cve-*` primitives so the page inherits Phase 30 theme and overflow guards.
 - `test_p39_19_ui_contains_start_command` - UI surfaces the `py run.py mcp` start command.
@@ -2756,6 +2756,34 @@ Phase 39 adds 16 deterministic tests in `mcp/test_verify.py` (P39-1 through P39-
 - `test_p39_24_ui_navigation_contains_mcp_setup` - the AppLayout sidebar exposes the `/app/mcp` MCP Setup entry inside the Developer group.
 
 Phase 39 is a setup-and-verification phase. It does not change the MCP safety model, does not start Phase 27 (Registry and Reuse Layer) or Phase 28 (Optional Semantic Retrieval), does not add embeddings, does not add LLM calls, does not add a new direct vault-write path, and does not add autonomous mutation.
+
+### Phase 39 Roadmap Normalisation Drift Guards
+
+After Phase 39, nine additional deterministic guards in `mcp/test_verify.py` (`test_p39rd_01_*` through `test_p39rd_09_*`) brought the total from 1143 to 1152. A subsequent deep ROADMAP normalisation added 14 more guards (`test_p39rd_10_*` through `test_p39rd_23_*`) bringing the total to 1166. These tests pin the structural invariants of `ROADMAP.md` so the roadmap cannot silently regress to a stale state. They assert that the Phase Status Overview marks Phase 39 Complete, that Phases 37 and 38 are Complete, that the document names Phase 40 as the next planned phase, that Phases 27 and 28 remain Deferred, that there are no duplicate Phase 37/38/39 detail headings, no tab characters, no `Neurtralisation` typo, exactly one `## Phase Status Overview` heading, no `## Current Active Phase` heading or phrase, no `retained verbatim for traceability` or `supersedes it for status purposes` phrases, that Phase 40 is named the next planned implementation phase, that Phase 32 is not named the next planned phase, that exactly one `## Current Status`, `## Completed Capability Summary`, `## Planned Productisation Phases`, and `## Deferred Phases` section exists, that Phase 27 and Phase 28 appear inside the Deferred Phases section, that Phase 39 appears Complete both in the table and in the Completed Phase Notes, and that no Phase 30 or 31 work is described as currently active.
+
+- `test_p39rd_01_roadmap_phase_39_complete_in_table` - the Phase Status Overview table marks Phase 39 Complete.
+- `test_p39rd_02_roadmap_phase_39_not_planned_anywhere_in_table` - the table contains no Phase 39 row marked Planned.
+- `test_p39rd_03_roadmap_phase_37_and_38_complete_in_table` - the table marks Phase 37 and Phase 38 Complete.
+- `test_p39rd_04_roadmap_identifies_phase_40_as_next_planned` - the executive narrative names Phase 40 as the next planned phase.
+- `test_p39rd_05_roadmap_phase_27_and_28_remain_deferred` - the table keeps Phase 27 and Phase 28 Deferred.
+- `test_p39rd_06_roadmap_no_duplicate_phase_37_38_39_headings` - there is at most one `### Phase 37/38/39` detail heading.
+- `test_p39rd_07_roadmap_contains_no_tab_characters` - the roadmap file contains no tab characters.
+- `test_p39rd_08_roadmap_no_neurtralisation_typo` - the historical `Neurtralisation` typo is absent.
+- `test_p39rd_09_roadmap_exactly_one_phase_status_overview_heading` - the document has exactly one `## Phase Status Overview` heading.
+- `test_p39rd_10_roadmap_no_current_active_phase_heading` - the document has no `## Current Active Phase` heading.
+- `test_p39rd_11_roadmap_no_current_active_phase_phrase` - the document contains no `Current Active Phase` phrase anywhere.
+- `test_p39rd_12_roadmap_no_retained_verbatim_for_traceability_phrase` - the document does not preserve stale narrative under the `retained verbatim for traceability` justification.
+- `test_p39rd_13_roadmap_no_supersedes_it_for_status_purposes_phrase` - the document contains no `supersedes it for status purposes` phrase.
+- `test_p39rd_14_roadmap_states_phase_40_is_next_planned_implementation_phase` - the document names Phase 40 as the next planned implementation phase.
+- `test_p39rd_15_roadmap_does_not_state_phase_32_is_the_next_planned_phase` - the document does not claim Phase 32 is the next planned phase.
+- `test_p39rd_16_roadmap_exactly_one_current_status_section` - the document has exactly one `## Current Status` section.
+- `test_p39rd_17_roadmap_exactly_one_completed_capability_summary_section` - the document has exactly one `## Completed Capability Summary` section.
+- `test_p39rd_18_roadmap_exactly_one_planned_productisation_phases_section` - the document has exactly one `## Planned Productisation Phases` section.
+- `test_p39rd_19_roadmap_exactly_one_deferred_phases_section` - the document has exactly one `## Deferred Phases` section.
+- `test_p39rd_20_phase_27_appears_in_deferred_phases_section` - Phase 27 appears inside the Deferred Phases section.
+- `test_p39rd_21_phase_28_appears_in_deferred_phases_section` - Phase 28 appears inside the Deferred Phases section.
+- `test_p39rd_22_phase_39_appears_complete_in_table_and_completed_phase_notes` - Phase 39 appears Complete in both the status table and the Completed Phase Notes.
+- `test_p39rd_23_roadmap_does_not_describe_phase_30_or_31_as_currently_active` - no Phase 30 or 31A/31B/31C work is described as currently active.
 
 ### Phase 37 Test Family
 

@@ -1,5 +1,95 @@
 # Changelog
 
+## Unreleased - ROADMAP deep normalisation
+
+Documentation-only restructure of `ROADMAP.md` that removes stale "Current
+Active Phase" narrative carried forward from earlier phases, reorganises the
+file under a fixed section template, and adds 14 new deterministic guards to
+prevent regression. No runtime, schema, API, or MCP behaviour changes.
+
+### Changed
+
+- `ROADMAP.md` fully restructured under the section template: Executive
+  Direction, Product North Star, Core Principles, Strategic Non-Goals,
+  Current Baseline, Current Status, Phase Status Overview, Completed
+  Capability Summary, Completed Phase Notes, Planned Productisation Phases,
+  Deferred Phases.
+- The stale `## Current Active Phase` heading and supporting narrative have
+  been removed. The "retained verbatim for traceability" and "supersedes it
+  for status purposes" phrases are no longer present.
+- Phase 40 (Public Security Posture and Release Trust) is now explicitly
+  named as the next planned implementation phase. The earlier claim that
+  Phase 32 is the next planned phase has been removed.
+- Historical phase ranges (0-9, 10-16, 17-26F, 29A-31C) are now expressed as
+  compressed range entries under Completed Phase Notes rather than as long
+  individual sections. Phases 37, 38, 39, and 44 retain their full clean
+  detail blocks under Completed Phase Notes.
+- Phase 27 (Registry and Reuse Layer) and Phase 28 (Optional Semantic
+  Retrieval) are now exclusively documented inside the single `## Deferred
+  Phases` section.
+
+### Added
+
+- 14 new deterministic guards in `mcp/test_verify.py`
+  (`test_p39rd_10_*` through `test_p39rd_23_*`) pinning the new ROADMAP
+  structure: no `## Current Active Phase` heading or phrase, no
+  `retained verbatim for traceability` or `supersedes it for status
+  purposes` phrases, Phase 40 is the next planned implementation phase,
+  Phase 32 is not the next planned phase, exactly one `## Current Status`,
+  `## Completed Capability Summary`, `## Planned Productisation Phases`,
+  and `## Deferred Phases` section, Phase 27 and Phase 28 inside the
+  Deferred Phases section, Phase 39 Complete in both the table and the
+  Completed Phase Notes, and no Phase 30 or 31 work described as currently
+  active.
+- TESTING.md and RELEASE_CHECKLIST.md updated to record the 1152 historical
+  marker and the new total of 1166 tests.
+
+### Verification
+
+- Verification total advertised across README.md, TESTING.md, and
+  RELEASE_CHECKLIST.md bumped from 1152 to 1166. All four documentation
+  drift guards re-pinned at 1166. `py mcp/test_verify.py` prints
+  `ALL VERIFICATION TESTS PASSED`.
+
+## Unreleased - Phase 39 Roadmap Normalisation
+
+Documentation-cleanup pass that closes out Phase 39 in `ROADMAP.md` and adds
+deterministic guardrails so the roadmap cannot silently regress.
+
+### Changed
+
+- `ROADMAP.md` Phase Status Overview now marks Phase 39 (MCP Client Setup and
+  Connection Testing) as Complete, alongside the already-complete Phases 37
+  and 38. Tab characters in the Phase 42 and Phase 43 rows were replaced with
+  spaces, and the "Legacy Acronym Neurtralisation" typo in the Phase 45 row
+  was corrected to "Neutralisation". Parent Phase 44 is now Complete (both
+  44A and 44B subphases shipped).
+- A short Post-Phase 39 normalisation paragraph was added to the Current
+  Active Phase section recording that Phases 37, 38, and 39 are Complete,
+  that Phase 40 (Public Security Posture and Release Trust) is the next
+  planned phase, and that Phases 27 and 28 remain Deferred. The Phase Status
+  Overview table remains the single source of truth.
+
+### Added
+
+- Nine new deterministic roadmap drift guards in `mcp/test_verify.py`
+  (`test_p39rd_01_*` through `test_p39rd_09_*`). They pin: Phase 39 marked
+  Complete in the overview table, no Phase 39 Planned row anywhere in the
+  table, Phases 37 and 38 marked Complete, Phase 40 named as next planned,
+  Phases 27 and 28 still Deferred, no duplicate `### Phase 37/38/39` detail
+  headings, no tab characters in `ROADMAP.md`, no `Neurtralisation` typo,
+  and exactly one `## Phase Status Overview` heading.
+- These nine guards bring the test suite from 1143 to 1152 deterministic
+  tests. `README.md`, `TESTING.md`, and `RELEASE_CHECKLIST.md` were updated
+  accordingly, and the existing doc-drift count guards were updated in
+  lockstep so 1143 is retained as a historical marker.
+
+### Non-goals
+
+- No runtime, backend, HTTP API, MCP protocol, schema, or UI behaviour was
+  changed. Phase 27 (Registry and Reuse Layer) and Phase 28 (Optional
+  Semantic Retrieval) remain Deferred and are not started by this pass.
+
 ## Unreleased - Phase 38: Backup, Restore, and Migration Safety
 
 Add a local, preview-first backup and restore surface so users can capture and recover their vaults, config, feedback, state, and templates without risking accidental data loss.

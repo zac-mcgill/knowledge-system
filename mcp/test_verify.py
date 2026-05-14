@@ -11995,6 +11995,34 @@ def main():
     test_p39_23_ui_contains_compatibility_caveat()
     test_p39_24_ui_navigation_contains_mcp_setup()
 
+    # ---- Phase 39 Roadmap Normalisation Drift Guards ----
+    print("\n" + "=" * 60)
+    print("Phase 39 - Roadmap Normalisation Drift Guards")
+    print("=" * 60)
+    test_p39rd_01_roadmap_phase_39_complete_in_table()
+    test_p39rd_02_roadmap_phase_39_not_planned_anywhere_in_table()
+    test_p39rd_03_roadmap_phase_37_and_38_complete_in_table()
+    test_p39rd_04_roadmap_identifies_phase_40_as_next_planned()
+    test_p39rd_05_roadmap_phase_27_and_28_remain_deferred()
+    test_p39rd_06_roadmap_no_duplicate_phase_37_38_39_headings()
+    test_p39rd_07_roadmap_contains_no_tab_characters()
+    test_p39rd_08_roadmap_no_neurtralisation_typo()
+    test_p39rd_09_roadmap_exactly_one_phase_status_overview_heading()
+    test_p39rd_10_roadmap_no_current_active_phase_heading()
+    test_p39rd_11_roadmap_no_current_active_phase_phrase()
+    test_p39rd_12_roadmap_no_retained_verbatim_for_traceability_phrase()
+    test_p39rd_13_roadmap_no_supersedes_it_for_status_purposes_phrase()
+    test_p39rd_14_roadmap_states_phase_40_is_next_planned_implementation_phase()
+    test_p39rd_15_roadmap_does_not_state_phase_32_is_the_next_planned_phase()
+    test_p39rd_16_roadmap_exactly_one_current_status_section()
+    test_p39rd_17_roadmap_exactly_one_completed_capability_summary_section()
+    test_p39rd_18_roadmap_exactly_one_planned_productisation_phases_section()
+    test_p39rd_19_roadmap_exactly_one_deferred_phases_section()
+    test_p39rd_20_phase_27_appears_in_deferred_phases_section()
+    test_p39rd_21_phase_28_appears_in_deferred_phases_section()
+    test_p39rd_22_phase_39_appears_complete_in_table_and_completed_phase_notes()
+    test_p39rd_23_roadmap_does_not_describe_phase_30_or_31_as_currently_active()
+
     # ---- Phase 37: Local Diagnostics and Support Report ----
     print("\n" + "=" * 60)
     print("Phase 37 - Local Diagnostics and Support Report")
@@ -19782,9 +19810,9 @@ def _repo_root():
 
 
 def test_doc_drift_readme_test_count():
-    """DOC-DRIFT-1: README quotes the current 1143-test total, no stale counts."""
+    """DOC-DRIFT-1: README quotes the current 1166-test total, no stale counts."""
     readme = (_repo_root() / "README.md").read_text(encoding="utf-8")
-    assert "1143" in readme, "README.md must mention the current test count 1143"
+    assert "1166" in readme, "README.md must mention the current test count 1166"
     stale_phrases = [
         "553 deterministic tests",
         "548 deterministic tests",
@@ -19839,31 +19867,37 @@ def test_doc_drift_readme_test_count():
         "1103 tests.",
         "1135 deterministic tests",
         "1135 tests.",
+        "1143 deterministic tests",
+        "1143 tests.",
+        "1152 deterministic tests",
+        "1152 tests.",
     ]
     for phrase in stale_phrases:
         assert phrase not in readme, f"README.md still mentions stale phrase {phrase!r}"
-    print(f"  README mentions 1143 tests, no stale counts present ✓")
+    print(f"  README mentions 1166 tests, no stale counts present ✓")
 
 
 def test_doc_drift_testing_test_count():
-    """DOC-DRIFT-2: TESTING.md current total is 1143 and historical markers retained."""
+    """DOC-DRIFT-2: TESTING.md current total is 1166 and historical markers retained."""
     text = (_repo_root() / "TESTING.md").read_text(encoding="utf-8")
-    assert "1143 test functions" in text, "TESTING.md must state 1143 test functions"
-    for marker in ("429", "467", "507", "548", "564", "587", "607", "625", "650", "675", "695", "706", "721", "740", "763", "787", "800", "818", "842", "866", "890", "913", "937", "985", "999", "1021", "1028", "1044", "1065", "1081", "1103", "1135"):
+    assert "1166 test functions" in text, "TESTING.md must state 1166 test functions"
+    for marker in ("429", "467", "507", "548", "564", "587", "607", "625", "650", "675", "695", "706", "721", "740", "763", "787", "800", "818", "842", "866", "890", "913", "937", "985", "999", "1021", "1028", "1044", "1065", "1081", "1103", "1135", "1143", "1152"):
         assert marker in text, f"TESTING.md must retain historical test-count marker {marker}"
-    print(f"  TESTING.md states 1143 functions and keeps historical markers ✓")
+    print(f"  TESTING.md states 1166 functions and keeps historical markers ✓")
 
 
 def test_doc_drift_release_checklist_test_count():
-    """DOC-DRIFT-3: RELEASE_CHECKLIST references 1143 tests and required commands."""
+    """DOC-DRIFT-3: RELEASE_CHECKLIST references 1166 tests and required commands."""
     text = (_repo_root() / "RELEASE_CHECKLIST.md").read_text(encoding="utf-8")
-    assert "1143" in text, "RELEASE_CHECKLIST.md must reference the 1143-test target"
+    assert "1166" in text, "RELEASE_CHECKLIST.md must reference the 1166-test target"
     assert "1135" in text, "RELEASE_CHECKLIST.md must keep 1135 as historical marker"
+    assert "1143" in text, "RELEASE_CHECKLIST.md must keep 1143 as historical marker"
+    assert "1152" in text, "RELEASE_CHECKLIST.md must keep 1152 as historical marker"
     # historical marker also retained
     for req in ("test_verify.py", "run.py validate", "run.py security",
                 "run.py export", "GitHub Release"):
         assert req in text, f"RELEASE_CHECKLIST.md must contain {req!r}"
-    print(f"  RELEASE_CHECKLIST mentions 1135 tests and required commands ✓")
+    print(f"  RELEASE_CHECKLIST mentions 1166 tests and required commands ✓")
 
 
 def test_doc_drift_roadmap_active_phase():
@@ -20083,19 +20117,16 @@ def test_p29a_4_roadmap_phase28_still_deferred():
 
 
 def test_p29a_5_roadmap_current_active_phase():
-    """P29A-5: ROADMAP.md Current Active Phase references Phase 29A."""
-    print("\n=== Test P29A-5: Current Active Phase ===")
+    """P29A-5: ROADMAP.md (post-deep-restructure) still references Phase 29A as completed work."""
+    print("\n=== Test P29A-5: ROADMAP references Phase 29A as completed ===")
     text = (_repo_root() / "ROADMAP.md").read_text(encoding="utf-8")
-    assert "## Current Active Phase" in text, \
-        "ROADMAP.md must have a Current Active Phase section"
-    # Locate the section and confirm it names Phase 29A.
-    marker = "## Current Active Phase"
-    idx = text.find(marker)
-    assert idx >= 0
-    section = text[idx:idx + 800]
-    assert "Phase 29A" in section, \
-        "ROADMAP.md Current Active Phase must reference Phase 29A"
-    print("  Current Active Phase references Phase 29A ✓")
+    assert "Phase 29A" in text, \
+        "ROADMAP.md must still reference Phase 29A somewhere in the document"
+    # The deep ROADMAP normalisation explicitly removed the stale '## Current Active Phase'
+    # section. The replacement contract is: Phase 29A is documented as Complete.
+    assert "## Current Active Phase" not in text, \
+        "ROADMAP.md must not reintroduce the '## Current Active Phase' section"
+    print("  ROADMAP references Phase 29A as completed work \u2713")
 
 
 def test_p29a_6_ui_ux_audit_exists():
@@ -26660,13 +26691,13 @@ def test_p39_test_count_updated():
     print("\n=== Test P39-16: documentation test count updated ===")
     testing = _p39_read("TESTING.md")
     readme = _p39_read("README.md")
-    assert "1143 test functions" in testing, (
-        "TESTING.md must advertise the post-Phase 39 UI test count of 1143"
+    assert "1166 test functions" in testing, (
+        "TESTING.md must advertise the post-Phase 39 UI test count of 1166"
     )
-    assert "1143 tests" in readme, (
-        "README.md must advertise the post-Phase 39 UI test count of 1143"
+    assert "1166 tests" in readme, (
+        "README.md must advertise the post-Phase 39 UI test count of 1166"
     )
-    print("  TESTING.md and README.md advertise 1143 tests \u2713")
+    print("  TESTING.md and README.md advertise 1166 tests \u2713")
 
 
 def test_p39_17_ui_page_exists():
@@ -26780,6 +26811,358 @@ def test_p39_24_ui_navigation_contains_mcp_setup():
     dev_section = layout[dev_start:dev_end]
     assert "/app/mcp" in dev_section, "MCP Setup link must live in the Developer group"
     print("  AppLayout exposes MCP Setup in the Developer group \u2713")
+
+
+# ============================================================
+# Phase 39 Roadmap Normalisation Drift Guards (post-Phase-39)
+# ============================================================
+#
+# These tests are deterministic guardrails against regressions in
+# ROADMAP.md that surfaced after Phase 39 (table left Phase 39 marked
+# "Planned" while the body and the test suite reported it complete,
+# stray tab characters in two table rows, and a "Neurtralisation"
+# typo). They assert structural invariants of ROADMAP.md only and do
+# not exercise runtime behaviour.
+
+
+def _p39rd_roadmap() -> str:
+    from pathlib import Path as _Path
+    return (_Path(__file__).resolve().parent.parent / "ROADMAP.md").read_text(encoding="utf-8")
+
+
+def _p39rd_overview_table_rows():
+    """Return the list of phase status table rows (lines starting with '| ')
+    inside the '## Phase Status Overview' section, excluding header/separator.
+    """
+    text = _p39rd_roadmap()
+    start = text.find("## Phase Status Overview")
+    assert start >= 0, "ROADMAP.md must contain '## Phase Status Overview'"
+    # Section ends at the next '## ' heading
+    end = text.find("\n## ", start + 1)
+    section = text[start:end] if end > 0 else text[start:]
+    rows = []
+    for line in section.splitlines():
+        s = line.strip()
+        if not s.startswith("|"):
+            continue
+        # skip separator rows like |------|
+        if set(s.replace("|", "").replace("-", "").replace(":", "").strip()) == set():
+            continue
+        # skip header row
+        cells = [c.strip() for c in s.strip("|").split("|")]
+        if cells and cells[0].lower() == "phase":
+            continue
+        rows.append(cells)
+    return rows
+
+
+def test_p39rd_01_roadmap_phase_39_complete_in_table():
+    """P39-RD-1: ROADMAP Phase Status Overview marks Phase 39 as Complete."""
+    print("\n=== Test P39-RD-1: ROADMAP table marks Phase 39 Complete ===")
+    rows = _p39rd_overview_table_rows()
+    p39 = [r for r in rows if r and r[0] == "39"]
+    assert len(p39) == 1, f"ROADMAP must have exactly one Phase 39 row, found {len(p39)}"
+    assert p39[0][-1].strip().lower() == "complete", (
+        f"ROADMAP Phase 39 row must be Complete, found {p39[0][-1]!r}"
+    )
+    print("  ROADMAP Phase 39 row is Complete \u2713")
+
+
+def test_p39rd_02_roadmap_phase_39_not_planned_anywhere_in_table():
+    """P39-RD-2: ROADMAP overview table contains no Phase 39 row marked Planned."""
+    print("\n=== Test P39-RD-2: ROADMAP table has no Planned Phase 39 row ===")
+    rows = _p39rd_overview_table_rows()
+    bad = [r for r in rows if r and r[0] == "39" and r[-1].strip().lower() == "planned"]
+    assert not bad, f"ROADMAP table still has a Planned Phase 39 row: {bad}"
+    print("  No Planned Phase 39 row in ROADMAP overview table \u2713")
+
+
+def test_p39rd_03_roadmap_phase_37_and_38_complete_in_table():
+    """P39-RD-3: ROADMAP overview marks Phase 37 and Phase 38 Complete."""
+    print("\n=== Test P39-RD-3: ROADMAP table marks Phase 37 and 38 Complete ===")
+    rows = _p39rd_overview_table_rows()
+    for pid in ("37", "38"):
+        match = [r for r in rows if r and r[0] == pid]
+        assert len(match) == 1, f"ROADMAP must have exactly one Phase {pid} row"
+        assert match[0][-1].strip().lower() == "complete", (
+            f"ROADMAP Phase {pid} must be Complete, found {match[0][-1]!r}"
+        )
+    print("  ROADMAP Phases 37 and 38 are Complete \u2713")
+
+
+def test_p39rd_04_roadmap_identifies_phase_40_as_next_planned():
+    """P39-RD-4: ROADMAP names Phase 40 as the next planned phase post-Phase-39."""
+    print("\n=== Test P39-RD-4: ROADMAP names Phase 40 as next planned ===")
+    text = _p39rd_roadmap()
+    assert "next planned phase is Phase 40" in text, (
+        "ROADMAP.md must explicitly state that the next planned phase is Phase 40"
+    )
+    print("  ROADMAP identifies Phase 40 as next planned \u2713")
+
+
+def test_p39rd_05_roadmap_phase_27_and_28_remain_deferred():
+    """P39-RD-5: ROADMAP keeps Phase 27 and Phase 28 marked Deferred in the overview table."""
+    print("\n=== Test P39-RD-5: ROADMAP keeps Phase 27 and 28 Deferred ===")
+    rows = _p39rd_overview_table_rows()
+    for pid in ("27", "28"):
+        match = [r for r in rows if r and r[0] == pid]
+        assert len(match) == 1, f"ROADMAP must have exactly one Phase {pid} row"
+        assert match[0][-1].strip().lower() == "deferred", (
+            f"ROADMAP Phase {pid} must remain Deferred, found {match[0][-1]!r}"
+        )
+    print("  ROADMAP Phases 27 and 28 remain Deferred \u2713")
+
+
+def test_p39rd_06_roadmap_no_duplicate_phase_37_38_39_headings():
+    """P39-RD-6: ROADMAP contains no duplicate `### Phase 37/38/39` detail headings."""
+    print("\n=== Test P39-RD-6: ROADMAP has no duplicate Phase 37/38/39 headings ===")
+    text = _p39rd_roadmap()
+    import re as _re
+    for pid in ("37", "38", "39"):
+        pattern = _re.compile(r"^### Phase " + pid + r"\b", _re.MULTILINE)
+        hits = pattern.findall(text)
+        assert len(hits) <= 1, (
+            f"ROADMAP must have at most one '### Phase {pid}' heading, found {len(hits)}"
+        )
+    print("  No duplicate Phase 37/38/39 detail headings in ROADMAP \u2713")
+
+
+def test_p39rd_07_roadmap_contains_no_tab_characters():
+    """P39-RD-7: ROADMAP.md contains no tab characters (formatting normalisation)."""
+    print("\n=== Test P39-RD-7: ROADMAP has no tab characters ===")
+    text = _p39rd_roadmap()
+    assert "\t" not in text, (
+        "ROADMAP.md must not contain tab characters; use spaces for table alignment"
+    )
+    print("  ROADMAP contains no tab characters \u2713")
+
+
+def test_p39rd_08_roadmap_no_neurtralisation_typo():
+    """P39-RD-8: ROADMAP.md does not contain the historical 'Neurtralisation' typo."""
+    print("\n=== Test P39-RD-8: ROADMAP has no 'Neurtralisation' typo ===")
+    text = _p39rd_roadmap()
+    assert "Neurtralisation" not in text, (
+        "ROADMAP.md still contains the 'Neurtralisation' typo; should be 'Neutralisation'"
+    )
+    print("  ROADMAP no longer contains the 'Neurtralisation' typo \u2713")
+
+
+def test_p39rd_09_roadmap_exactly_one_phase_status_overview_heading():
+    """P39-RD-9: ROADMAP.md has exactly one `## Phase Status Overview` heading."""
+    print("\n=== Test P39-RD-9: ROADMAP has exactly one Phase Status Overview ===")
+    text = _p39rd_roadmap()
+    count = text.count("\n## Phase Status Overview")
+    # account for the heading appearing as the very first character of the file (unlikely)
+    if text.startswith("## Phase Status Overview"):
+        count += 1
+    assert count == 1, (
+        f"ROADMAP.md must contain exactly one '## Phase Status Overview' heading, found {count}"
+    )
+    print("  ROADMAP contains exactly one Phase Status Overview heading \u2713")
+
+
+# ------------------------------------------------------------
+# Phase 39 ROADMAP Deep Restructure (P39-RD-10 .. P39-RD-23)
+# ------------------------------------------------------------
+
+
+def _p39rd_count_headings(text: str, heading: str) -> int:
+    """Count occurrences of an exact top-level heading anywhere in ROADMAP.md."""
+    count = text.count("\n" + heading + "\n")
+    if text.startswith(heading + "\n"):
+        count += 1
+    return count
+
+
+def test_p39rd_10_roadmap_no_current_active_phase_heading():
+    """P39-RD-10: ROADMAP.md contains no `## Current Active Phase` heading."""
+    print("\n=== Test P39-RD-10: ROADMAP has no '## Current Active Phase' heading ===")
+    text = _p39rd_roadmap()
+    assert "## Current Active Phase" not in text, (
+        "ROADMAP.md must not contain a '## Current Active Phase' heading after the deep restructure"
+    )
+    print("  ROADMAP has no '## Current Active Phase' heading \u2713")
+
+
+def test_p39rd_11_roadmap_no_current_active_phase_phrase():
+    """P39-RD-11: ROADMAP.md contains no 'Current Active Phase' phrase anywhere."""
+    print("\n=== Test P39-RD-11: ROADMAP has no 'Current Active Phase' phrase ===")
+    text = _p39rd_roadmap()
+    assert "Current Active Phase" not in text, (
+        "ROADMAP.md must not contain the stale 'Current Active Phase' phrase anywhere"
+    )
+    print("  ROADMAP has no 'Current Active Phase' phrase \u2713")
+
+
+def test_p39rd_12_roadmap_no_retained_verbatim_for_traceability_phrase():
+    """P39-RD-12: ROADMAP.md contains no 'retained verbatim for traceability' phrase."""
+    print("\n=== Test P39-RD-12: ROADMAP has no 'retained verbatim for traceability' phrase ===")
+    text = _p39rd_roadmap()
+    assert "retained verbatim for traceability" not in text, (
+        "ROADMAP.md must not preserve stale narrative under the 'retained verbatim for traceability' justification"
+    )
+    print("  ROADMAP has no 'retained verbatim for traceability' phrase \u2713")
+
+
+def test_p39rd_13_roadmap_no_supersedes_it_for_status_purposes_phrase():
+    """P39-RD-13: ROADMAP.md contains no 'supersedes it for status purposes' phrase."""
+    print("\n=== Test P39-RD-13: ROADMAP has no 'supersedes it for status purposes' phrase ===")
+    text = _p39rd_roadmap()
+    assert "supersedes it for status purposes" not in text, (
+        "ROADMAP.md must not contain the 'supersedes it for status purposes' phrase"
+    )
+    print("  ROADMAP has no 'supersedes it for status purposes' phrase \u2713")
+
+
+def test_p39rd_14_roadmap_states_phase_40_is_next_planned_implementation_phase():
+    """P39-RD-14: ROADMAP.md states Phase 40 is the next planned implementation phase."""
+    print("\n=== Test P39-RD-14: ROADMAP names Phase 40 as next planned implementation phase ===")
+    text = _p39rd_roadmap()
+    assert "next planned implementation phase" in text, (
+        "ROADMAP.md must use the phrase 'next planned implementation phase'"
+    )
+    assert "Phase 40" in text, "ROADMAP.md must mention Phase 40"
+    # And it must associate Phase 40 with that phrase.
+    import re as _re
+    pattern = _re.compile(
+        r"Phase 40[^\n]{0,200}next planned implementation phase|next planned implementation phase[^\n]{0,200}Phase 40",
+        _re.IGNORECASE,
+    )
+    assert pattern.search(text), (
+        "ROADMAP.md must explicitly name Phase 40 as the next planned implementation phase"
+    )
+    print("  ROADMAP names Phase 40 as next planned implementation phase \u2713")
+
+
+def test_p39rd_15_roadmap_does_not_state_phase_32_is_the_next_planned_phase():
+    """P39-RD-15: ROADMAP.md does not say Phase 32 is the next planned phase."""
+    print("\n=== Test P39-RD-15: ROADMAP does not name Phase 32 as next planned phase ===")
+    text = _p39rd_roadmap()
+    for forbidden in (
+        "next planned phase is Phase 32",
+        "Phase 32 is the next planned phase",
+        "next planned phase: Phase 32",
+    ):
+        assert forbidden not in text, (
+            f"ROADMAP.md must not contain the stale '{forbidden}' claim"
+        )
+    print("  ROADMAP does not name Phase 32 as next planned phase \u2713")
+
+
+def test_p39rd_16_roadmap_exactly_one_current_status_section():
+    """P39-RD-16: ROADMAP.md contains exactly one `## Current Status` section."""
+    print("\n=== Test P39-RD-16: ROADMAP has exactly one '## Current Status' section ===")
+    text = _p39rd_roadmap()
+    count = _p39rd_count_headings(text, "## Current Status")
+    assert count == 1, (
+        f"ROADMAP.md must contain exactly one '## Current Status' section, found {count}"
+    )
+    print("  ROADMAP has exactly one '## Current Status' section \u2713")
+
+
+def test_p39rd_17_roadmap_exactly_one_completed_capability_summary_section():
+    """P39-RD-17: ROADMAP.md contains exactly one `## Completed Capability Summary` section."""
+    print("\n=== Test P39-RD-17: ROADMAP has exactly one '## Completed Capability Summary' section ===")
+    text = _p39rd_roadmap()
+    count = _p39rd_count_headings(text, "## Completed Capability Summary")
+    assert count == 1, (
+        f"ROADMAP.md must contain exactly one '## Completed Capability Summary' section, found {count}"
+    )
+    print("  ROADMAP has exactly one '## Completed Capability Summary' section \u2713")
+
+
+def test_p39rd_18_roadmap_exactly_one_planned_productisation_phases_section():
+    """P39-RD-18: ROADMAP.md contains exactly one `## Planned Productisation Phases` section."""
+    print("\n=== Test P39-RD-18: ROADMAP has exactly one '## Planned Productisation Phases' section ===")
+    text = _p39rd_roadmap()
+    count = _p39rd_count_headings(text, "## Planned Productisation Phases")
+    assert count == 1, (
+        f"ROADMAP.md must contain exactly one '## Planned Productisation Phases' section, found {count}"
+    )
+    print("  ROADMAP has exactly one '## Planned Productisation Phases' section \u2713")
+
+
+def test_p39rd_19_roadmap_exactly_one_deferred_phases_section():
+    """P39-RD-19: ROADMAP.md contains exactly one `## Deferred Phases` section."""
+    print("\n=== Test P39-RD-19: ROADMAP has exactly one '## Deferred Phases' section ===")
+    text = _p39rd_roadmap()
+    count = _p39rd_count_headings(text, "## Deferred Phases")
+    assert count == 1, (
+        f"ROADMAP.md must contain exactly one '## Deferred Phases' section, found {count}"
+    )
+    print("  ROADMAP has exactly one '## Deferred Phases' section \u2713")
+
+
+def test_p39rd_20_phase_27_appears_in_deferred_phases_section():
+    """P39-RD-20: Phase 27 appears inside the `## Deferred Phases` section."""
+    print("\n=== Test P39-RD-20: Phase 27 appears in Deferred Phases section ===")
+    text = _p39rd_roadmap()
+    start = text.find("## Deferred Phases")
+    assert start >= 0, "ROADMAP.md must contain a '## Deferred Phases' section"
+    # Deferred Phases is the last top-level section in the restructured roadmap.
+    end = text.find("\n## ", start + 1)
+    section = text[start:end] if end > 0 else text[start:]
+    assert "### Phase 27" in section, (
+        "Phase 27 must appear as a `### Phase 27` heading inside the Deferred Phases section"
+    )
+    print("  Phase 27 appears in Deferred Phases section \u2713")
+
+
+def test_p39rd_21_phase_28_appears_in_deferred_phases_section():
+    """P39-RD-21: Phase 28 appears inside the `## Deferred Phases` section."""
+    print("\n=== Test P39-RD-21: Phase 28 appears in Deferred Phases section ===")
+    text = _p39rd_roadmap()
+    start = text.find("## Deferred Phases")
+    assert start >= 0, "ROADMAP.md must contain a '## Deferred Phases' section"
+    end = text.find("\n## ", start + 1)
+    section = text[start:end] if end > 0 else text[start:]
+    assert "### Phase 28" in section, (
+        "Phase 28 must appear as a `### Phase 28` heading inside the Deferred Phases section"
+    )
+    print("  Phase 28 appears in Deferred Phases section \u2713")
+
+
+def test_p39rd_22_phase_39_appears_complete_in_table_and_completed_phase_notes():
+    """P39-RD-22: Phase 39 appears as Complete in the status table and in `## Completed Phase Notes`."""
+    print("\n=== Test P39-RD-22: Phase 39 appears Complete in both the table and Completed Phase Notes ===")
+    text = _p39rd_roadmap()
+    # Table: reuse the helper.
+    rows = _p39rd_overview_table_rows()
+    p39 = [r for r in rows if r and r[0] == "39"]
+    assert len(p39) == 1 and p39[0][-1].strip().lower() == "complete", (
+        "ROADMAP table must show Phase 39 as Complete"
+    )
+    # Completed Phase Notes section must contain a Phase 39 entry.
+    start = text.find("## Completed Phase Notes")
+    assert start >= 0, "ROADMAP.md must contain a '## Completed Phase Notes' section"
+    end = text.find("\n## ", start + 1)
+    section = text[start:end] if end > 0 else text[start:]
+    assert "### Phase 39" in section, (
+        "ROADMAP '## Completed Phase Notes' must contain a `### Phase 39` entry"
+    )
+    assert "Complete" in section, (
+        "ROADMAP '## Completed Phase Notes' Phase 39 entry must record a Complete status"
+    )
+    print("  Phase 39 appears Complete in both the table and Completed Phase Notes \u2713")
+
+
+def test_p39rd_23_roadmap_does_not_describe_phase_30_or_31_as_currently_active():
+    """P39-RD-23: ROADMAP.md no longer describes any Phase 30/31A/31B/31C work as currently active."""
+    print("\n=== Test P39-RD-23: ROADMAP does not describe Phase 30/31 work as currently active ===")
+    text = _p39rd_roadmap()
+    for forbidden in (
+        "active phase is Phase 30",
+        "active phase is Phase 31",
+        "Phase 30 (UI Release Quality Pass) is complete and Phase 31A",
+        "Phase 30 is the current",
+        "Phase 31C is the current",
+        "currently active phase is Phase 30",
+        "currently active phase is Phase 31",
+    ):
+        assert forbidden not in text, (
+            f"ROADMAP.md must not describe '{forbidden}' as currently active"
+        )
+    print("  ROADMAP does not describe Phase 30/31 work as currently active \u2713")
 
 
 # ============================================================
