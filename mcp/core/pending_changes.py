@@ -684,16 +684,28 @@ def list_pending_changes(
     Args:
         vault_name: Vault name.
         status: Filter by status (``"pending"``, ``"accepted"``, ``"rejected"``,
-            ``"invalid"``).  Pass ``None`` to list all.
+            ``"invalid"``).  Pass ``None`` to list all (active and archived).
         limit: Maximum number of results to return (most-recent first).
+
+    Phase 44B: when ``status`` is ``"accepted"``, ``"rejected"``, or ``None``
+    (all), records archived under ``pending-changes/archive/`` are included
+    in addition to active records under ``pending-changes/``. Each returned
+    record is decorated with a transient ``archived`` boolean indicating
+    whether it lives in the archive directory. The ``archived`` flag is
+    computed at list time and is never persisted to disk.
     """
     try:
         pending_root = get_pending_root(vault_name)
+        archive_root = get_archive_root(vault_name)
     except KeyError:
         return _error("INVALID_VAULT", f"Vault not registered: {vault_name!r}")
 
+    include_active = status in (None, "pending", "invalid", "all")
+    include_archive = status in (None, "accepted", "rejected", "all")
+
     changes: list[dict] = []
-    if pending_root.is_dir():
+
+    if include_active and pending_root.is_dir():
         for f in pending_root.glob("*.json"):
             if f.stem.startswith(".") or not _is_valid_change_id(f.stem):
                 continue
@@ -701,7 +713,20 @@ def list_pending_changes(
                 change = json.loads(f.read_text(encoding="utf-8"))
             except (json.JSONDecodeError, OSError):
                 continue
-            if status is None or change.get("status") == status:
+            if status is None or status == "all" or change.get("status") == status:
+                change["archived"] = False
+                changes.append(change)
+
+    if include_archive and archive_root.is_dir():
+        for f in archive_root.glob("*.json"):
+            if f.stem.startswith(".") or not _is_valid_change_id(f.stem):
+                continue
+            try:
+                change = json.loads(f.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError):
+                continue
+            if status is None or status == "all" or change.get("status") == status:
+                change["archived"] = True
                 changes.append(change)
 
     # Sort: most-recent first (created_at desc), then id desc for determinism
@@ -718,10 +743,23 @@ def list_pending_changes(
     }
 
 
+def _is_archived_on_disk(vault_name: str, change_id: str) -> bool:
+    """Return True when the change record currently lives in the archive directory."""
+    try:
+        archive_root = get_archive_root(vault_name)
+    except KeyError:
+        return False
+    return (archive_root / f"{change_id}.json").is_file()
+
+
 def review_pending_change(vault_name: str, change_id: str) -> dict:
     """Return the full pending change object (including diff and validation status).
 
     Checks the pending directory first, then the archive.
+
+    Phase 44B: the returned record is decorated with a transient
+    ``archived`` boolean reflecting whether the record currently lives in
+    the archive directory. The flag is never persisted.
     """
     if not _is_valid_change_id(change_id):
         return _error(
@@ -741,6 +779,7 @@ def review_pending_change(vault_name: str, change_id: str) -> dict:
             f"Pending change not found: {change_id!r}",
         )
 
+    change["archived"] = _is_archived_on_disk(vault_name, change_id)
     return {"status": "ok", "data": {"change": change}}
 
 
@@ -1029,3 +1068,110 @@ def validate_pending_change(vault_name: str, change: dict) -> dict:
     validation_errors = _validate_content(proposed_content, norm_path, schema)
     validation_status = "fail" if validation_errors else "pass"
     return dict(change, validation_status=validation_status, validation_errors=validation_errors)
+
+
+# ---------------------------------------------------------------------------
+# Revalidate (Phase 44B): public service action
+# ---------------------------------------------------------------------------
+
+def revalidate_pending_change(vault_name: str, change_id: str) -> dict:
+    """Re-run schema validation for a single pending change.
+
+    Phase 44B safety contract:
+    - Never writes to the target vault note.
+    - Never accepts the proposal.
+    - Does not bypass stale-hash protection at acceptance time.
+    - Refuses revalidation for archived (accepted/rejected) records and
+      returns a documented ``ARCHIVED_NOT_REVALIDATABLE`` error.
+    - Refreshes ``validation_status`` and ``validation_errors`` on the
+      persisted pending record.
+    - Appends a deterministic entry to ``revalidation_history`` so the
+      previous validation state is preserved for audit.
+    - Updates ``status`` between ``pending`` and ``invalid`` based on the
+      fresh validation result. ``accepted`` and ``rejected`` records are
+      never mutated.
+    """
+    if not _is_valid_change_id(change_id):
+        return _error(
+            "INVALID_PENDING_CHANGE",
+            f"change_id format is invalid: {change_id!r}",
+        )
+
+    try:
+        _get_vault_and_schema(vault_name)
+    except KeyError:
+        return _error("INVALID_VAULT", f"Vault not registered: {vault_name!r}")
+
+    change = load_pending_change(vault_name, change_id)
+    if change is None:
+        return _error(
+            "PENDING_CHANGE_NOT_FOUND",
+            f"Pending change not found: {change_id!r}",
+        )
+
+    current_status = change.get("status")
+    if current_status in ("accepted", "rejected"):
+        return _error(
+            "ARCHIVED_NOT_REVALIDATABLE",
+            (
+                "Archived records cannot be revalidated. "
+                f"Change {change_id!r} has status {current_status!r} and is "
+                "retained for audit only."
+            ),
+        )
+
+    previous_validation_status = change.get("validation_status")
+    previous_validation_errors = list(change.get("validation_errors", []))
+    previous_status = current_status
+
+    revalidated = validate_pending_change(vault_name, change)
+    new_validation_status = revalidated.get("validation_status", "fail")
+    new_validation_errors = list(revalidated.get("validation_errors", []))
+
+    now = _utcnow()
+    change["validation_status"] = new_validation_status
+    change["validation_errors"] = new_validation_errors
+    change["validated_at"] = now
+    change["updated_at"] = now
+
+    if new_validation_status == "fail":
+        change["status"] = "invalid"
+    else:
+        change["status"] = "pending"
+
+    history = list(change.get("revalidation_history", []))
+    history.append({
+        "at": now,
+        "previous_status": previous_status,
+        "previous_validation_status": previous_validation_status,
+        "previous_validation_errors": previous_validation_errors,
+        "new_status": change["status"],
+        "new_validation_status": new_validation_status,
+    })
+    change["revalidation_history"] = history
+
+    try:
+        write_pending_change(vault_name, change)
+    except OSError as exc:
+        logger.error(
+            "pending_change_revalidate_write_failed vault=%s id=%s error=%s",
+            vault_name, change_id, exc,
+        )
+        return _error("WRITE_FAILED", f"Failed to persist revalidated change: {exc}")
+
+    logger.info(
+        "pending_change_revalidated vault=%s id=%s previous=%s new=%s",
+        vault_name, change_id, previous_validation_status, new_validation_status,
+    )
+
+    change["archived"] = False
+    return {
+        "status": "ok",
+        "data": {
+            "change": change,
+            "revalidated": True,
+            "previous_validation_status": previous_validation_status,
+            "previous_validation_errors": previous_validation_errors,
+            "new_validation_status": new_validation_status,
+        },
+    }

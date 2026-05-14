@@ -3497,6 +3497,67 @@ def endpoint_memory_pending_reject(change_id: str, req: PendingChangeActionReque
         return _error("PENDING_CHANGES_FAILED", f"Failed to reject pending change: {exc}", 500)
 
 
+class PendingChangeRevalidateRequest(BaseModel):
+    """Request body for POST /memory/pending/{change_id}/revalidate (Phase 44B)."""
+
+    vault: str = Field(..., description="Vault name")
+
+
+@app.post("/memory/pending/{change_id}/revalidate")
+def endpoint_memory_pending_revalidate(change_id: str, req: PendingChangeRevalidateRequest):
+    """Re-run schema validation for a pending change without writing the vault.
+
+    Phase 44B safety contract:
+    - Never writes to the target vault note.
+    - Never accepts the proposal.
+    - Does not bypass stale-hash protection at acceptance time.
+    - Refuses revalidation for archived (accepted/rejected) records.
+    - Refreshes the persisted ``validation_status`` and ``validation_errors``
+      on the pending record and appends an audit entry to
+      ``revalidation_history`` so the previous validation state is retained.
+
+    Path parameter:
+        change_id (str): Change ID.
+
+    Request body:
+        vault (str, required): Vault name.
+
+    Response data:
+        change (dict): Updated pending change object.
+        revalidated (bool): Always ``true`` on success.
+        previous_validation_status (str | null): Validation status before revalidation.
+        previous_validation_errors (list[str]): Validation errors before revalidation.
+        new_validation_status (str): Validation status after revalidation.
+
+    Error codes:
+        INVALID_VAULT: Vault not registered (HTTP 404).
+        PENDING_CHANGE_NOT_FOUND: Change not found (HTTP 404).
+        INVALID_PENDING_CHANGE: change_id format invalid (HTTP 400).
+        ARCHIVED_NOT_REVALIDATABLE: Archived (accepted/rejected) record cannot be revalidated (HTTP 409).
+        WRITE_FAILED: Failed to persist refreshed validation state (HTTP 500).
+        REMOTE_READ_ONLY: Server is in remote read-only mode (HTTP 403).
+    """
+    err = _validate_vault(req.vault)
+    if err:
+        return err
+    try:
+        result = _pending_changes.revalidate_pending_change(req.vault, change_id)
+        if result.get("status") == "error":
+            code = result["error"]["code"]
+            if code in ("PENDING_CHANGE_NOT_FOUND", "INVALID_VAULT"):
+                status_code = 404
+            elif code == "ARCHIVED_NOT_REVALIDATABLE":
+                status_code = 409
+            elif code == "WRITE_FAILED":
+                status_code = 500
+            else:
+                status_code = 400
+            return JSONResponse(status_code=status_code, content=result)
+        return result
+    except Exception as exc:
+        return _error("PENDING_CHANGES_FAILED", f"Failed to revalidate pending change: {exc}", 500)
+
+
 # ---------- Phase 22: Session and Project State ----------
 
 

@@ -340,13 +340,19 @@ TOOLS = [
         "name": "cve_list_pending_changes",
         "description": (
             "List pending change proposals for a vault. "
-            "Currently returns only active records in the pending directory "
-            "(status 'pending' or 'invalid'). Accepted and rejected records are "
-            "archived under '<vault>/Vault Files/State/pending-changes/archive/' "
-            "and are not surfaced by this list call. To inspect an archived "
-            "record, retrieve it by ID via cve_review_pending_change. "
-            "Use this tool to review the active queue before calling accept or "
-            "reject."
+            "Active records live under '<vault>/Vault Files/State/pending-changes/' "
+            "and archived records live under "
+            "'<vault>/Vault Files/State/pending-changes/archive/'. "
+            "Phase 44B: when status is 'accepted', 'rejected', or 'all' the "
+            "archive directory is also walked, so archived records are "
+            "discoverable through this call. status='pending' (default) and "
+            "status='invalid' return active records only. Each returned record "
+            "carries a transient 'archived' boolean indicating which directory "
+            "it lives in. Archived records are immutable: they cannot be "
+            "accepted, rejected, or revalidated again. To inspect a single "
+            "record (active or archived) by ID, use cve_review_pending_change. "
+            "Use this tool to review the queue before calling accept, reject, "
+            "or revalidate."
         ),
         "inputSchema": {
             "type": "object",
@@ -430,6 +436,34 @@ TOOLS = [
         },
     },
     {
+        "name": "cve_revalidate_pending_change",
+        "description": (
+            "[SAFE - does NOT write to the vault and does NOT accept the proposal] "
+            "Re-run schema validation for a single pending change against the "
+            "current active vault schema. Refreshes the persisted "
+            "validation_status and validation_errors on the pending record and "
+            "appends an audit entry to revalidation_history so the previous "
+            "validation state is retained. "
+            "Revalidation never writes to the target vault note and never "
+            "accepts the proposal; acceptance still goes through "
+            "cve_accept_pending_change, which re-runs validation and the stale "
+            "hash check before any vault write. Archived (accepted, rejected) "
+            "records cannot be revalidated and return "
+            "ARCHIVED_NOT_REVALIDATABLE. Use this when a proposal was created "
+            "before the schema or vault state changed and you want to re-check "
+            "whether it would now pass validation."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "vault": {"type": "string"},
+                "change_id": {"type": "string"},
+            },
+            "required": ["vault", "change_id"],
+            "additionalProperties": False,
+        },
+    },
+    {
         "name": "cve_review_pending_change",
         "description": (
             "Retrieve the full details of a single pending change proposal "
@@ -437,10 +471,14 @@ TOOLS = [
             "metadata. Works for both active (pending or invalid) records and "
             "archived (accepted or rejected) records. "
             "The returned validation_status and validation_errors reflect the "
-            "state persisted when the proposal was created or last accepted; "
+            "state persisted when the proposal was created or last revalidated; "
             "this call does not re-run validation against the current vault "
-            "schema. Acceptance re-validates before any vault write. "
-            "Use this before deciding to accept or reject."
+            "schema. To re-run validation on an active record, use "
+            "cve_revalidate_pending_change. Acceptance still re-validates "
+            "before any vault write. The returned record carries a transient "
+            "'archived' boolean. Archived records are immutable and cannot be "
+            "accepted, rejected, or revalidated again. "
+            "Use this before deciding to accept, reject, or revalidate."
         ),
         "inputSchema": {
             "type": "object",
@@ -733,6 +771,7 @@ def _execute_tool(tool_name: str, args: dict) -> dict:
         "cve_query_notes": _tool_query_notes,
         "cve_reject_pending_change": _tool_reject_pending_change,
         "cve_resume_session": _tool_resume_session,
+        "cve_revalidate_pending_change": _tool_revalidate_pending_change,
         "cve_review_pending_change": _tool_review_pending_change,
         "cve_security_scan": _tool_security_scan,
         "cve_start_session": _tool_start_session,
@@ -1214,6 +1253,29 @@ def _tool_reject_pending_change(args: dict) -> dict:
         err = result["error"]
         return _tool_error(f"{err['code']}: {err['message']}")
     return _tool_ok(result, f"Change rejected and archived: {change_id}")
+
+
+def _tool_revalidate_pending_change(args: dict) -> dict:
+    """Phase 44B: re-run validation for a pending change without writing the vault."""
+    guard = _check_remote_read_only()
+    if guard:
+        return guard
+    from mcp.core import pending_changes as _pc  # noqa: PLC0415
+    vault = args["vault"]
+    change_id = args["change_id"]
+    result = _pc.revalidate_pending_change(vault, change_id)
+    if result.get("status") == "error":
+        err = result["error"]
+        return _tool_error(f"{err['code']}: {err['message']}")
+    change = result["data"]["change"]
+    return _tool_ok(
+        result,
+        (
+            f"Change revalidated: {change_id} "
+            f"(status={change['status']}, validation={change['validation_status']}). "
+            "No vault write."
+        ),
+    )
 
 
 # ---------------------------------------------------------------------------

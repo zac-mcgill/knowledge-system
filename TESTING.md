@@ -1,13 +1,13 @@
 # Context Vault Engine - Testing
 
-All tests live in `mcp/test_verify.py`. The suite currently has 1044 test functions, all of which are executed by the manual runner in `main()` at the bottom of that file. A passing run prints `ALL VERIFICATION TESTS PASSED`. Historical test counts from earlier phases (272, 382, 429, 467, 507, 548, 553, 564, 587, 607, 625, 650, 675, 695, 706, 721, 740, 763, 787, 800, 818, 842, 866, 890, 913, 937, 985, 999, 1021, 1028) appear later in this document as part of the phase changelog and are not the current total.
+All tests live in `mcp/test_verify.py`. The suite currently has 1065 test functions, all of which are executed by the manual runner in `main()` at the bottom of that file. A passing run prints `ALL VERIFICATION TESTS PASSED`. Historical test counts from earlier phases (272, 382, 429, 467, 507, 548, 553, 564, 587, 607, 625, 650, 675, 695, 706, 721, 740, 763, 787, 800, 818, 842, 866, 890, 913, 937, 985, 999, 1021, 1028, 1044) appear later in this document as part of the phase changelog and are not the current total.
 
 ## Current Verification Summary
 
 A full local verification consists of:
 
 ```bash
-py mcp/test_verify.py           # 1044 tests, all must pass
+py mcp/test_verify.py           # 1065 tests, all must pass
 py run.py validate              # vault schema-compliance
 py run.py security              # status: pass (or warning, never fail)
 py run.py feedback              # exits 0, valid JSON
@@ -2699,4 +2699,30 @@ Phase 44A adds 8 deterministic tests in `mcp/test_verify.py` (P44A-1 through P44
 - `test_p44a_no_new_direct_write_or_semantic_path` - Phase 44A does not import semantic-retrieval, embeddings, or LLM dependencies, and does not introduce a new direct note-write helper in `pending_changes`. The only write-like helper remains the JSON-writing `write_pending_change`; vault writes still go through `accept_pending_change`.
 
 Phase 44A is a bounded investigation, contract, documentation, and guardrail phase. It does not change the accept, reject, or write semantics of the pending change system. Behaviour changes (archive-aware listing, explicit revalidate surface, UI filter copy) are deferred to Phase 44B.
+
+### Phase 44B Test Family
+
+Phase 44B adds 21 deterministic tests in `mcp/test_verify.py` (P44B-1 through P44B-21), bringing the total from 1044 to 1065. The tests lock the implementation of archive-aware pending listing, the safe `cve_revalidate_pending_change` surface, and the UI visibility hardening. The existing P44A-2 test was repurposed to assert that the safe default `status='pending'` filter never surfaces archived records, and P44A-4 was narrowed to assert only that the `validate_pending_change` helper exists (the negative assertions about a missing revalidate tool and HTTP route were removed because Phase 44B intentionally introduces them).
+
+- `test_p44b_list_returns_accepted_archived_records` and `test_p44b_list_returns_rejected_archived_records` - `list_pending_changes` with `status='accepted'` or `status='rejected'` scans the archive directory.
+- `test_p44b_list_status_all_includes_active_and_archived_deterministic_order` - `status=None` (all) returns active and archived records in a deterministic `(created_at, id)` desc order.
+- `test_p44b_list_archived_records_marked_archived_true` - returned records carry a transient `archived` boolean (not persisted to disk).
+- `test_p44b_review_archived_returns_record_with_archived_true` - `review_pending_change` returns `archived: true` for archived records.
+- `test_p44b_accept_archived_record_blocked` and `test_p44b_reject_archived_record_blocked` - archived records cannot be re-accepted or re-rejected.
+- `test_p44b_revalidate_endpoint_exists_and_returns_current_validation` - the new `POST /memory/pending/{change_id}/revalidate` route is registered and the service helper returns fresh validation state.
+- `test_p44b_revalidate_does_not_write_vault_note` - revalidation never writes to the target vault note.
+- `test_p44b_revalidate_does_not_accept_proposal` - revalidation never sets `status='accepted'`.
+- `test_p44b_revalidate_updates_persisted_validation_state_and_appends_history` - revalidation persists fresh `validation_status`, `validation_errors`, `validated_at`, and appends to `revalidation_history`.
+- `test_p44b_revalidate_unknown_id_returns_structured_error` - unknown IDs return `PENDING_CHANGE_NOT_FOUND`.
+- `test_p44b_revalidate_archived_record_blocked` - accepted or rejected records return `ARCHIVED_NOT_REVALIDATABLE`.
+- `test_p44b_invalid_proposal_remains_blocked_from_accept_after_revalidate` - revalidating an invalid proposal does not enable acceptance.
+- `test_p44b_stale_hash_still_blocks_accept_after_revalidate` - stale-hash protection at acceptance time is preserved after revalidation.
+- `test_p44b_mcp_revalidate_tool_registered_and_safe_wording` - `cve_revalidate_pending_change` is advertised and its description warns that it does NOT write and does NOT accept, and mentions `ARCHIVED_NOT_REVALIDATABLE`.
+- `test_p44b_mcp_list_review_descriptions_match_phase_44b_contract` - `cve_list_pending_changes` mentions the archive scan and the `archived` flag and notes archived records are immutable; `cve_review_pending_change` mentions the `archived` flag and points at `cve_revalidate_pending_change`.
+- `test_p44b_ui_pending_includes_archived_and_revalidate_support` - the Svelte component imports `revalidatePendingChange` and renders archived state; `api.ts` exposes `revalidatePendingChange` and targets the `/revalidate` path.
+- `test_p44b_ui_revalidate_does_not_call_accept` - the `submitRevalidate` handler does not call `acceptPendingChange`.
+- `test_p44b_phase_27_28_remain_deferred` - Phase 27 and Phase 28 remain Deferred in ROADMAP.
+- `test_p44b_no_semantic_retrieval_or_new_write_path_added` - no semantic retrieval, embeddings, or LLM dependencies are imported by `mcp.core`, and no new write-like helper is added to `pending_changes` beyond `write_pending_change`.
+
+Phase 44B is the safe lifecycle implementation phase. It does not change accept semantics, does not bypass stale-hash protection, does not introduce semantic retrieval, and does not add a new direct vault-write path.
 

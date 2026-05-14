@@ -1087,6 +1087,19 @@ export interface PendingChange {
   rejected_at: string | null;
   reviewer: string | null;
   audit_note: string | null;
+  /** Phase 44B: transient flag indicating archive membership (never persisted). */
+  archived?: boolean;
+  /** Phase 44B: timestamp of last revalidation, when present. */
+  validated_at?: string | null;
+  /** Phase 44B: audit trail of previous validation results. */
+  revalidation_history?: Array<{
+    at: string;
+    previous_status: string | null;
+    previous_validation_status: string | null;
+    previous_validation_errors: string[];
+    new_status: string;
+    new_validation_status: string;
+  }>;
 }
 
 export interface PendingChangesData {
@@ -1212,6 +1225,25 @@ export function rejectPendingChange(
   return post<PendingChangeData>(
     `/memory/pending/${encodeURIComponent(changeId)}/reject`,
     body,
+  );
+}
+
+/**
+ * POST /memory/pending/{change_id}/revalidate (Phase 44B).
+ *
+ * Re-runs schema validation against the current vault schema without
+ * writing to the target vault note and without accepting the proposal.
+ * Returns the refreshed pending change with updated validation state and
+ * an audit entry appended to revalidation_history. Archived (accepted or
+ * rejected) records cannot be revalidated.
+ */
+export function revalidatePendingChange(
+  vault: string,
+  changeId: string,
+): Promise<ApiResult<PendingChangeData>> {
+  return post<PendingChangeData>(
+    `/memory/pending/${encodeURIComponent(changeId)}/revalidate`,
+    { vault },
   );
 }
 

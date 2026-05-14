@@ -6,6 +6,7 @@
     getPendingChange,
     acceptPendingChange,
     rejectPendingChange,
+    revalidatePendingChange,
     isOk,
     type PendingChange,
   } from '../lib/api.ts';
@@ -236,6 +237,31 @@
     await loadChanges();
   }
 
+  /**
+   * Phase 44B: re-run schema validation for the selected pending change.
+   * This does NOT accept the change and does NOT write to the vault. It
+   * refreshes the persisted validation_status and validation_errors only.
+   */
+  async function submitRevalidate() {
+    if (!selectedChange) return;
+    if (selectedChange.status !== 'pending' && selectedChange.status !== 'invalid') return;
+    if (selectedChange.archived) return;
+    actionState = 'loading';
+    actionError = '';
+    actionErrorCode = '';
+    activeAction = null;
+    const resp = await revalidatePendingChange(selectedVault, selectedChange.id);
+    if (!isOk(resp)) {
+      actionState = 'error';
+      actionError = resp.error?.message ?? 'Failed to revalidate change';
+      actionErrorCode = resp.error?.code ?? '';
+      return;
+    }
+    actionState = 'ok';
+    selectedChange = resp.data.change;
+    await loadChanges();
+  }
+
   // ---------------------------------------------------------------------------
   // Helpers
   // ---------------------------------------------------------------------------
@@ -450,6 +476,9 @@
                       {#if ch.validation_status === 'fail'}
                         <span class="cve-p30e1-tag cve-p30e1-tag--invalid">validation fail</span>
                       {/if}
+                      {#if ch.archived}
+                        <span class="cve-p30e1-tag cve-p30e1-tag--archived">archived</span>
+                      {/if}
                     </span>
                     <span class="cve-p30e1-queue-item__path">{ch.path}</span>
                     {#if ch.section}
@@ -485,6 +514,9 @@
               <span class="cve-p30e1-validation cve-p30e1-validation--{ch.validation_status}">
                 validation: {ch.validation_status}
               </span>
+              {#if ch.archived}
+                <span class="cve-p30e1-tag cve-p30e1-tag--archived" data-testid="pending-archived-badge">archived</span>
+              {/if}
             </div>
             <h2 class="cve-p30e1-inspector__path" data-testid="pending-inspector-path">{ch.path}</h2>
             {#if ch.section}
@@ -592,6 +624,30 @@
             {/if}
 
             <!-- Accept / reject confirmation panel -->
+            {#if ch.status === 'pending' || ch.status === 'invalid'}
+              {#if !ch.archived}
+                <!-- Phase 44B: revalidate action (no-write, no-accept). -->
+                <section class="cve-p30e1-section" aria-labelledby="pending-revalidate-head">
+                  <h3 id="pending-revalidate-head" class="cve-p30e1-section__title">Revalidate</h3>
+                  <p class="cve-helper">
+                    Re-runs schema validation against the current vault schema.
+                    Does not accept the proposal and does not write to the
+                    target vault note. Refreshes the persisted validation
+                    state and appends an audit entry to revalidation history.
+                  </p>
+                  <button
+                    type="button"
+                    class="cve-btn cve-btn-secondary"
+                    data-testid="pending-revalidate-submit"
+                    on:click={submitRevalidate}
+                    disabled={actionState === 'loading'}
+                  >
+                    {actionState === 'loading' ? 'Revalidating...' : 'Revalidate'}
+                  </button>
+                </section>
+              {/if}
+            {/if}
+
             {#if ch.status === 'pending'}
               <section class="cve-p30e1-section cve-p30e1-section--actions" aria-labelledby="pending-actions-head">
                 <h3 id="pending-actions-head" class="cve-p30e1-section__title">Review decision</h3>

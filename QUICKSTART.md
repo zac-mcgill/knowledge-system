@@ -1231,19 +1231,28 @@ Seven new tools: `cve_create_note_draft`, `cve_suggest_note_update`, `cve_update
 
 A new `cve_review_pending_change` prompt guides a reviewer through examining a diff and deciding to accept or reject.
 
-### Safe MCP pending-change review (Phase 44A contract)
+### Safe MCP pending-change review (Phase 44B contract)
 
-Confirmed behaviour as of Phase 44A:
+Confirmed behaviour as of Phase 44B:
 
 - Drafts are validated against the active vault schema at create time. Use only frontmatter fields and values that the schema declares. Common mistakes that produce `validation_status: fail`:
   - adding an unknown `title` frontmatter field when the schema does not declare it;
   - setting `status: draft` when the schema's `VALID_STATUSES` only allows `complete` and `partial`;
   - using non-canonical headings such as `## Pitfalls` when the schema defines a different canonical heading;
   - omitting canonical headings required for the note type.
-- `cve_review_pending_change` returns the persisted `validation_status` and `validation_errors`. It does not re-run schema validation. To see whether a stale invalid record is still invalid, reject it and create a corrected draft.
+- `cve_review_pending_change` returns the persisted `validation_status` and `validation_errors`. It does not re-run schema validation. The returned record carries a transient `archived` boolean so reviewers can tell active and archived proposals apart at a glance.
+- `cve_revalidate_pending_change` re-runs schema validation against the current vault schema, refreshes the persisted `validation_status` and `validation_errors`, and appends an entry to `revalidation_history`. It never writes to the vault and never accepts the proposal. Archived (`accepted` or `rejected`) records return `ARCHIVED_NOT_REVALIDATABLE` and remain immutable.
 - `cve_accept_pending_change` re-validates the proposal and re-checks the original-content hash before any vault write. Invalid drafts cannot be accepted. If the target note has changed since the proposal was made, accept returns `STALE_PENDING_CHANGE` and no write occurs.
-- `cve_list_pending_changes` currently surfaces only active records (`pending`, `invalid`). Accepted and rejected records are archived under `Vault Files/State/pending-changes/archive/` and are retrievable by ID via `cve_review_pending_change`, but are not returned by the list call.
+- `cve_list_pending_changes` is archive-aware. `status='pending'` (default) and `status='invalid'` scan the active directory; `status='accepted'` and `status='rejected'` scan the archive directory; `status='all'` scans both. Each returned record carries a transient `archived` flag. Archived records are immutable: they cannot be re-accepted, re-rejected, or revalidated.
 - Agents must wait for explicit human confirmation before calling `cve_accept_pending_change`. Do not auto-accept based on `validation_status` alone.
+
+### Recommended review flow
+
+1. `cve_list_pending_changes` with the default filter to see active proposals.
+2. `cve_review_pending_change` for the proposal of interest.
+3. If the persisted validation looks stale, call `cve_revalidate_pending_change` to refresh it against the current schema. The call is safe: no write, no accept.
+4. Once a human has confirmed the proposal, call `cve_accept_pending_change`.
+5. To inspect audit history, call `cve_list_pending_changes` with `status='accepted'` or `status='rejected'`.
 
 ### Storage
 

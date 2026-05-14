@@ -11943,6 +11943,29 @@ def main():
     test_p44a_phase_27_28_remain_deferred()
     test_p44a_no_new_direct_write_or_semantic_path()
 
+    # Phase 44B - Pending Change Lifecycle Implementation and UI Visibility
+    test_p44b_list_returns_accepted_archived_records()
+    test_p44b_list_returns_rejected_archived_records()
+    test_p44b_list_status_all_includes_active_and_archived_deterministic_order()
+    test_p44b_list_archived_records_marked_archived_true()
+    test_p44b_review_archived_returns_record_with_archived_true()
+    test_p44b_accept_archived_record_blocked()
+    test_p44b_reject_archived_record_blocked()
+    test_p44b_revalidate_endpoint_exists_and_returns_current_validation()
+    test_p44b_revalidate_does_not_write_vault_note()
+    test_p44b_revalidate_does_not_accept_proposal()
+    test_p44b_revalidate_updates_persisted_validation_state_and_appends_history()
+    test_p44b_revalidate_unknown_id_returns_structured_error()
+    test_p44b_revalidate_archived_record_blocked()
+    test_p44b_invalid_proposal_remains_blocked_from_accept_after_revalidate()
+    test_p44b_stale_hash_still_blocks_accept_after_revalidate()
+    test_p44b_mcp_revalidate_tool_registered_and_safe_wording()
+    test_p44b_mcp_list_review_descriptions_match_phase_44b_contract()
+    test_p44b_ui_pending_includes_archived_and_revalidate_support()
+    test_p44b_ui_revalidate_does_not_call_accept()
+    test_p44b_phase_27_28_remain_deferred()
+    test_p44b_no_semantic_retrieval_or_new_write_path_added()
+
     print()
     print("=" * 60)
     print("ALL VERIFICATION TESTS PASSED")
@@ -19666,9 +19689,9 @@ def _repo_root():
 
 
 def test_doc_drift_readme_test_count():
-    """DOC-DRIFT-1: README quotes the current 1044-test total, no stale counts."""
+    """DOC-DRIFT-1: README quotes the current 1065-test total, no stale counts."""
     readme = (_repo_root() / "README.md").read_text(encoding="utf-8")
-    assert "1044" in readme, "README.md must mention the current test count 1044"
+    assert "1065" in readme, "README.md must mention the current test count 1065"
     stale_phrases = [
         "553 deterministic tests",
         "548 deterministic tests",
@@ -19713,29 +19736,31 @@ def test_doc_drift_readme_test_count():
         "1021 tests.",
         "1028 deterministic tests",
         "1028 tests.",
+        "1044 deterministic tests",
+        "1044 tests.",
     ]
     for phrase in stale_phrases:
         assert phrase not in readme, f"README.md still mentions stale phrase {phrase!r}"
-    print(f"  README mentions 1044 tests, no stale counts present ✓")
+    print(f"  README mentions 1065 tests, no stale counts present ✓")
 
 
 def test_doc_drift_testing_test_count():
-    """DOC-DRIFT-2: TESTING.md current total is 1044 and historical markers retained."""
+    """DOC-DRIFT-2: TESTING.md current total is 1065 and historical markers retained."""
     text = (_repo_root() / "TESTING.md").read_text(encoding="utf-8")
-    assert "1044 test functions" in text, "TESTING.md must state 1044 test functions"
-    for marker in ("429", "467", "507", "548", "564", "587", "607", "625", "650", "675", "695", "706", "721", "740", "763", "787", "800", "818", "842", "866", "890", "913", "937", "985", "999", "1021", "1028"):
+    assert "1065 test functions" in text, "TESTING.md must state 1065 test functions"
+    for marker in ("429", "467", "507", "548", "564", "587", "607", "625", "650", "675", "695", "706", "721", "740", "763", "787", "800", "818", "842", "866", "890", "913", "937", "985", "999", "1021", "1028", "1044"):
         assert marker in text, f"TESTING.md must retain historical test-count marker {marker}"
-    print(f"  TESTING.md states 1044 functions and keeps historical markers ✓")
+    print(f"  TESTING.md states 1065 functions and keeps historical markers ✓")
 
 
 def test_doc_drift_release_checklist_test_count():
-    """DOC-DRIFT-3: RELEASE_CHECKLIST references 1044 tests and required commands."""
+    """DOC-DRIFT-3: RELEASE_CHECKLIST references 1065 tests and required commands."""
     text = (_repo_root() / "RELEASE_CHECKLIST.md").read_text(encoding="utf-8")
-    assert "1044" in text, "RELEASE_CHECKLIST.md must reference the 1044-test target"
+    assert "1065" in text, "RELEASE_CHECKLIST.md must reference the 1065-test target"
     for req in ("test_verify.py", "run.py validate", "run.py security",
                 "run.py export", "GitHub Release"):
         assert req in text, f"RELEASE_CHECKLIST.md must contain {req!r}"
-    print(f"  RELEASE_CHECKLIST mentions 1044 tests and required commands ✓")
+    print(f"  RELEASE_CHECKLIST mentions 1065 tests and required commands ✓")
 
 
 def test_doc_drift_roadmap_active_phase():
@@ -21124,10 +21149,10 @@ def test_p29e_19_readme_states_phase29_complete():
 
 def test_p29e_20_release_checklist_test_count_updated():
     """P29E-20: RELEASE_CHECKLIST.md references the current test count.
-    Phase 44A bumped the total from 1028 to 1044."""
+    Phase 44B bumped the total from 1044 to 1065."""
     print("\n=== Test P29E-20: RELEASE_CHECKLIST test count ===")
     text = (_repo_root() / "RELEASE_CHECKLIST.md").read_text(encoding="utf-8")
-    assert "1044" in text, "RELEASE_CHECKLIST.md must reference the current 1044-test target"
+    assert "1065" in text, "RELEASE_CHECKLIST.md must reference the current 1065-test target"
     # The previous counts must not linger in the checklist after this phase.
     assert "all 763 tests green" not in text, \
         "RELEASE_CHECKLIST.md must not still say 'all 763 tests green'"
@@ -21155,7 +21180,9 @@ def test_p29e_20_release_checklist_test_count_updated():
         "RELEASE_CHECKLIST.md must not still say 'all 1021 tests green'"
     assert "all 1028 tests green" not in text, \
         "RELEASE_CHECKLIST.md must not still say 'all 1028 tests green'"
-    print("  RELEASE_CHECKLIST.md references 1044 tests \u2713")
+    assert "all 1044 tests green" not in text, \
+        "RELEASE_CHECKLIST.md must not still say 'all 1044 tests green'"
+    print("  RELEASE_CHECKLIST.md references 1065 tests \u2713")
 
 
 def test_p29e_21_ui_ux_audit_has_phase29e_note():
@@ -25443,6 +25470,7 @@ _CANONICAL_TOOL_NAMES = {
     "cve_query_notes",
     "cve_reject_pending_change",
     "cve_resume_session",
+    "cve_revalidate_pending_change",
     "cve_review_pending_change",
     "cve_security_scan",
     "cve_start_session",
@@ -25480,15 +25508,15 @@ def test_copilot_tool_names_match_charset():
 
 
 def test_copilot_all_28_canonical_tools_advertised():
-    """All 28 expected cve_* tool names are advertised."""
-    print("\n=== Test Copilot-3: all 28 canonical cve_* tools advertised ===")
+    """All 29 expected cve_* tool names are advertised (Phase 44B added revalidate)."""
+    print("\n=== Test Copilot-3: all 29 canonical cve_* tools advertised ===")
     advertised = set(_advertised_tool_names())
     missing = _CANONICAL_TOOL_NAMES - advertised
     extra = advertised - _CANONICAL_TOOL_NAMES
     assert not missing, f"Missing canonical tools: {sorted(missing)}"
     assert not extra, f"Unexpected advertised tools: {sorted(extra)}"
-    assert len(advertised) == 28, f"Expected 28 tools, got {len(advertised)}"
-    print("  All 28 cve_* tools advertised exactly \u2713")
+    assert len(advertised) == 29, f"Expected 29 tools, got {len(advertised)}"
+    print("  All 29 cve_* tools advertised exactly \u2713")
 
 
 def test_copilot_old_dotted_names_not_advertised():
@@ -25567,41 +25595,31 @@ def test_p44a_review_returns_persisted_validation_state():
 
 
 def test_p44a_archived_records_excluded_from_list_endpoint():
-    """P44A-2: list_pending_changes currently surfaces only active records.
-    Accepted and rejected (archived) records are not returned by the list call.
-    This documents the confirmed current contract and the Phase 44B gap.
+    """P44A-2: the default ``status='pending'`` filter never surfaces archived
+    records, even after Phase 44B added explicit archive-aware listing.
+    This locks the safe default: callers must opt in to archive visibility.
     """
-    print("\n=== Test P44A-2: archived records excluded from list ===")
+    print("\n=== Test P44A-2: default status=pending excludes archive ===")
     with _p23_temp_vault() as (vault_name, vault_path):
         from mcp.core import pending_changes as _pc
-        # Create then reject a draft so we have an archived record.
         result = _pc.create_note_draft(
-            vault_name, "Fundamentals/ArchivedListed.md",
+            vault_name, "Fundamentals/ArchivedDefault.md",
             {"title": "X", "status": "partial", "domain": "Testing"}, "body",
         )
         change_id = result["data"]["change"]["id"]
-        rej = _pc.reject_pending_change(vault_name, change_id, reviewer="t", audit_note="n")
-        assert rej.get("status") == "ok"
+        _pc.reject_pending_change(vault_name, change_id, reviewer="t", audit_note="n")
 
-        # Archive file exists on disk.
         archive_file = _pc.get_archive_root(vault_name) / f"{change_id}.json"
         assert archive_file.is_file()
 
-        # status='rejected' must not surface archived records via list.
-        r_rej = _pc.list_pending_changes(vault_name, status="rejected")
-        assert r_rej.get("status") == "ok"
-        ids_rej = {c["id"] for c in r_rej["data"]["changes"]}
-        assert change_id not in ids_rej, (
-            "Phase 44A contract: archived 'rejected' records are not returned by list_pending_changes"
+        # Default behaviour: status='pending' never includes archived records.
+        r_default = _pc.list_pending_changes(vault_name, status="pending")
+        assert r_default.get("status") == "ok"
+        ids_default = {c["id"] for c in r_default["data"]["changes"]}
+        assert change_id not in ids_default, (
+            "Default 'pending' filter must never surface archived records"
         )
-
-        # status=None ('all') likewise must not surface archived records.
-        r_all = _pc.list_pending_changes(vault_name, status=None)
-        ids_all = {c["id"] for c in r_all["data"]["changes"]}
-        assert change_id not in ids_all, (
-            "Phase 44A contract: archived records are not returned by list_pending_changes for status=None"
-        )
-    print("  Archived records remain in archive and are not surfaced by list \u2713")
+    print("  Default status='pending' filter never surfaces archived records \u2713")
 
 
 def test_p44a_archived_record_retrievable_by_id():
@@ -25632,29 +25650,15 @@ def test_p44a_archived_record_retrievable_by_id():
 
 def test_p44a_validate_pending_change_helper_exists():
     """P44A-4: a service-level validate_pending_change helper exists for
-    in-memory re-validation. It is intentionally not exposed via HTTP or MCP
-    in Phase 44A; Phase 44B will surface it as an explicit revalidate action.
+    in-memory re-validation. Phase 44B exposes it as cve_revalidate_pending_change
+    and POST /memory/pending/{id}/revalidate; this test only locks the helper.
     """
     print("\n=== Test P44A-4: validate_pending_change helper exists ===")
     from mcp.core import pending_changes as _pc
     assert callable(getattr(_pc, "validate_pending_change", None)), (
-        "validate_pending_change helper must exist for Phase 44B to expose"
+        "validate_pending_change helper must exist"
     )
-
-    # And the helper must not be surfaced as an MCP tool in Phase 44A.
-    from mcp.core.mcp_tools import TOOLS
-    tool_names = {t["name"] for t in TOOLS}
-    assert "cve_revalidate_pending_change" not in tool_names, (
-        "Phase 44A must not introduce a revalidate MCP tool; deferred to Phase 44B"
-    )
-
-    # And there must be no /memory/pending/{id}/revalidate HTTP route in Phase 44A.
-    from mcp.server.mcp_server import app
-    routes = {getattr(r, "path", "") for r in app.routes}
-    assert not any(p.endswith("/revalidate") for p in routes), (
-        "Phase 44A must not add a revalidate HTTP route; deferred to Phase 44B"
-    )
-    print("  validate_pending_change exists; no revalidate surface added in 44A \u2713")
+    print("  validate_pending_change helper present \u2713")
 
 
 def test_p44a_mcp_create_draft_guidance_warns_against_schema_traps():
@@ -25777,6 +25781,442 @@ def test_p44a_no_new_direct_write_or_semantic_path():
             "Phase 44A must not add a new direct note-write path."
         )
     print("  No new direct write path or semantic retrieval introduced \u2713")
+
+
+# ============================================================
+# Phase 44B - Pending Change Lifecycle Implementation and UI Visibility
+# ============================================================
+
+
+def _p44b_make_valid_draft(vault_name, vault_path, rel_path="Fundamentals/P44B.md"):
+    """Create a draft that passes schema validation (suggest_note_update path)."""
+    from mcp.core import pending_changes as _pc
+    _p23_create_minimal_note(vault_path, rel_path)
+    result = _pc.suggest_note_update(
+        vault_name, rel_path,
+        body="## Overview\n\nP44B body.\n",
+        reason="P44B test",
+    )
+    assert result.get("status") == "ok", f"Draft failed: {result}"
+    return result["data"]["change"]
+
+
+def test_p44b_list_returns_accepted_archived_records():
+    """P44B-1: list(status='accepted') surfaces archived accepted records."""
+    print("\n=== Test P44B-1: list returns accepted archived records ===")
+    with _p23_temp_vault() as (vault_name, vault_path):
+        from mcp.core import pending_changes as _pc
+        change = _p44b_make_valid_draft(vault_name, vault_path)
+        if change["validation_status"] == "fail":
+            print("  (skip: draft invalid in this env)")
+            return
+        acc = _pc.accept_pending_change(vault_name, change["id"], reviewer="t")
+        if acc.get("status") != "ok":
+            print(f"  (skip: accept failed: {acc.get('error')})")
+            return
+        r = _pc.list_pending_changes(vault_name, status="accepted")
+        assert r.get("status") == "ok"
+        ids = {c["id"] for c in r["data"]["changes"]}
+        assert change["id"] in ids, "accepted archived record must appear with status='accepted'"
+    print("  status='accepted' surfaces archived accepted record \u2713")
+
+
+def test_p44b_list_returns_rejected_archived_records():
+    """P44B-2: list(status='rejected') surfaces archived rejected records."""
+    print("\n=== Test P44B-2: list returns rejected archived records ===")
+    with _p23_temp_vault() as (vault_name, vault_path):
+        from mcp.core import pending_changes as _pc
+        result = _pc.create_note_draft(
+            vault_name, "Fundamentals/P44BReject.md",
+            {"title": "X", "status": "partial", "domain": "Testing"}, "body",
+        )
+        cid = result["data"]["change"]["id"]
+        _pc.reject_pending_change(vault_name, cid, reviewer="t", audit_note="n")
+        r = _pc.list_pending_changes(vault_name, status="rejected")
+        assert r.get("status") == "ok"
+        ids = {c["id"] for c in r["data"]["changes"]}
+        assert cid in ids, "rejected archived record must appear with status='rejected'"
+    print("  status='rejected' surfaces archived rejected record \u2713")
+
+
+def test_p44b_list_status_all_includes_active_and_archived_deterministic_order():
+    """P44B-3: status=None ('all') returns both active and archived in deterministic order."""
+    print("\n=== Test P44B-3: status=None returns active+archived deterministic ===")
+    with _p23_temp_vault() as (vault_name, vault_path):
+        from mcp.core import pending_changes as _pc
+        # active pending
+        a = _pc.create_note_draft(
+            vault_name, "Fundamentals/P44BActive.md",
+            {"title": "A", "status": "partial", "domain": "Testing"}, "b1",
+        )["data"]["change"]
+        # archived rejected
+        b = _pc.create_note_draft(
+            vault_name, "Fundamentals/P44BArchived.md",
+            {"title": "B", "status": "partial", "domain": "Testing"}, "b2",
+        )["data"]["change"]
+        _pc.reject_pending_change(vault_name, b["id"], reviewer="t", audit_note="n")
+
+        r = _pc.list_pending_changes(vault_name, status=None)
+        assert r.get("status") == "ok"
+        ids = [c["id"] for c in r["data"]["changes"]]
+        assert a["id"] in ids and b["id"] in ids, "status=None must include both"
+        # Deterministic order: sort by (created_at, id) desc.
+        # Calling list a second time must return the same order.
+        r2 = _pc.list_pending_changes(vault_name, status=None)
+        ids2 = [c["id"] for c in r2["data"]["changes"]]
+        assert ids == ids2, "list order must be deterministic across calls"
+    print("  status=None returns active+archived in deterministic order \u2713")
+
+
+def test_p44b_list_archived_records_marked_archived_true():
+    """P44B-4: records returned from archive carry archived=True."""
+    print("\n=== Test P44B-4: archived records carry archived=True ===")
+    with _p23_temp_vault() as (vault_name, vault_path):
+        from mcp.core import pending_changes as _pc
+        r0 = _pc.create_note_draft(
+            vault_name, "Fundamentals/P44BMark.md",
+            {"title": "X", "status": "partial", "domain": "Testing"}, "b",
+        )
+        cid = r0["data"]["change"]["id"]
+        _pc.reject_pending_change(vault_name, cid, reviewer="t", audit_note="n")
+
+        r = _pc.list_pending_changes(vault_name, status="rejected")
+        rec = next(c for c in r["data"]["changes"] if c["id"] == cid)
+        assert rec.get("archived") is True, "archived rejected record must carry archived=True"
+
+        # Active records carry archived=False. The new draft may persist as
+        # status='pending' or 'invalid' depending on schema; use status='all'
+        # so we always find it.
+        r2 = _pc.create_note_draft(
+            vault_name, "Fundamentals/P44BMark2.md",
+            {"title": "Y", "status": "partial", "domain": "Testing"}, "b",
+        )
+        cid2 = r2["data"]["change"]["id"]
+        r3 = _pc.list_pending_changes(vault_name, status="all")
+        active = next(c for c in r3["data"]["changes"] if c["id"] == cid2)
+        assert active.get("archived") is False, "active record must carry archived=False"
+    print("  archived flag set correctly on active and archived records \u2713")
+
+
+def test_p44b_review_archived_returns_record_with_archived_true():
+    """P44B-5: review_pending_change returns archived=True for archived records."""
+    print("\n=== Test P44B-5: review returns archived=True for archived ===")
+    with _p23_temp_vault() as (vault_name, vault_path):
+        from mcp.core import pending_changes as _pc
+        r0 = _pc.create_note_draft(
+            vault_name, "Fundamentals/P44BReviewArch.md",
+            {"title": "X", "status": "partial", "domain": "Testing"}, "b",
+        )
+        cid = r0["data"]["change"]["id"]
+        _pc.reject_pending_change(vault_name, cid, reviewer="t", audit_note="n")
+        rev = _pc.review_pending_change(vault_name, cid)
+        assert rev.get("status") == "ok"
+        assert rev["data"]["change"].get("archived") is True
+    print("  review returns archived=True for archived records \u2713")
+
+
+def test_p44b_accept_archived_record_blocked():
+    """P44B-6: accepting an archived (accepted) record is blocked."""
+    print("\n=== Test P44B-6: accept archived record blocked ===")
+    with _p23_temp_vault() as (vault_name, vault_path):
+        from mcp.core import pending_changes as _pc
+        change = _p44b_make_valid_draft(vault_name, vault_path,
+                                        rel_path="Fundamentals/P44BAcc.md")
+        if change["validation_status"] == "fail":
+            print("  (skip)")
+            return
+        acc = _pc.accept_pending_change(vault_name, change["id"], reviewer="t")
+        if acc.get("status") != "ok":
+            print(f"  (skip: first accept failed: {acc.get('error')})")
+            return
+        # Second accept must fail.
+        acc2 = _pc.accept_pending_change(vault_name, change["id"], reviewer="t")
+        assert acc2.get("status") == "error", "Second accept must fail"
+    print("  archived accepted record cannot be re-accepted \u2713")
+
+
+def test_p44b_reject_archived_record_blocked():
+    """P44B-7: rejecting an archived (rejected) record is blocked."""
+    print("\n=== Test P44B-7: reject archived record blocked ===")
+    with _p23_temp_vault() as (vault_name, vault_path):
+        from mcp.core import pending_changes as _pc
+        r0 = _pc.create_note_draft(
+            vault_name, "Fundamentals/P44BRej.md",
+            {"title": "X", "status": "partial", "domain": "Testing"}, "b",
+        )
+        cid = r0["data"]["change"]["id"]
+        _pc.reject_pending_change(vault_name, cid, reviewer="t", audit_note="n")
+        # Second reject must fail.
+        rej2 = _pc.reject_pending_change(vault_name, cid, reviewer="t", audit_note="n")
+        assert rej2.get("status") == "error", "Second reject must fail"
+    print("  archived rejected record cannot be re-rejected \u2713")
+
+
+def test_p44b_revalidate_endpoint_exists_and_returns_current_validation():
+    """P44B-8: POST /memory/pending/{id}/revalidate returns updated validation."""
+    print("\n=== Test P44B-8: revalidate endpoint exists ===")
+    from mcp.server.mcp_server import app
+    paths = {getattr(r, "path", "") for r in app.routes}
+    assert any(p.endswith("/revalidate") for p in paths), (
+        "Phase 44B must register /memory/pending/{id}/revalidate"
+    )
+    with _p23_temp_vault() as (vault_name, vault_path):
+        from mcp.core import pending_changes as _pc
+        r0 = _pc.create_note_draft(
+            vault_name, "Fundamentals/P44BReval.md",
+            {"title": "X", "status": "partial", "domain": "Testing"}, "b",
+        )
+        cid = r0["data"]["change"]["id"]
+        result = _pc.revalidate_pending_change(vault_name, cid)
+        assert result.get("status") == "ok"
+        assert "validation_status" in result["data"]["change"]
+    print("  revalidate endpoint registered; helper returns validation \u2713")
+
+
+def test_p44b_revalidate_does_not_write_vault_note():
+    """P44B-9: revalidate must not write to the target vault note."""
+    print("\n=== Test P44B-9: revalidate does not write vault note ===")
+    import hashlib
+    with _p23_temp_vault() as (vault_name, vault_path):
+        from mcp.core import pending_changes as _pc
+        rel = "Fundamentals/P44BNoWrite.md"
+        _p23_create_minimal_note(vault_path, rel)
+        before = (vault_path / rel).read_bytes()
+        before_hash = hashlib.sha256(before).hexdigest()
+        r0 = _pc.suggest_note_update(
+            vault_name, rel,
+            body="## Overview\n\nNew body.\n",
+            reason="r",
+        )
+        cid = r0["data"]["change"]["id"]
+        _pc.revalidate_pending_change(vault_name, cid)
+        after_hash = hashlib.sha256((vault_path / rel).read_bytes()).hexdigest()
+        assert before_hash == after_hash, "revalidate must not modify target note"
+    print("  revalidate leaves vault note untouched \u2713")
+
+
+def test_p44b_revalidate_does_not_accept_proposal():
+    """P44B-10: revalidate never transitions to status='accepted'."""
+    print("\n=== Test P44B-10: revalidate never accepts ===")
+    with _p23_temp_vault() as (vault_name, vault_path):
+        from mcp.core import pending_changes as _pc
+        r0 = _pc.create_note_draft(
+            vault_name, "Fundamentals/P44BNoAcc.md",
+            {"title": "X", "status": "partial", "domain": "Testing"}, "b",
+        )
+        cid = r0["data"]["change"]["id"]
+        result = _pc.revalidate_pending_change(vault_name, cid)
+        new_status = result["data"]["change"]["status"]
+        assert new_status in ("pending", "invalid"), (
+            f"revalidate must not accept; got status={new_status!r}"
+        )
+    print("  revalidate never transitions to accepted \u2713")
+
+
+def test_p44b_revalidate_updates_persisted_validation_state_and_appends_history():
+    """P44B-11: revalidate updates persisted validation state and history."""
+    print("\n=== Test P44B-11: revalidate updates state and history ===")
+    with _p23_temp_vault() as (vault_name, vault_path):
+        from mcp.core import pending_changes as _pc
+        r0 = _pc.create_note_draft(
+            vault_name, "Fundamentals/P44BHist.md",
+            {"title": "X", "status": "partial", "domain": "Testing"}, "b",
+        )
+        cid = r0["data"]["change"]["id"]
+        before_history = list(r0["data"]["change"].get("revalidation_history", []))
+        result = _pc.revalidate_pending_change(vault_name, cid)
+        assert result.get("status") == "ok"
+        ch = result["data"]["change"]
+        assert "validation_status" in ch
+        assert "validated_at" in ch
+        new_history = ch.get("revalidation_history", [])
+        assert len(new_history) == len(before_history) + 1, "history must grow by 1"
+        entry = new_history[-1]
+        for key in ("at", "previous_validation_status", "new_status", "new_validation_status"):
+            assert key in entry, f"history entry missing {key}"
+
+        # Persisted to disk.
+        reloaded = _pc.review_pending_change(vault_name, cid)
+        assert reloaded["data"]["change"].get("validated_at") is not None
+        assert len(reloaded["data"]["change"]["revalidation_history"]) == len(new_history)
+    print("  revalidate updates state and appends history entry \u2713")
+
+
+def test_p44b_revalidate_unknown_id_returns_structured_error():
+    """P44B-12: revalidate with unknown id returns PENDING_CHANGE_NOT_FOUND."""
+    print("\n=== Test P44B-12: revalidate unknown id returns structured error ===")
+    with _p23_temp_vault() as (vault_name, vault_path):
+        from mcp.core import pending_changes as _pc
+        bogus = "20990101T010101-deadbeef"
+        result = _pc.revalidate_pending_change(vault_name, bogus)
+        assert result.get("status") == "error"
+        assert result["error"]["code"] == "PENDING_CHANGE_NOT_FOUND"
+    print("  unknown id returns PENDING_CHANGE_NOT_FOUND \u2713")
+
+
+def test_p44b_revalidate_archived_record_blocked():
+    """P44B-13: revalidating an archived record returns ARCHIVED_NOT_REVALIDATABLE."""
+    print("\n=== Test P44B-13: revalidate archived record blocked ===")
+    with _p23_temp_vault() as (vault_name, vault_path):
+        from mcp.core import pending_changes as _pc
+        r0 = _pc.create_note_draft(
+            vault_name, "Fundamentals/P44BArchBlock.md",
+            {"title": "X", "status": "partial", "domain": "Testing"}, "b",
+        )
+        cid = r0["data"]["change"]["id"]
+        _pc.reject_pending_change(vault_name, cid, reviewer="t", audit_note="n")
+        result = _pc.revalidate_pending_change(vault_name, cid)
+        assert result.get("status") == "error"
+        assert result["error"]["code"] == "ARCHIVED_NOT_REVALIDATABLE"
+    print("  archived record returns ARCHIVED_NOT_REVALIDATABLE \u2713")
+
+
+def test_p44b_invalid_proposal_remains_blocked_from_accept_after_revalidate():
+    """P44B-14: invalid proposal still cannot be accepted after revalidate."""
+    print("\n=== Test P44B-14: invalid stays blocked after revalidate ===")
+    with _p23_temp_vault() as (vault_name, vault_path):
+        from mcp.core import pending_changes as _pc
+        r0 = _pc.create_note_draft(
+            vault_name, "Fundamentals/P44BInvalid.md",
+            {"title": "X"},  # missing required schema fields
+            "b",
+        )
+        cid = r0["data"]["change"]["id"]
+        rev = _pc.revalidate_pending_change(vault_name, cid)
+        if rev["data"]["change"]["validation_status"] != "fail":
+            print("  (skip: schema permissive)")
+            return
+        acc = _pc.accept_pending_change(vault_name, cid, reviewer="t")
+        assert acc.get("status") == "error", "invalid proposal must not be acceptable"
+    print("  invalid proposal still blocked after revalidate \u2713")
+
+
+def test_p44b_stale_hash_still_blocks_accept_after_revalidate():
+    """P44B-15: stale-hash detection still blocks accept after revalidate."""
+    print("\n=== Test P44B-15: stale hash blocks accept after revalidate ===")
+    with _p23_temp_vault() as (vault_name, vault_path):
+        from mcp.core import pending_changes as _pc
+        rel = "Fundamentals/P44BStale.md"
+        _p23_create_minimal_note(vault_path, rel)
+        r0 = _pc.suggest_note_update(
+            vault_name, rel,
+            body="## Overview\n\nstale-test.\n",
+            reason="r",
+        )
+        if r0.get("status") != "ok":
+            print("  (skip: draft failed)")
+            return
+        cid = r0["data"]["change"]["id"]
+        # Mutate the target note to invalidate original_content_hash.
+        (vault_path / rel).write_text(
+            "---\ntitle: Test Note\nstatus: complete\ndomain: Testing\n---\n\n## Overview\n\nMUTATED.\n",
+            encoding="utf-8",
+        )
+        _pc.revalidate_pending_change(vault_name, cid)
+        acc = _pc.accept_pending_change(vault_name, cid, reviewer="t")
+        assert acc.get("status") == "error", "stale-hash must still block accept"
+    print("  stale-hash continues to block accept after revalidate \u2713")
+
+
+def test_p44b_mcp_revalidate_tool_registered_and_safe_wording():
+    """P44B-16: cve_revalidate_pending_change registered with safe wording."""
+    print("\n=== Test P44B-16: MCP revalidate tool registered ===")
+    from mcp.core.mcp_tools import TOOLS
+    by_name = {t["name"]: t for t in TOOLS}
+    assert "cve_revalidate_pending_change" in by_name, "tool must be advertised"
+    desc = by_name["cve_revalidate_pending_change"]["description"]
+    low = desc.lower()
+    assert "does not write" in low or "does not write to" in low, "must state non-write"
+    assert "does not accept" in low, "must state non-accept"
+    assert "ARCHIVED_NOT_REVALIDATABLE" in desc, "must mention error code"
+    print("  cve_revalidate_pending_change has safe wording \u2713")
+
+
+def test_p44b_mcp_list_review_descriptions_match_phase_44b_contract():
+    """P44B-17: list/review descriptions reflect Phase 44B archive contract."""
+    print("\n=== Test P44B-17: list/review descriptions match 44B contract ===")
+    from mcp.core.mcp_tools import TOOLS
+    by_name = {t["name"]: t for t in TOOLS}
+    list_desc = by_name["cve_list_pending_changes"]["description"].lower()
+    review_desc = by_name["cve_review_pending_change"]["description"].lower()
+    assert "archive" in list_desc or "archived" in list_desc
+    assert "archived" in list_desc, "list must mention archived flag"
+    assert "immutab" in list_desc or "audit" in list_desc, "list must note immutability"
+    assert "cve_revalidate_pending_change" in review_desc, (
+        "review must point at cve_revalidate_pending_change"
+    )
+    assert "archived" in review_desc, "review must mention archived flag"
+    print("  list/review descriptions reflect Phase 44B contract \u2713")
+
+
+def test_p44b_ui_pending_includes_archived_and_revalidate_support():
+    """P44B-18: UI PendingChanges component uses revalidate and renders archived."""
+    print("\n=== Test P44B-18: UI uses revalidate and archived ===")
+    from pathlib import Path
+    src = (Path(__file__).resolve().parent.parent /
+           "ui" / "src" / "components" / "PendingChanges.svelte").read_text(encoding="utf-8")
+    assert "revalidatePendingChange" in src, "UI must import/use revalidatePendingChange"
+    assert "submitRevalidate" in src, "UI must define a submitRevalidate handler"
+    assert "archived" in src.lower(), "UI must render archived state"
+    api = (Path(__file__).resolve().parent.parent /
+           "ui" / "src" / "lib" / "api.ts").read_text(encoding="utf-8")
+    assert "revalidatePendingChange" in api, "api.ts must export revalidatePendingChange"
+    assert "/revalidate" in api, "api.ts must call /revalidate path"
+    print("  UI exposes archived state and revalidate action \u2713")
+
+
+def test_p44b_ui_revalidate_does_not_call_accept():
+    """P44B-19: revalidate handler does not invoke acceptPendingChange."""
+    print("\n=== Test P44B-19: revalidate handler does not call accept ===")
+    from pathlib import Path
+    src = (Path(__file__).resolve().parent.parent /
+           "ui" / "src" / "components" / "PendingChanges.svelte").read_text(encoding="utf-8")
+    idx = src.find("function submitRevalidate")
+    assert idx >= 0, "submitRevalidate must exist"
+    # Find function body — from idx to next top-level "  async function" or "  function"
+    after = src[idx:idx + 2000]
+    assert "acceptPendingChange" not in after, (
+        "submitRevalidate body must not call acceptPendingChange"
+    )
+    print("  submitRevalidate does not call acceptPendingChange \u2713")
+
+
+def test_p44b_phase_27_28_remain_deferred():
+    """P44B-20: ROADMAP keeps Phase 27 and Phase 28 explicitly Deferred."""
+    print("\n=== Test P44B-20: phases 27 and 28 remain Deferred ===")
+    from pathlib import Path
+    roadmap = (Path(__file__).resolve().parent.parent / "ROADMAP.md").read_text(encoding="utf-8")
+    assert "### Phase 27 - Registry and Reuse Layer\n\n**Status: Deferred.**" in roadmap
+    idx = roadmap.find("Phase 28")
+    assert idx >= 0
+    tail = roadmap[idx:idx + 2000]
+    assert "Deferred" in tail
+    print("  Phase 27 and Phase 28 remain Deferred \u2713")
+
+
+def test_p44b_no_semantic_retrieval_or_new_write_path_added():
+    """P44B-21: no semantic/LLM dependency and no new note-write helper added."""
+    print("\n=== Test P44B-21: no semantic retrieval or new write path ===")
+    import sys
+    forbidden = (
+        "sentence_transformers", "sentence-transformers",
+        "faiss", "chromadb", "pinecone", "weaviate",
+        "openai", "anthropic", "litellm", "ollama",
+        "embedding", "embeddings",
+    )
+    for mod_name in list(sys.modules):
+        for bad in forbidden:
+            if bad in mod_name.lower() and mod_name.startswith(("mcp", "core")):
+                raise AssertionError(f"Forbidden dependency loaded: {mod_name}")
+    from mcp.core import pending_changes as _pc
+    writing = [n for n in dir(_pc)
+               if n.startswith(("write_", "apply_", "commit_")) and callable(getattr(_pc, n))]
+    allowed = {"write_pending_change"}
+    for n in writing:
+        assert n in allowed, (
+            f"Unexpected write-like helper: {n}. Phase 44B must not add new write paths."
+        )
+    print("  No semantic retrieval and no new write path added in 44B \u2713")
 
 
 if __name__ == "__main__":

@@ -119,6 +119,7 @@ See `DEPLOYMENT.md` for full deployment and VPS setup guidance.
 | `POST` | `/memory/update-section-draft` | Propose an update to a single section (Phase 23) |
 | `POST` | `/memory/pending/{change_id}/accept` | Accept a pending change and write it (Phase 23) |
 | `POST` | `/memory/pending/{change_id}/reject` | Reject a pending change (Phase 23) |
+| `POST` | `/memory/pending/{change_id}/revalidate` | Re-run schema validation without writing or accepting (Phase 44B) |
 
 Route groups, for orientation:
 
@@ -130,7 +131,7 @@ Route groups, for orientation:
 - **Trust and evidence:** `/trust`, `/stale`, `/evidence`
 - **App and vault lifecycle:** `/app`, `/app/{ui_path:path}`, `/vault/bootstrap`, `/vault/{vault_name}` (DELETE)
 - **Session and project state:** `/session/start`, `/session/resume`, `/session/summary`, `/session/attach-note`, `/session/close`, `/project/state` (GET/PUT)
-- **Safe memory write queue:** `/memory/pending`, `/memory/pending/{change_id}`, `/memory/create-note-draft`, `/memory/suggest-note-update`, `/memory/update-section-draft`, `/memory/pending/{change_id}/accept`, `/memory/pending/{change_id}/reject`
+- **Safe memory write queue:** `/memory/pending`, `/memory/pending/{change_id}`, `/memory/create-note-draft`, `/memory/suggest-note-update`, `/memory/update-section-draft`, `/memory/pending/{change_id}/accept`, `/memory/pending/{change_id}/reject`, `/memory/pending/{change_id}/revalidate`
 
 ---
 
@@ -1772,22 +1773,22 @@ Write endpoints are blocked when `CVE_REMOTE_READ_ONLY=true`.
 
 List pending change proposals.
 
-**Lifecycle and visibility (confirmed in Phase 44A):**
+**Lifecycle and visibility (Phase 44B):**
 
 - Active records are stored under `<vault>/Vault Files/State/pending-changes/` with status `pending` or `invalid`.
-- Accepted and rejected records are moved to `<vault>/Vault Files/State/pending-changes/archive/` and retained immutably for audit.
-- This endpoint currently lists only active records. The `status` filter accepts `pending`, `accepted`, `rejected`, `invalid`, or `all`, but archived (`accepted`, `rejected`) records are not returned by the list call and therefore do not appear under `accepted`, `rejected`, or `all` here.
-- Archived records remain retrievable by ID via `GET /memory/pending/{change_id}` so audit history is preserved.
-- The `validation_status` and `validation_errors` returned in list and single-record responses reflect the state persisted at creation (or last accept attempt). `GET /memory/pending/{change_id}` does not re-run validation. The accept endpoint re-validates before any vault write.
-
-Surfacing archived records through this list endpoint and adding an explicit revalidate action are tracked under Phase 44B.
+- Accepted and rejected records are moved to `<vault>/Vault Files/State/pending-changes/archive/` and retained immutably for audit. They are never deleted, mutated, re-accepted, or re-rejected.
+- This endpoint is archive-aware. The `status` filter chooses which directory is scanned: `pending` (default) and `invalid` scan only the active directory; `accepted` and `rejected` scan only the archive directory; `all` (and an absent filter) scan both.
+- The safe default `status='pending'` never surfaces archived records.
+- Each returned record carries a transient `archived` boolean (`true` for records read from the archive, `false` for active records). The flag is decorated on the response and is not persisted in the underlying JSON.
+- The `validation_status` and `validation_errors` returned reflect the state persisted at creation or last revalidated; the list call does not re-run validation. Call `POST /memory/pending/{change_id}/revalidate` to refresh persisted validation. The accept endpoint still re-validates before any vault write.
+- Records are returned in deterministic `(created_at, id)` descending order.
 
 **Query parameters:**
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `vault` | string | yes | Registered vault name |
-| `status` | string | no | Filter: `pending` (default), `accepted`, `rejected`, `invalid`, `all`. Archived (`accepted`, `rejected`) records are not surfaced through this endpoint; use `GET /memory/pending/{change_id}` to inspect them. |
+| `status` | string | no | Filter: `pending` (default), `accepted`, `rejected`, `invalid`, `all`. `accepted` and `rejected` scan the archive directory; `all` scans both. Records returned from the archive carry a transient `archived: true` flag. |
 | `limit` | integer | no | Max results (default 50) |
 
 **Success response (HTTP 200):**
@@ -1968,6 +1969,38 @@ Reject a pending change and archive it. Never deletes; always preserves for audi
 
 ---
 
+### POST /memory/pending/{change_id}/revalidate
+
+Re-run schema validation for a single pending change against the current vault schema (Phase 44B). Refreshes the persisted `validation_status`, `validation_errors`, and `validated_at` fields and appends an entry to `revalidation_history`. Flips `status` between `pending` and `invalid` based on the fresh result.
+
+**Safety contract:**
+
+- Never writes to the target vault note.
+- Never accepts the proposal.
+- Never bypasses the stale-hash protection enforced at acceptance time.
+- Refuses revalidation for archived (`accepted`, `rejected`) records.
+
+**Request body:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `vault` | string | yes | Registered vault name |
+
+**Response:** Returns the refreshed pending change record plus `revalidated: true`, `previous_validation_status`, `previous_validation_errors`, and `new_validation_status`.
+
+**Error responses:**
+
+| Code | HTTP Status | Trigger |
+|------|-------------|---------|
+| `INVALID_VAULT` | 404 | Vault name is not registered |
+| `PENDING_CHANGE_NOT_FOUND` | 404 | Change ID not found |
+| `ARCHIVED_NOT_REVALIDATABLE` | 409 | Change status is `accepted` or `rejected` |
+| `INVALID_PENDING_CHANGE` | 400 | Malformed `change_id` |
+| `REMOTE_READ_ONLY` | 403 | `CVE_REMOTE_READ_ONLY=true` |
+| `WRITE_FAILED` | 500 | Persisting the refreshed pending JSON failed |
+
+---
+
 ## Error Reference
 
 | Code | HTTP Status | Meaning |
@@ -2005,6 +2038,7 @@ Reject a pending change and archive it. Never deletes; always preserves for audi
 | `PENDING_CHANGE_NOT_FOUND` | 404 | Change ID not found in pending or archive |
 | `VALIDATION_FAILED` | 422 | Schema validation failed for proposed note content |
 | `STALE_PENDING_CHANGE` | 409 | Source note was modified after proposal; re-propose |
+| `ARCHIVED_NOT_REVALIDATABLE` | 409 | Pending change is archived (`accepted` or `rejected`) and cannot be revalidated |
 
 ---
 
